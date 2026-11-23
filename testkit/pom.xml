@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+    <parent>
+        <groupId>org.lolaf.replicos</groupId>
+        <artifactId>replicos-parent</artifactId>
+        <version>0.9.0-SNAPSHOT</version>
+    </parent>
+    <artifactId>replicos-testkit</artifactId>
+
+    <name>Replicos Testkit</name>
+    <description>
+        What an application's tests need to test its replication: frames recorded as text, a harness feeding a
+        follower's connection the frames a leader would send, key exchanges and an allocation counter.
+    </description>
+
+    <properties>
+        <automatic.module.name>org.lolaf.replicos.testkit</automatic.module.name>
+    </properties>
+
+    <dependencies>
+        <dependency>
+            <groupId>org.lolaf.replicos</groupId>
+            <artifactId>replicos</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>org.mockito</groupId>
+            <artifactId>mockito-core</artifactId>
+            <version>${mockito.version}</version>
+            <scope>compile</scope>
+        </dependency>
+    </dependencies>
+</project>

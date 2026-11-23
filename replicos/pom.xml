@@ -1,0 +1,75 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+    <parent>
+        <groupId>org.lolaf.replicos</groupId>
+        <artifactId>replicos-parent</artifactId>
+        <version>0.9.0-SNAPSHOT</version>
+    </parent>
+    <artifactId>replicos</artifactId>
+
+    <name>Replicos</name>
+    <description>
+        Low-latency replication of an application's data from a leader JVM to its followers over TCP, allocating
+        nothing on the write path: streams of records, snapshots to catch a follower up, writes that wait for the
+        followers' acknowledgement, and optional encryption.
+    </description>
+
+    <properties>
+        <automatic.module.name>org.lolaf.replicos</automatic.module.name>
+    </properties>
+
+    <dependencies>
+        <dependency>
+            <groupId>org.slf4j</groupId>
+            <artifactId>slf4j-api</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.jspecify</groupId>
+            <artifactId>jspecify</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.lolaf.betty</groupId>
+            <artifactId>betty-api</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.lolaf.betty</groupId>
+            <artifactId>betty-impl</artifactId>
+            <scope>runtime</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.lolaf.ringos</groupId>
+            <artifactId>ringos-lib-api</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.lolaf.ringos</groupId>
+            <artifactId>ringos-lib-impl-all</artifactId>
+            <scope>runtime</scope>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.codehaus.mojo</groupId>
+                <artifactId>build-helper-maven-plugin</artifactId>
+                <executions>
+                    <execution>
+                        <!-- The testkit depends on this module, so these tests compile its sources rather than
+                             depend on it, which Maven would refuse as a cycle. -->
+                        <id>add-testkit-sources</id>
+                        <phase>generate-test-sources</phase>
+                        <goals>
+                            <goal>add-test-source</goal>
+                        </goals>
+                        <configuration>
+                            <sources>
+                                <source>${project.basedir}/../testkit/src/main/java</source>
+                            </sources>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+        </plugins>
+    </build>
+</project>

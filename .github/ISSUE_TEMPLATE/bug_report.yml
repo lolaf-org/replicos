@@ -1,0 +1,61 @@
+name: Bug report
+description: Something in replicos behaves differently from what it documents
+labels: [ bug ]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        The replication mode of each stream, the lane count and whether the lanes encrypt decide most of what
+        replicos does, so the details below are usually what separates "a bug" from "a different configuration
+        than you think".
+
+  - type: input
+    id: version
+    attributes:
+      label: Replicos version
+      placeholder: "0.9.0"
+    validations:
+      required: true
+
+  - type: input
+    id: jdk
+    attributes:
+      label: JDK
+      description: Vendor and full version, as `java -version` prints it, on the leader and on the follower.
+      placeholder: "Zulu 21.0.12"
+    validations:
+      required: true
+
+  - type: input
+    id: platform
+    attributes:
+      label: OS and architecture
+      placeholder: "Ubuntu 24.04, x86-64"
+    validations:
+      required: true
+
+  - type: textarea
+    id: config
+    attributes:
+      label: Node configuration
+      description: >
+        The `ReplicationNodeBuilder` settings (lanes, log capacity, timeouts, threads, encryption), and each stream's
+        replication mode. The relevant part of your builder is ideal.
+      render: java
+
+  - type: textarea
+    id: what
+    attributes:
+      label: What happens, and what you expected instead
+      description: Say which node leads, and what each node logged around it.
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproducer
+    attributes:
+      label: Reproducer
+      description: >
+        The smallest code that shows it, leader and follower. Say whether it reproduces every time or occasionally:
+        a race between the writer and the network thread and a logic error need different reading.
+      render: java
