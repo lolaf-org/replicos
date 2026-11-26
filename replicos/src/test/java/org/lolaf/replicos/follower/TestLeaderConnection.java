@@ -233,6 +233,7 @@ class TestLeaderConnection extends LeaderConnectionHarness {
     @Test
     void aReconnectionKeepsTheSinkAndResumesAfterTheLastRecord() {
         streaming();
+        inSync(0, main);
         read(record(EPOCH, 0, 0, 3, "three"));
         ReplicaStream stream = followerStreams.find(MAIN);
 
@@ -265,9 +266,9 @@ class TestLeaderConnection extends LeaderConnectionHarness {
         main.setBatching(true);
         streaming();
 
-        read(snapshotBegin(512, "1"), record(EPOCH, 600, 0, 1, "live"), snapshotEnd(0, "2"));
+        read(snapshotBegin(512, "1"), snapshotRecord(1, "one"), snapshotEnd(1, "2"));
 
-        assertThat(main.getWrites()).containsExactly("begin from=0 state=1", "1 live", "end state=2");
+        assertThat(main.getWrites()).containsExactly("begin from=0 state=1", "snapshot 1 one", "end state=2");
     }
 
     @Test
@@ -275,7 +276,7 @@ class TestLeaderConnection extends LeaderConnectionHarness {
         main.setBatching(true);
         streaming();
 
-        read(snapshotBegin(512, "1"), record(EPOCH, 600, 0, 1, "live"), snapshotBegin(700, "1"), snapshotEnd(0, "2"));
+        read(snapshotBegin(512, "1"), snapshotRecord(1, "one"), snapshotBegin(700, "1"), snapshotEnd(0, "2"));
 
         assertThat(main.getWrites()).containsExactly("begin from=0 state=1", "begin from=0 state=1", "end state=2");
     }
@@ -295,6 +296,8 @@ class TestLeaderConnection extends LeaderConnectionHarness {
         JournalCopy other = replica.configure("other", StreamReplicationMode.ASYNC);
         streaming();
         read(stream(3, "other"));
+        inSync(0, main);
+        inSync(3, other);
 
         read(fragment(0, 0, 5, "frag", FIRST), record(EPOCH, 64, 3, 2, "other's"));
         assertThat(main.getWrites()).as("nothing until the last fragment").isEmpty();

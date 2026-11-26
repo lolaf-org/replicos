@@ -131,16 +131,20 @@ final class BoundStream implements ReplicaStream {
     }
 
     /**
+     * Hands the sink nothing while the stream waits for a snapshot, which would discard it anyway: stored past the gap
+     * the snapshot fills, a record would let {@link #claim} prove a copy missing that gap.
+     *
      * @return false for a fragment out of place
      */
     boolean apply(byte contentType, long position, ByteBuffer receiveBuffer, int payloadIndex, int payloadLength,
                   byte fragmentFlags) {
+        @Nullable ReplicaSink target = inSync ? sink : null;
         if (fragmentFlags != 0 || assembling) {
-            return assemble(contentType, position, receiveBuffer, payloadIndex, payloadLength, fragmentFlags,
+            return assemble(target, contentType, position, receiveBuffer, payloadIndex, payloadLength, fragmentFlags,
                     ReplicaSink::apply);
         }
-        if (sink != null) {
-            sink.apply(contentType, position, receiveBuffer, payloadIndex, payloadLength);
+        if (target != null) {
+            target.apply(contentType, position, receiveBuffer, payloadIndex, payloadLength);
         }
         return true;
     }
@@ -189,7 +193,7 @@ final class BoundStream implements ReplicaStream {
     boolean snapshotRecord(byte contentType, long position, ByteBuffer receiveBuffer, int payloadIndex,
                            int payloadLength, byte fragmentFlags) {
         if (fragmentFlags != 0 || assembling) {
-            if (!assemble(contentType, position, receiveBuffer, payloadIndex, payloadLength, fragmentFlags,
+            if (!assemble(sink, contentType, position, receiveBuffer, payloadIndex, payloadLength, fragmentFlags,
                     ReplicaSink::snapshotRecord)) {
                 return false;
             }
@@ -231,15 +235,15 @@ final class BoundStream implements ReplicaStream {
     }
 
     /**
-     * Adds a fragment of a payload longer than a frame, applying the record with its last fragment. A stream not
-     * replicated here keeps no bytes, only where the payload ends. A continued fragment with no payload begun is what
+     * Adds a fragment of a payload longer than a frame, applying the record with its last fragment. With no
+     * {@code target} it keeps no bytes, only where the payload ends. A continued fragment with no payload begun is what
      * a resume leaves of a record whose start it skipped: dropped, its stream catching up by snapshot.
      *
      * @param assembled the sink method the whole payload goes to
      * @return false for a fragment out of place: another record's, or a new record before the last one ended
      */
-    private boolean assemble(byte contentType, long position, ByteBuffer receiveBuffer, int fragmentIndex,
-                             int fragmentLength, byte fragmentFlags, SinkMethod assembled) {
+    private boolean assemble(@Nullable ReplicaSink target, byte contentType, long position, ByteBuffer receiveBuffer,
+                             int fragmentIndex, int fragmentLength, byte fragmentFlags, SinkMethod assembled) {
         boolean continued = (fragmentFlags & WireFormat.CONTINUED_FRAGMENT) != 0;
         boolean moreFragments = (fragmentFlags & WireFormat.MORE_FRAGMENTS) != 0;
         if (continued != assembling) {
@@ -252,14 +256,15 @@ final class BoundStream implements ReplicaStream {
         } else if (position != assembledPosition) {
             return false;
         }
-        if (sink != null) {
+        if (target != null) {
             ByteBuffer fragment = receiveBuffer.duplicate();
             fragment.limit(fragmentIndex + fragmentLength).position(fragmentIndex);
             assembledPayload = assembledPayloadWithRoomFor(fragmentLength).put(fragment);
         }
         if (!moreFragments) {
-            if (sink != null) {
-                assembled.call(sink, assembledContentType, position, assembledPayload, 0, assembledPayload.position());
+            if (target != null) {
+                assembled.call(target, assembledContentType, position, assembledPayload, 0,
+                        assembledPayload.position());
             }
             discardAssembledPayload();
         }

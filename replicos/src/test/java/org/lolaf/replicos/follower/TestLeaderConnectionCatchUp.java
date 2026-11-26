@@ -62,6 +62,21 @@ class TestLeaderConnectionCatchUp extends LeaderConnectionHarness {
     }
 
     @Test
+    void liveRecordsOfAStreamWaitingForItsSnapshotAreNotStoredSoTheNextClaimHasNoGap() {
+        main.hold(1, "one");
+        main.hold(2, "two");
+        streaming();
+
+        read(record(EPOCH, 100, 0, 10, "ten"), record(EPOCH, 200, 0, 11, "eleven"));
+        sent.frames.clear();
+        read(newConnection(0), welcome(EPOCH, WireFormat.NO_RESUME), stream(0, MAIN));
+
+        assertThat(main.getStored()).containsExactly("1 one", "2 two");
+        assertThat(sent.frames).contains(
+                "STREAM_ANSWER epoch=7 key=0 SNAPSHOT_NEEDED LAST_RECORDS last=2 proof=44 bytes");
+    }
+
+    @Test
     void aSnapshotStartingPastTheClaimedRecordsIsAProtocolError() {
         main.hold(1, "one");
         streaming();

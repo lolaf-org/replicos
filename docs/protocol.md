@@ -190,7 +190,8 @@ time per lane, in chunks between the lane's live batches so the other streams ke
 
 Meanwhile the leader skips the stream's records in the log, except a `RESET`, which ends the snapshot; from its end,
 the stream's records come through the log again. The log may then bring a record the snapshot already held, which the
-application may skip by its position.
+application may skip by its position. Before the snapshot begins, the follower applies none of the stream's records
+the log brings: the snapshot copies them, and stored past what the follower holds they would leave its copy a gap.
 
 The snapshot copies in rounds while the stream keeps being written: each round reads the positions from the last one
 copied up to the last position the stream's state covers when the round starts, and the snapshot ends with a round

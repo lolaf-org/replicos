@@ -115,6 +115,16 @@ abstract class LeaderConnectionHarness extends AbstractLeaderConnectionHarness {
         sent.frames.clear();
     }
 
+    /**
+     * Brings stream {@code key} in sync by an empty snapshot, then forgets what it sent and what {@code copy} wrote.
+     */
+    void inSync(int key, JournalCopy copy) {
+        read((out, index) -> TestingFrameEncoder.snapshotBegin(out, index, EPOCH, key, 0, 0, ""),
+                (out, index) -> TestingFrameEncoder.snapshotEnd(out, index, EPOCH, key, 0, ""));
+        copy.getWrites().clear();
+        sent.frames.clear();
+    }
+
     void streamingSyncReceived() {
         replica.configure(MAIN, StreamReplicationMode.SYNC_RECEIVED);
         read(welcome(EPOCH, WireFormat.NO_RESUME), stream(0, MAIN, StreamReplicationMode.SYNC_RECEIVED, "leader-storage"),

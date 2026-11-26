@@ -164,9 +164,16 @@ public final class JournalCopy implements ReplicaSink {
 
     @Override
     public void snapshotRecord(byte contentType, long position, ByteBuffer buffer, int payloadIndex, int payloadLength) {
-        Write entry = entry(contentType, position, buffer, payloadIndex, payloadLength);
-        stored.put(position, entry);
-        writes.add("snapshot " + entry.line);
+        Write applied = entry(contentType, position, buffer, payloadIndex, payloadLength);
+        Write entry = new Write(contentType, position, applied.payload, "snapshot " + applied.line);
+        if (batching) {
+            synchronized (pending) {
+                pending.add(entry);
+            }
+        } else {
+            stored.put(position, entry);
+            writes.add(entry.line);
+        }
     }
 
     @Override
