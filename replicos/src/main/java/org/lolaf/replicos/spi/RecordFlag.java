@@ -46,4 +46,12 @@ public enum RecordFlag {
      * The flag's bit in a record's flags on the wire.
      */
     private final byte bits;
+
+    /**
+     * @param flags a record's flags on the wire, the fragment bits included
+     * @return whether this flag's bit is set; never for {@link #NONE}, which has none
+     */
+    public boolean isSet(byte flags) {
+        return (flags & bits) != 0;
+    }
 }

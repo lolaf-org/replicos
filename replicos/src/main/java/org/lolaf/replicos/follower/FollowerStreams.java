@@ -339,10 +339,10 @@ public final class FollowerStreams {
     }
 
     private static RecordFlag recordFlag(byte flags) {
-        if ((flags & RecordFlag.RESET.getBits()) != 0) {
+        if (RecordFlag.RESET.isSet(flags)) {
             return RecordFlag.RESET;
         }
-        return (flags & RecordFlag.PLAINTEXT.getBits()) != 0 ? RecordFlag.PLAINTEXT : RecordFlag.NONE;
+        return RecordFlag.PLAINTEXT.isSet(flags) ? RecordFlag.PLAINTEXT : RecordFlag.NONE;
     }
 
     private static byte fragmentFlags(byte flags) {

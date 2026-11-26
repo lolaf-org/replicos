@@ -86,10 +86,9 @@ public class FrameDecoder {
     public static boolean isPlaintext(ByteBuffer in, int frameIndex, FrameType type) {
         switch (type) {
             case RECORD:
-                return (in.get(frameIndex + WireFormat.OFFSET_RECORD_FLAGS) & RecordFlag.PLAINTEXT.getBits()) != 0;
+                return RecordFlag.PLAINTEXT.isSet(in.get(frameIndex + WireFormat.OFFSET_RECORD_FLAGS));
             case SNAPSHOT_RECORD:
-                return (in.get(frameIndex + HEADER_BYTES + WireFormat.RECORD_BODY_FLAGS)
-                        & RecordFlag.PLAINTEXT.getBits()) != 0;
+                return RecordFlag.PLAINTEXT.isSet(in.get(frameIndex + HEADER_BYTES + WireFormat.RECORD_BODY_FLAGS));
             default:
                 return false;
         }

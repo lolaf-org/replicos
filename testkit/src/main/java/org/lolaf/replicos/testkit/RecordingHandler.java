@@ -158,7 +158,7 @@ public class RecordingHandler implements FrameHandler {
     private static String flags(byte flags) {
         return ((flags & WireFormat.CONTINUED_FRAGMENT) != 0 ? " continued" : "")
                 + ((flags & WireFormat.MORE_FRAGMENTS) != 0 ? " more" : "")
-                + ((flags & RecordFlag.RESET.getBits()) != 0 ? " reset" : "");
+                + (RecordFlag.RESET.isSet(flags) ? " reset" : "");
     }
 
     /**

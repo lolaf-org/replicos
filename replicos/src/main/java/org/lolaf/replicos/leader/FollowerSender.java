@@ -194,7 +194,7 @@ final class FollowerSender {
                 break;
             }
             if (snapshots.isOf(streamKey)) {
-                if ((FrameDecoder.recordFlags(dst, bodyIndex) & RecordFlag.RESET.getBits()) == 0) {
+                if (!RecordFlag.RESET.isSet(FrameDecoder.recordFlags(dst, bodyIndex))) {
                     continue;
                 }
                 // left for the stream, after the snapshot's end
