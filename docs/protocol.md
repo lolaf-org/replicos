@@ -137,8 +137,9 @@ Per lane:
      first position to the last, its position 8, content type 1, payload length 4 and payload. The leader digests its
      own records over those positions: the same digest starts the snapshot after the follower's last position,
      anything else at 0. No proof, as from a follower holding nothing, gets the whole stream.
-   - **2, reserved** for a check by the history of the leaderships that wrote each stream. A leader reads a check it
-     does not know as a mismatch.
+   - **2, reserved** for a check by the history of the leaderships that wrote each stream, see
+     [Reserved for an exact catch-up](#reserved-for-an-exact-catch-up). A leader reads a check it does not know as a
+     mismatch.
 
    A follower whose check or count is not the leader's gets the whole stream, and the leader logs it once per
    connection. A follower closes with `PROTOCOL_ERROR` a snapshot starting past its last position + 1.
@@ -184,7 +185,8 @@ time per lane, in chunks between the lane's live batches so the other streams ke
 3. **SNAPSHOT_END** carries the record count, which the follower checks against what it received, and the state when
    the snapshot caught up, which supersedes the one it began with. The follower answers `REPLICATING`, and the
    stream's `SYNC` appends wait for it from then on. The boundaries after the state, 16 bytes each (leadership 8,
-   first position 8), are reserved for check 2: this version sends none and skips any it receives.
+   first position 8), are [reserved for check 2](#reserved-for-an-exact-catch-up): this version sends none and skips
+   any it receives.
 
 Meanwhile the leader skips the stream's records in the log, except a `RESET`, which ends the snapshot; from its end,
 the stream's records come through the log again. The log may then bring a record the snapshot already held, which the
@@ -202,6 +204,30 @@ whole. This relies on two things the application guarantees:
 The state is opaque bytes, at most 65535, from which the follower's application resumes the stream (for a sequence,
 the next position it expects). This model fits an append-mostly log, not an arbitrary state machine needing a
 point-in-time snapshot.
+
+## Reserved for an exact catch-up
+
+Version 1 leaves room for a third catch-up check, not built yet, so a later version can add it without a new protocol
+version: a version 1 peer reads it as a check it does not know and copies the whole stream. It would work as Kafka's
+leader epochs do. Each node keeps, durably and per stream, the first position each leadership wrote, so the leader
+finds exactly where a follower's copy parts from its own: no blind spot, and a deposed leader caught up incrementally.
+
+| Room | Where | Version 1 | Check 2 would carry |
+|---|---|---|---|
+| Check code 2 | STREAM_ANSWER | never sent; read as unknown, a full copy | the follower proving its copy by its leadership history |
+| The proof | STREAM_ANSWER | check 1's digest | the leadership of the follower's record at its last position, 8 bytes |
+| Boundary count 2, then the boundaries after the state, 16 bytes each | SNAPSHOT_END | count 0; any boundary received is skipped | the leader's history over the positions copied (leadership 8, first position 8), replacing the follower's from the snapshot's start |
+| `ReplicaSink.lastPosition()` | the Java SPI, default -1 | never called | the copy's last durable position, claimed without reading its records back |
+
+The check: the follower claims its last position `p` and the leadership `L` of its record there. The leader starts the
+snapshot after `min(p, the end of L in its own history)`, and at 0 for a leadership it does not know. A history keeps
+at most 1024 boundaries per stream, the oldest dropped, and a reset starts it again.
+
+It is not built because of when a boundary would be written. An application stores a record before it appends it, so
+a leader crashing between its first store of a leadership and that leadership's boundary holds records its history
+gives to the previous leadership, which the check would then keep. Kafka has no such window, its log being its
+storage. Closing it needs the application to announce a position before storing it, as a
+`StreamWriter.beforeStore(position)` that writes the boundary durably first: an API change for a later version.
 
 ## Hand over
 
