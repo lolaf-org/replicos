@@ -17,6 +17,8 @@ package org.lolaf.replicos;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.lolaf.ringos.Deadline;
 import org.lolaf.replicos.journal.Journal;
 import org.lolaf.replicos.journal.JournalCopy;
@@ -32,9 +34,12 @@ import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -283,6 +288,90 @@ class TestReplicationNode {
             follower.close(stop());
             leader.close(stop());
         }
+    }
+
+    /**
+     * The follower starts holding {@code followerHolds} from position 1, and catches up with a leader holding
+     * {@code leaderHolds} from position 1.
+     */
+    private JournalCopy caughtUp(CatchUp leaderCatchUp, CatchUp followerCatchUp, List<String> leaderHolds,
+                                 List<String> followerHolds) {
+        Journal leaderJournal = new Journal();
+        JournalReplica followerReplica = new JournalReplica();
+        JournalCopy copy = followerReplica.configure(MAIN, StreamReplicationMode.SYNC_APPLIED);
+        for (int i = 0; i < followerHolds.size(); i++) {
+            copy.hold(i + 1, followerHolds.get(i));
+        }
+        ReplicationEncryptionSettings clear = ReplicationEncryptionSettings.builder().build();
+        ReplicationNode leader = node("n", addressA, leaderJournal, new JournalReplica(), clear, leaderCatchUp);
+        ReplicationNode follower = node("o", addressB, new Journal(), followerReplica, clear, followerCatchUp);
+        try {
+            JournalStream main = leaderJournal.add(MAIN, StreamReplicationMode.SYNC_APPLIED);
+            leaderHolds.forEach(main::append);
+            leader.lead(1, stop());
+            follower.follow(addressA, () -> 1, stop());
+            await().until(() -> follower.leader().isInSync());
+            return copy;
+        } finally {
+            follower.close(stop());
+            leader.close(stop());
+        }
+    }
+
+    private static List<String> entries(String prefix, int from, int to) {
+        return IntStream.rangeClosed(from, to).mapToObj(position -> prefix + " " + position)
+                .collect(Collectors.toList());
+    }
+
+    private static List<String> stored(List<String> entries) {
+        return IntStream.range(0, entries.size()).mapToObj(i -> (i + 1) + " " + entries.get(i))
+                .collect(Collectors.toList());
+    }
+
+    private static List<String> concat(List<String> first, List<String> second) {
+        List<String> all = new ArrayList<>(first);
+        all.addAll(second);
+        return all;
+    }
+
+    /**
+     * The deposed leader's own 8..10 never reached the new leader, which wrote its own at those positions.
+     */
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    void aDeposedLeaderHoldingRecordsTheNewOneNeverGotEndsWithTheNewLeadersAlone(boolean byLastRecords) {
+        CatchUp catchUp = byLastRecords ? CatchUp.byLastRecords() : CatchUp.fullCopy();
+        List<String> leaders = concat(entries("shared", 1, 7), entries("new", 8, 13));
+
+        JournalCopy deposed = caughtUp(catchUp, catchUp, leaders,
+                concat(entries("shared", 1, 7), entries("own", 8, 10)));
+
+        assertThat(deposed.getWrites()).first().isEqualTo("begin from=0 state=14");
+        assertThat(deposed.getStored()).isEqualTo(stored(leaders));
+    }
+
+    @Test
+    void aFollowerHoldingTheLeadersFirstRecordsIsCopiedTheRest() {
+        List<String> leaders = concat(entries("shared", 1, 7), entries("new", 8, 13));
+
+        JournalCopy follower = caughtUp(CatchUp.byLastRecords(), CatchUp.byLastRecords(), leaders,
+                entries("shared", 1, 7));
+
+        assertThat(follower.getWrites()).first().isEqualTo("begin from=8 state=14");
+        assertThat(follower.getStored()).isEqualTo(stored(leaders));
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    void aFollowerCatchingUpOtherwiseThanItsLeaderIsCopiedTheWholeStream(boolean leaderByLastRecords) {
+        CatchUp leaderCatchUp = leaderByLastRecords ? CatchUp.byLastRecords() : CatchUp.fullCopy();
+        CatchUp followerCatchUp = leaderByLastRecords ? CatchUp.fullCopy() : CatchUp.byLastRecords();
+        List<String> leaders = entries("shared", 1, 9);
+
+        JournalCopy follower = caughtUp(leaderCatchUp, followerCatchUp, leaders, entries("shared", 1, 7));
+
+        assertThat(follower.getWrites()).first().isEqualTo("begin from=0 state=10");
+        assertThat(follower.getStored()).isEqualTo(stored(leaders));
     }
 
     @Test

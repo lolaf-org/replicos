@@ -89,6 +89,17 @@ public final class JournalCopy implements ReplicaSink {
     }
 
     /**
+     * What the copy holds, by position, each as {@code "3 hello"}.
+     */
+    public List<String> getStored() {
+        List<String> held = new ArrayList<>();
+        for (Write entry : stored.values()) {
+            held.add(entry.position + " " + new String(entry.payload, StandardCharsets.US_ASCII));
+        }
+        return held;
+    }
+
+    /**
      * An entry stored before this process started, as a copy left by an earlier run.
      */
     public void hold(long position, String text) {
