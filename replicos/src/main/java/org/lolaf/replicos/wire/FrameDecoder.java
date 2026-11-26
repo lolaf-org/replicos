@@ -112,7 +112,7 @@ public class FrameDecoder {
                 decodeStream(in, p, flags, epoch, variableBytes, handler);
                 break;
             case STREAM_ANSWER:
-                decodeStreamAnswer(in, p, epoch, handler);
+                decodeStreamAnswer(in, p, epoch, variableBytes, handler);
                 break;
             case RECORD:
                 decodeRecord(in, p, epoch, variableBytes, handler);
@@ -171,8 +171,11 @@ public class FrameDecoder {
         handler.onStream(epoch, in.getInt(p), StreamReplicationMode.from(in.get(p + 4)), utf8String(in, p + 10, nameLength), identity);
     }
 
-    private static void decodeStreamAnswer(ByteBuffer in, int p, long epoch, FrameHandler handler) {
-        handler.onStreamAnswer(epoch, in.getInt(p), StreamAnswer.from(in.get(p + 4)));
+    private static void decodeStreamAnswer(ByteBuffer in, int p, long epoch, int variableBytes, FrameHandler handler) {
+        int proofLength = unsignedShort(in, p + 6);
+        checkVariableBytes(FrameType.STREAM_ANSWER, proofLength, variableBytes);
+        handler.onStreamAnswer(epoch, in.getInt(p), StreamAnswer.from(in.get(p + 4)), CatchUpCheck.from(in.get(p + 5)),
+                in.getLong(p + 8), in, p + 16, proofLength);
     }
 
     /**
@@ -208,7 +211,7 @@ public class FrameDecoder {
     private static void decodeSnapshotBegin(ByteBuffer in, int p, long epoch, int variableBytes, FrameHandler handler) {
         int stateLength = unsignedShort(in, p + 6);
         checkVariableBytes(FrameType.SNAPSHOT_BEGIN, stateLength, variableBytes);
-        handler.onSnapshotBegin(epoch, in.getInt(p), in.getLong(p + 8), in, p + 16, stateLength);
+        handler.onSnapshotBegin(epoch, in.getInt(p), in.getLong(p + 8), in.getLong(p + 16), in, p + 24, stateLength);
     }
 
     private static void decodeSnapshotRecord(ByteBuffer in, int p, long epoch, int variableBytes, FrameHandler handler) {

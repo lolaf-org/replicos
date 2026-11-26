@@ -96,8 +96,12 @@ public interface FrameHandler {
     /**
      * The follower's answer to a {@code STREAM}, and again whenever the stream's state on the follower changes, as
      * when a snapshot completes it.
+     *
+     * @param lastPosition the last position the follower holds of the stream, -1 for none
+     * @param proofIndex   where {@code check}'s proof of the follower's copy starts in {@code buffer}
      */
-    default void onStreamAnswer(long epoch, int streamKey, StreamAnswer answer) {
+    default void onStreamAnswer(long epoch, int streamKey, StreamAnswer answer, CatchUpCheck check, long lastPosition,
+                                ByteBuffer buffer, int proofIndex, int proofLength) {
         throw unexpected(FrameType.STREAM_ANSWER);
     }
 
@@ -116,10 +120,11 @@ public interface FrameHandler {
     /**
      * @param snapshotOffset the log offset the snapshot starts at; the stream's records after it come through the
      *                       snapshot until its end, and through the log again after that
+     * @param fromPosition   the first position the snapshot copies: the follower keeps what it holds before it
      * @param stateIndex     where the stream's state starts in {@code buffer}, the application's to resume from
      */
-    default void onSnapshotBegin(long epoch, int streamKey, long snapshotOffset, ByteBuffer buffer, int stateIndex,
-                                 int stateLength) {
+    default void onSnapshotBegin(long epoch, int streamKey, long snapshotOffset, long fromPosition, ByteBuffer buffer,
+                                 int stateIndex, int stateLength) {
         throw unexpected(FrameType.SNAPSHOT_BEGIN);
     }
 

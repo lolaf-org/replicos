@@ -140,12 +140,12 @@ final class BoundStream implements ReplicaStream {
     /**
      * Only for a stream replicated here.
      */
-    void snapshotBegin(ByteBuffer state, int stateIndex, int stateLength) {
+    void snapshotBegin(long fromPosition, ByteBuffer state, int stateIndex, int stateLength) {
         inSync = false;
         discardAssembledPayload();
         discardPending();
         snapshotRecordCount = 0;
-        sink.snapshotBegin(state, stateIndex, stateLength);
+        sink.snapshotBegin(fromPosition, state, stateIndex, stateLength);
     }
 
     /**

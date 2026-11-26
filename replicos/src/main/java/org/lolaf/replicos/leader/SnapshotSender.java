@@ -49,6 +49,7 @@ import java.util.function.LongSupplier;
 final class SnapshotSender {
 
     private static final int NONE = -1;
+    private static final long WHOLE_STREAM = 0;
     private static final int INITIAL_READ_SPAN = 64;
     private static final int MAX_READ_SPAN = 1 << 20;
     private static final long SOURCE_RETRY_NANOS = Duration.ofMillis(10).toNanos();
@@ -76,6 +77,10 @@ final class SnapshotSender {
     private int streamKey;
     private @Nullable SnapshotSource source;
     private long snapshotOffset;
+    /**
+     * The first position copied, the follower keeping what it holds before it.
+     */
+    private long fromPosition;
     private boolean begun;
     /**
      * The next position to copy.
@@ -172,7 +177,7 @@ final class SnapshotSender {
             }
             SnapshotSource streamSource = streams.get(key).newSnapshotSource();
             if (streamSource.isReadable()) {
-                start(key, streamSource, snapshotOffset);
+                start(key, streamSource, snapshotOffset, WHOLE_STREAM);
                 // others may be pending, started once this one ends
                 requested = true;
                 return;
@@ -240,12 +245,13 @@ final class SnapshotSender {
         }
     }
 
-    private void start(int key, SnapshotSource streamSource, long offset) {
+    private void start(int key, SnapshotSource streamSource, long offset, long from) {
         streamKey = key;
         source = streamSource;
         snapshotOffset = offset;
+        fromPosition = from;
         begun = false;
-        next = 0;
+        next = from;
         roundEnd = -1;
         previousRoundLength = Long.MAX_VALUE;
         whole = false;
@@ -313,7 +319,7 @@ final class SnapshotSender {
         void begin() {
             room(FrameEncoder.fixedBytes(FrameType.SNAPSHOT_BEGIN) + state.position());
             filled += cipher.seal(batch, filled, FrameEncoder.snapshotBegin(batch, filled, currentEpoch, streamKey,
-                    snapshotOffset, state, 0, state.position()));
+                    snapshotOffset, fromPosition, state, 0, state.position()));
         }
 
         /**

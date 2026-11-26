@@ -33,10 +33,20 @@ public interface ReplicaSink {
     void apply(byte contentType, long position, ByteBuffer buffer, int payloadIndex, int payloadLength);
 
     /**
-     * Discards the copy: the snapshot's records and its end follow, unless the leader gives the snapshot up, its
-     * source having stopped; live records then follow until another snapshot starts the copy over.
+     * The last position the copy holds, read from its storage, so that the node's
+     * {@link org.lolaf.replicos.CatchUp} may copy only what follows it; -1, the default, holds nothing and gets the
+     * whole stream. Not read under {@link org.lolaf.replicos.CatchUp#fullCopy()}.
      */
-    void snapshotBegin(ByteBuffer buffer, int stateIndex, int stateLength);
+    default long lastPosition() {
+        return -1;
+    }
+
+    /**
+     * Discards the copy from {@code fromPosition} on, keeping what it holds before, always 0 for a sink keeping
+     * {@link #lastPosition()}'s default: the snapshot's records and its end follow, unless the leader gives the
+     * snapshot up, its source having stopped; live records then follow until another snapshot starts over.
+     */
+    void snapshotBegin(long fromPosition, ByteBuffer buffer, int stateIndex, int stateLength);
 
     void snapshotRecord(byte contentType, long position, ByteBuffer buffer, int payloadIndex, int payloadLength);
 

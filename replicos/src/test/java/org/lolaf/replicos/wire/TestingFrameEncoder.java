@@ -68,9 +68,10 @@ public class TestingFrameEncoder {
     }
 
     public static int snapshotBegin(ByteBuffer out, int index, long epoch, int streamKey, long snapshotOffset,
-                                    String state) {
+                                    long fromPosition, String state) {
         ByteBuffer bytes = ascii(state);
-        return FrameEncoder.snapshotBegin(out, index, epoch, streamKey, snapshotOffset, bytes, 0, bytes.remaining());
+        return FrameEncoder.snapshotBegin(out, index, epoch, streamKey, snapshotOffset, fromPosition, bytes, 0,
+                bytes.remaining());
     }
 
     public static int snapshotEnd(ByteBuffer out, int index, long epoch, int streamKey, int recordCount, String state) {

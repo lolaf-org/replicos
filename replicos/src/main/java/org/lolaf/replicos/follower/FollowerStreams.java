@@ -20,6 +20,7 @@ import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.Nullable;
 import org.lolaf.ringos.Deadline;
+import org.lolaf.replicos.CatchUp;
 import org.lolaf.replicos.ReplicaStream;
 import org.lolaf.replicos.spi.LatencyRecorder;
 import org.lolaf.replicos.spi.ReplicaSinks;
@@ -47,6 +48,8 @@ import java.util.function.ToLongFunction;
 public final class FollowerStreams {
 
     private final ReplicaSinks replicaSinks;
+    @Getter(AccessLevel.PACKAGE)
+    private final CatchUp catchUp;
     private final LanePositions positions;
     private volatile BoundStream[] streamsByKey;
     /**
@@ -57,12 +60,13 @@ public final class FollowerStreams {
     @Getter
     private final FollowerStats stats;
 
-    public FollowerStreams(ReplicaSinks replicaSinks, LatencyRecorder receivedWriteLatency) {
+    public FollowerStreams(ReplicaSinks replicaSinks, CatchUp catchUp, LatencyRecorder receivedWriteLatency) {
         this.positions = new LanePositions();
         this.streamsByKey = new BoundStream[16];
         this.receivedWriteLatency = receivedWriteLatency;
         this.stats = new FollowerStats();
         this.replicaSinks = replicaSinks;
+        this.catchUp = catchUp;
     }
 
     public int getApplicationId() {
@@ -292,12 +296,12 @@ public final class FollowerStreams {
     /**
      * @return false for a key the leader never bound, of another lane, or not replicated here
      */
-    boolean snapshotBegin(int lane, int key, ByteBuffer state, int stateIndex, int stateLength) {
+    boolean snapshotBegin(int lane, int key, long fromPosition, ByteBuffer state, int stateIndex, int stateLength) {
         BoundStream stream = replicatedStream(lane, key);
         if (stream == null) {
             return false;
         }
-        stream.snapshotBegin(state, stateIndex, stateLength);
+        stream.snapshotBegin(fromPosition, state, stateIndex, stateLength);
         return true;
     }
 

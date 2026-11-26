@@ -241,7 +241,7 @@ class TestFollowerConnection extends FollowerConnectionHarness {
         try {
             await().alias("the stream's announcement").until(() -> batchesSent.get() == 1);
 
-            connection.onStreamAnswer(EPOCH, 0, StreamAnswer.SNAPSHOT_NEEDED);
+            answer(connection, 0, StreamAnswer.SNAPSHOT_NEEDED);
 
             await().until(() -> stats.getSendWaits() == 1);
             assertThat(batchesSent.get()).as("all four in flight").isEqualTo(4);
@@ -334,7 +334,7 @@ class TestFollowerConnection extends FollowerConnectionHarness {
         connection.onHello(EPOCH, WireFormat.VERSION, Journal.APPLICATION_ID, "follower-b", EPOCH, LEADERSHIP, -1, 1, EncryptionMode.DISABLED, TestingKeyExchanges.NO_NONCE);
         fill();
 
-        connection.onStreamAnswer(EPOCH, 1, StreamAnswer.REPLICATING);
+        answer(connection, 1, StreamAnswer.REPLICATING);
 
         assertThat(connection.isLaneInSync(2)).as("main is another lane's").isTrue();
     }
@@ -787,7 +787,7 @@ class TestFollowerConnection extends FollowerConnectionHarness {
         assertThat(connection.getSyncState(0)).isEqualTo(StreamSyncState.ANNOUNCED);
         assertThat(connection.isStreamInSync(0)).as("announced").isFalse();
 
-        connection.onStreamAnswer(EPOCH, 0, StreamAnswer.REPLICATING);
+        answer(connection, 0, StreamAnswer.REPLICATING);
 
         assertThat(connection.isStreamInSync(0)).isTrue();
         assertThat(connection.isStreamInSync(1)).as("another stream").isFalse();
@@ -799,7 +799,7 @@ class TestFollowerConnection extends FollowerConnectionHarness {
         connection.onHello(EPOCH, WireFormat.VERSION, Journal.APPLICATION_ID, "follower-b", EPOCH, LEADERSHIP, 0, 0, EncryptionMode.DISABLED, TestingKeyExchanges.NO_NONCE);
         fill();
 
-        connection.onStreamAnswer(EPOCH, 0, StreamAnswer.UNKNOWN_STREAM);
+        answer(connection, 0, StreamAnswer.UNKNOWN_STREAM);
 
         assertThat(connection.getSyncState(0)).isEqualTo(StreamSyncState.NOT_REPLICATED);
         assertThat(connection.isStreamInSync(0)).isFalse();
@@ -811,12 +811,12 @@ class TestFollowerConnection extends FollowerConnectionHarness {
         main.append("");
         connection.onHello(EPOCH, WireFormat.VERSION, Journal.APPLICATION_ID, "follower-b", EPOCH, LEADERSHIP, 0, 0, EncryptionMode.DISABLED, TestingKeyExchanges.NO_NONCE);
         fill();
-        connection.onStreamAnswer(EPOCH, 0, StreamAnswer.REPLICATING);
+        answer(connection, 0, StreamAnswer.REPLICATING);
 
         main.setStreamReplicationMode(StreamReplicationMode.NONE);
         connection.reannounce(0);
         fill();
-        connection.onStreamAnswer(EPOCH, 0, StreamAnswer.NOT_REPLICATED);
+        answer(connection, 0, StreamAnswer.NOT_REPLICATED);
 
         assertThat(sent.frames).endsWith("STREAM epoch=7 key=0 NONE name=main identity=leader-storage");
         assertThat(connection.getSyncState(0)).isEqualTo(StreamSyncState.NOT_REPLICATED);
@@ -825,7 +825,7 @@ class TestFollowerConnection extends FollowerConnectionHarness {
 
     @Test
     void anAnswerForAStreamNeverAnnouncedClosesTheConnection() {
-        connection.onStreamAnswer(EPOCH, 3, StreamAnswer.REPLICATING);
+        answer(connection, 3, StreamAnswer.REPLICATING);
 
         assertThat(sent.frames).singleElement().asString().startsWith("CLOSE epoch=7 PROTOCOL_ERROR");
     }

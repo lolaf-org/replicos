@@ -118,7 +118,7 @@ final class ReplicationNodeImpl implements ReplicationNode {
             logFullWaits[lane] = metrics.logFullWait(lane);
         }
         this.followerStreams = new FollowerStreams(follower == null ? NO_SINKS : follower.getSinks(),
-                metrics.receivedWriteLatency());
+                builder.catchUp(), metrics.receivedWriteLatency());
         this.followersView = new FollowersViewImpl(followers, stats, logs, leader == null ? NO_STREAMS : leader.getStreams());
         this.leaderView = new LeaderViewImpl(() -> client, followerStreams);
     }

@@ -119,8 +119,8 @@ public final class JournalCopy implements ReplicaSink {
     }
 
     @Override
-    public void snapshotBegin(ByteBuffer buffer, int stateIndex, int stateLength) {
-        writes.add("begin " + state(buffer, stateIndex, stateLength));
+    public void snapshotBegin(long fromPosition, ByteBuffer buffer, int stateIndex, int stateLength) {
+        writes.add("begin from=" + fromPosition + " " + state(buffer, stateIndex, stateLength));
     }
 
     @Override

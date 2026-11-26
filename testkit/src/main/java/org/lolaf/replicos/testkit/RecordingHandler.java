@@ -19,6 +19,7 @@ import org.lolaf.replicos.EncryptionMode;
 import org.lolaf.replicos.spi.RecordFlag;
 import org.lolaf.replicos.spi.StreamAnswer;
 import org.lolaf.replicos.spi.StreamReplicationMode;
+import org.lolaf.replicos.wire.CatchUpCheck;
 import org.lolaf.replicos.wire.CloseReason;
 import org.lolaf.replicos.wire.FrameDecoder;
 import org.lolaf.replicos.wire.FrameHandler;
@@ -112,8 +113,10 @@ public class RecordingHandler implements FrameHandler {
     }
 
     @Override
-    public void onStreamAnswer(long epoch, int streamKey, StreamAnswer answer) {
-        frames.add("STREAM_ANSWER epoch=" + epoch + " key=" + streamKey + " " + answer);
+    public void onStreamAnswer(long epoch, int streamKey, StreamAnswer answer, CatchUpCheck check, long lastPosition,
+                               ByteBuffer buffer, int proofIndex, int proofLength) {
+        frames.add("STREAM_ANSWER epoch=" + epoch + " key=" + streamKey + " " + answer + " " + check + " last="
+                + lastPosition + (proofLength == 0 ? "" : " proof=" + proofLength + " bytes"));
     }
 
     @Override
@@ -128,10 +131,10 @@ public class RecordingHandler implements FrameHandler {
     }
 
     @Override
-    public void onSnapshotBegin(long epoch, int streamKey, long snapshotOffset, ByteBuffer buffer, int stateIndex,
-                                int stateLength) {
+    public void onSnapshotBegin(long epoch, int streamKey, long snapshotOffset, long fromPosition, ByteBuffer buffer,
+                                int stateIndex, int stateLength) {
         frames.add("SNAPSHOT_BEGIN epoch=" + epoch + " key=" + streamKey + " snapshotOffset=" + snapshotOffset
-                + state(buffer, stateIndex, stateLength));
+                + " from=" + fromPosition + state(buffer, stateIndex, stateLength));
     }
 
     @Override

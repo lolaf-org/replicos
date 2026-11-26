@@ -22,6 +22,7 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
 import org.lolaf.betty.api.ss.WakeupSelectStrategy;
 import org.lolaf.ringos.Deadline;
+import org.lolaf.replicos.CatchUp;
 import org.lolaf.replicos.spi.LatencyRecorder;
 import org.lolaf.replicos.spi.ReplicationMetrics;
 import org.lolaf.replicos.TestingPorts;
@@ -75,7 +76,7 @@ class TestReplicationEncryptionHandshake {
         this.leaderMain = leader.add(MAIN, StreamReplicationMode.ASYNC);
         this.replica = new JournalReplica();
         this.main = replica.configure(MAIN, StreamReplicationMode.ASYNC);
-        this.followerStreams = new FollowerStreams(replica, LatencyRecorder.NONE);
+        this.followerStreams = new FollowerStreams(replica, CatchUp.fullCopy(), LatencyRecorder.NONE);
     }
 
     private static KeyExchange exchange(EncryptionMode mode, String secret, String cipher) {

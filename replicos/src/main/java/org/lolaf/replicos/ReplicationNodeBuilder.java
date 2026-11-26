@@ -59,6 +59,11 @@ public final class ReplicationNodeBuilder {
      */
     private ReplicationEncryptionSettings encryption;
     /**
+     * What a follower holding part of a stream is sent to catch up; the same on every node.
+     * {@link CatchUp#fullCopy()} by default.
+     */
+    private CatchUp catchUp;
+    /**
      * How the network threads wait, the leader's and the follower's.
      */
     private Supplier<SelectStrategy> selectStrategy;
@@ -68,6 +73,7 @@ public final class ReplicationNodeBuilder {
     ReplicationNodeBuilder() {
         this.logCapacity = 16 << 20;
         this.encryption = ReplicationEncryptionSettings.builder().build();
+        this.catchUp = CatchUp.fullCopy();
         this.selectStrategy = () -> new WakeupSelectStrategy(10);
         this.clock = ReplicationClock.SYSTEM;
         this.metrics = ReplicationMetrics.NONE;

@@ -20,6 +20,8 @@ import org.lolaf.replicos.encryption.ConnectionEncryptionKeys;
 import org.lolaf.replicos.encryption.KeyExchange;
 import org.lolaf.replicos.testkit.TestingKeyExchanges;
 import org.lolaf.replicos.wire.WireFormat;
+import org.lolaf.replicos.wire.CatchUpCheck;
+import org.lolaf.replicos.spi.StreamAnswer;
 import org.lolaf.replicos.wire.FrameType;
 import java.util.concurrent.CopyOnWriteArrayList;
 import org.lolaf.betty.api.io.IOSession;
@@ -62,6 +64,14 @@ abstract class FollowerConnectionHarness {
     static final long EPOCH = 7;
     static final long LEADERSHIP = 41;
     static final int MESSAGE_BYTES = 1_000;
+    private static final ByteBuffer NO_PROOF = ByteBuffer.allocate(0);
+
+    /**
+     * The follower's answer for a stream, catching up by full copy.
+     */
+    static void answer(FollowerConnection connection, int streamKey, StreamAnswer answer) {
+        connection.onStreamAnswer(EPOCH, streamKey, answer, CatchUpCheck.FULL_COPY, -1, NO_PROOF, 0, 0);
+    }
 
     final IOSession ioSession;
     final RecordingHandler sent;

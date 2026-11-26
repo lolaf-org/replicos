@@ -20,6 +20,7 @@ import org.lolaf.replicos.journal.Journal;
 import org.lolaf.replicos.journal.JournalCopy;
 import org.lolaf.replicos.journal.JournalReplica;
 import org.lolaf.replicos.journal.JournalStream;
+import org.lolaf.replicos.CatchUp;
 import org.lolaf.replicos.spi.LatencyRecorder;
 import org.lolaf.replicos.spi.StreamReplicationMode;
 import org.lolaf.replicos.testkit.AbstractLeaderConnectionHarness;
@@ -48,7 +49,8 @@ abstract class LeaderConnectionHarness extends AbstractLeaderConnectionHarness {
     }
 
     private LeaderConnectionHarness(JournalReplica replica) {
-        super(new FollowerStreams(replica, LatencyRecorder.NONE), new RecordingHandler(Journal.APPLICATION_ID));
+        super(new FollowerStreams(replica, CatchUp.fullCopy(), LatencyRecorder.NONE),
+                new RecordingHandler(Journal.APPLICATION_ID));
         this.replica = replica;
         this.main = replica.configure(MAIN, StreamReplicationMode.ASYNC);
     }
@@ -84,7 +86,7 @@ abstract class LeaderConnectionHarness extends AbstractLeaderConnectionHarness {
     }
 
     static ToIntBiFunction<ByteBuffer, Integer> snapshotBegin(long snapshotOffset, String state) {
-        return (out, index) -> TestingFrameEncoder.snapshotBegin(out, index, EPOCH, 0, snapshotOffset, state);
+        return (out, index) -> TestingFrameEncoder.snapshotBegin(out, index, EPOCH, 0, snapshotOffset, 0, state);
     }
 
     static ToIntBiFunction<ByteBuffer, Integer> snapshotRecord(long position, String text) {

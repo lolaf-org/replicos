@@ -37,7 +37,7 @@ final class MemorySink implements ReplicaSink {
     }
 
     @Override
-    public void snapshotBegin(ByteBuffer buffer, int stateIndex, int stateLength) {
+    public void snapshotBegin(long fromPosition, ByteBuffer buffer, int stateIndex, int stateLength) {
         // nothing held to discard
     }
 

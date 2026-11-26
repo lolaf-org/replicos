@@ -291,7 +291,8 @@ public final class LeaderConnection implements FrameHandler {
 
     private void sendStreamAnswer(int streamKey, StreamAnswer answer) {
         ByteBuffer frame = answers.claim(FrameEncoder.fixedBytes(FrameType.STREAM_ANSWER));
-        answers.send(frame, FrameEncoder.streamAnswer(frame, 0, streamEpoch, streamKey, answer));
+        answers.send(frame, FrameEncoder.streamAnswer(frame, 0, streamEpoch, streamKey, answer,
+                followerStreams.getCatchUp().getCheck(), -1, null, 0, 0));
     }
 
     @Override
@@ -487,9 +488,10 @@ public final class LeaderConnection implements FrameHandler {
     }
 
     @Override
-    public void onSnapshotBegin(long epoch, int streamKey, long snapshotOffset, ByteBuffer buffer, int stateIndex,
-                                int stateLength) {
-        if (acceptsFrame(epoch) && !followerStreams.snapshotBegin(lane, streamKey, buffer, stateIndex, stateLength)) {
+    public void onSnapshotBegin(long epoch, int streamKey, long snapshotOffset, long fromPosition, ByteBuffer buffer,
+                                int stateIndex, int stateLength) {
+        if (acceptsFrame(epoch)
+                && !followerStreams.snapshotBegin(lane, streamKey, fromPosition, buffer, stateIndex, stateLength)) {
             close(CloseReason.PROTOCOL_ERROR, "a snapshot of stream key " + streamKey + ", not replicated here");
         }
     }

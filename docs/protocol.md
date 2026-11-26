@@ -47,9 +47,9 @@ The fixed payload follows, then the variable part, then a 16-byte tag on an encr
 | 1 | HELLO | follower to leader | magic 4, version 2, node id length 2, last applied epoch 8, last applied leadership 8, last applied offset 8, lane 2, encryption mode 1, reserved 1, application id 4, nonce 16; node id |
 | 2 | WELCOME | leader to follower | magic 4, version 2, leader id length 2, leadership 8, resume offset 8, lane count 2, encryption mode 1, reserved 1, application id 4, nonce 16; leader id |
 | 3 | STREAM | leader to follower | stream key 4, replication mode 1, reserved 1, name length 2, storage identity length 2; name, storage identity |
-| 4 | STREAM_ANSWER | follower to leader | stream key 4, answer 1 |
+| 4 | STREAM_ANSWER | follower to leader | stream key 4, answer 1, catch-up check 1, proof length 2, last position 8; proof |
 | 5 | RECORD | leader to follower | log offset 8, record body 24; payload |
-| 6 | SNAPSHOT_BEGIN | leader to follower | stream key 4, reserved 2, state length 2, snapshot offset 8; state |
+| 6 | SNAPSHOT_BEGIN | leader to follower | stream key 4, reserved 2, state length 2, snapshot offset 8, from position 8; state |
 | 7 | SNAPSHOT_RECORD | leader to follower | record body 24; payload |
 | 8 | SNAPSHOT_END | leader to follower | stream key 4, record count 4, reserved 2, state length 2; state |
 | 9 | ACK | follower to leader | applied offset 8, pending writes 8 |
@@ -128,7 +128,9 @@ Per lane:
 6. The follower answers each STREAM with a **STREAM_ANSWER**. A stream it held in sync over a resumed connection is
    `REPLICATING`; one it replicates but does not hold whole is `SNAPSHOT_NEEDED`; the refusals are configuration
    errors the leader reports. A stream refused as unknown or for its mode is answered again once the follower's
-   configuration changes.
+   configuration changes. The answer also carries the follower's catch-up check, the last position it holds of the
+   stream (-1 for none) and the check's proof of it, from which the leader picks where a snapshot starts. The only
+   check so far is 0, full copy: no proof, and the snapshot copies the whole stream.
 
 Every frame after the WELCOME must carry the WELCOME's epoch; any other closes the connection with `STALE_EPOCH`. A
 follower whose connection drops reconnects, sending its new last applied offset.
@@ -165,8 +167,8 @@ With nothing to send, the leader sends a **HEARTBEAT** carrying its log tail off
 A stream the follower answered `SNAPSHOT_NEEDED`, or one the leader resyncs, is copied by snapshot, one stream at a
 time per lane, in chunks between the lane's live batches so the other streams keep replicating:
 
-1. **SNAPSHOT_BEGIN** carries the stream's state and the log offset the snapshot starts at. The follower discards its
-   copy of the stream.
+1. **SNAPSHOT_BEGIN** carries the stream's state, the log offset the snapshot starts at and the first position it
+   copies. The follower discards its copy of the stream from that position on, all of it from 0.
 2. **SNAPSHOT_RECORD** frames carry the stream's records by position, fragmented as RECORD's.
 3. **SNAPSHOT_END** carries the record count, which the follower checks against what it received, and the state when
    the snapshot caught up, which supersedes the one it began with. The follower answers `REPLICATING`, and the

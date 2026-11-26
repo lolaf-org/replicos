@@ -35,10 +35,12 @@ import org.lolaf.replicos.spi.WireFormatException;
  * KEY_CONFIRMATION   follower to leader  HMAC-SHA256 32 of the HELLO and WELCOME, when both peers encrypt
  * STREAM             leader to follower  stream key 4, replication mode 1, reserved 1, stream name length 2,
  *                                        storage identity length 2; then the name, then the identity
- * STREAM_ANSWER      follower to leader  stream key 4, answer 1
+ * STREAM_ANSWER      follower to leader  stream key 4, answer 1, catch-up check 1, proof length 2, last position 8;
+ *                                        then the proof
  * RECORD             leader to follower  log offset 8, then a record body: stream key 4, content type 1, flags 1,
  *                                        reserved 2, position 8, payload length 4, reserved 4; then the payload
- * SNAPSHOT_BEGIN     leader to follower  stream key 4, reserved 2, state length 2, snapshot offset 8; then the state
+ * SNAPSHOT_BEGIN     leader to follower  stream key 4, reserved 2, state length 2, snapshot offset 8,
+ *                                        from position 8; then the state
  * SNAPSHOT_RECORD    leader to follower  a record body, as RECORD's; then the payload
  * SNAPSHOT_END       leader to follower  stream key 4, record count 4, reserved 2, state length 2; then the state
  * ACK                follower to leader  applied offset 8, pending writes 8
@@ -63,9 +65,9 @@ public enum FrameType {
     HELLO(1, 56),
     WELCOME(2, 48),
     STREAM(3, 10),
-    STREAM_ANSWER(4, 5),
+    STREAM_ANSWER(4, 16),
     RECORD(5, 32),
-    SNAPSHOT_BEGIN(6, 16),
+    SNAPSHOT_BEGIN(6, 24),
     SNAPSHOT_RECORD(7, 24),
     SNAPSHOT_END(8, 12),
     ACK(9, 16),

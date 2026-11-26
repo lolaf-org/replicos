@@ -82,7 +82,7 @@ class TestFollowers {
         }, new TestingReplicationClock(), TestingKeyExchanges.CLEAR);
         connection.onHello(EPOCH, WireFormat.VERSION, Journal.APPLICATION_ID, "follower", EPOCH, LEADERSHIP, 0, 0, EncryptionMode.DISABLED, TestingKeyExchanges.NO_NONCE);
         connection.getSender().fillBatch(ByteBuffer.allocate(1 << 16));
-        connection.onStreamAnswer(EPOCH, KEY, StreamAnswer.REPLICATING);
+        FollowerConnectionHarness.answer(connection, KEY, StreamAnswer.REPLICATING);
         connection.onAck(EPOCH, appliedOffset, true, 0);
         followers.add(connection);
         return connection;
@@ -92,7 +92,7 @@ class TestFollowers {
     void withoutAFollowerInSyncTheWaitEndsAtOnceEvenWithoutATimeout() {
         assertThat(followers.awaitAck(KEY, offset, StreamReplicationMode.SYNC_APPLIED, NO_TIMEOUT, idle)).isEqualTo(StreamWriter.Ack.NO_FOLLOWER_IN_SYNC);
 
-        inSyncFollower(0).onStreamAnswer(EPOCH, KEY, StreamAnswer.SNAPSHOT_NEEDED);
+        FollowerConnectionHarness.answer(inSyncFollower(0), KEY, StreamAnswer.SNAPSHOT_NEEDED);
 
         assertThat(followers.awaitAck(KEY, offset, StreamReplicationMode.SYNC_APPLIED, NO_TIMEOUT, idle)).isEqualTo(StreamWriter.Ack.NO_FOLLOWER_IN_SYNC);
     }
@@ -221,7 +221,7 @@ class TestFollowers {
         }, new TestingReplicationClock(), TestingKeyExchanges.CLEAR);
         connectionOfMain.onHello(EPOCH, WireFormat.VERSION, Journal.APPLICATION_ID, "follower", EPOCH, LEADERSHIP, -1, 0, EncryptionMode.DISABLED, TestingKeyExchanges.NO_NONCE);
         connectionOfMain.getSender().fillBatch(ByteBuffer.allocate(1 << 16));
-        connectionOfMain.onStreamAnswer(EPOCH, 0, StreamAnswer.REPLICATING);
+        FollowerConnectionHarness.answer(connectionOfMain, 0, StreamAnswer.REPLICATING);
         connectionOfMain.onAck(EPOCH, twoLanes.getLogs().get(0).getTailOffset(), true, 0);
         followers.add(connectionOfMain);
 
@@ -235,11 +235,11 @@ class TestFollowers {
         Journal twoLanes = twoLanes();
         FollowerConnection laneOfMain = laneConnection(twoLanes, 0);
         FollowerConnection laneOfOther = laneConnection(twoLanes, 1);
-        laneOfMain.onStreamAnswer(EPOCH, 0, StreamAnswer.REPLICATING);
+        FollowerConnectionHarness.answer(laneOfMain, 0, StreamAnswer.REPLICATING);
 
         assertThat(followers.isAnyFollowerInSync(2, 2)).as("other's lane still catching up").isFalse();
 
-        laneOfOther.onStreamAnswer(EPOCH, 1, StreamAnswer.REPLICATING);
+        FollowerConnectionHarness.answer(laneOfOther, 1, StreamAnswer.REPLICATING);
 
         assertThat(followers.isAnyFollowerInSync(2, 2)).isTrue();
         assertThat(followers.countFollowers(2, FollowerConnection::isConnected)).isEqualTo(1);

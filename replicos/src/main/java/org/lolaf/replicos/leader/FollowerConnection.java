@@ -299,7 +299,8 @@ public final class FollowerConnection implements FrameHandler {
     }
 
     @Override
-    public void onStreamAnswer(long epoch, int streamKey, StreamAnswer answer) {
+    public void onStreamAnswer(long epoch, int streamKey, StreamAnswer answer, CatchUpCheck check, long lastPosition,
+                               ByteBuffer buffer, int proofIndex, int proofLength) {
         if (syncs.get(streamKey) == null) {
             close(CloseReason.PROTOCOL_ERROR, "a STREAM_ANSWER for stream key " + streamKey + ", never announced");
             return;

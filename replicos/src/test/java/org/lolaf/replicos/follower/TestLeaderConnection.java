@@ -253,10 +253,11 @@ class TestLeaderConnection extends LeaderConnectionHarness {
 
         read(snapshotBegin(512, "13"), snapshotRecord(11, "eleven"), snapshotRecord(12, "twelve"), snapshotEnd(2, "14"));
 
-        assertThat(main.getWrites()).containsExactly("begin state=13", "snapshot 11 eleven", "snapshot 12 twelve",
+        assertThat(main.getWrites()).containsExactly("begin from=0 state=13", "snapshot 11 eleven", "snapshot 12 twelve",
                 "end state=14");
         assertThat(followerStreams.isInSync()).isTrue();
-        assertThat(sent.frames).containsExactly("STREAM_ANSWER epoch=7 key=0 REPLICATING", "ACK epoch=7 applied=-1 inSync=true");
+        assertThat(sent.frames).containsExactly("STREAM_ANSWER epoch=7 key=0 REPLICATING FULL_COPY last=-1",
+                "ACK epoch=7 applied=-1 inSync=true");
     }
 
     @Test
@@ -266,7 +267,7 @@ class TestLeaderConnection extends LeaderConnectionHarness {
 
         read(snapshotBegin(512, "1"), record(EPOCH, 600, 0, 1, "live"), snapshotEnd(0, "2"));
 
-        assertThat(main.getWrites()).containsExactly("begin state=1", "1 live", "end state=2");
+        assertThat(main.getWrites()).containsExactly("begin from=0 state=1", "1 live", "end state=2");
     }
 
     @Test
@@ -276,7 +277,7 @@ class TestLeaderConnection extends LeaderConnectionHarness {
 
         read(snapshotBegin(512, "1"), record(EPOCH, 600, 0, 1, "live"), snapshotBegin(700, "1"), snapshotEnd(0, "2"));
 
-        assertThat(main.getWrites()).containsExactly("begin state=1", "begin state=1", "end state=2");
+        assertThat(main.getWrites()).containsExactly("begin from=0 state=1", "begin from=0 state=1", "end state=2");
     }
 
     @Test
@@ -312,7 +313,7 @@ class TestLeaderConnection extends LeaderConnectionHarness {
                 snapshotFragment(5, "ted", LAST), snapshotEnd(1, "6"));
 
         assertThat(main.getWrites()).contains("snapshot 5 fragmented");
-        assertThat(sent.frames).contains("STREAM_ANSWER epoch=7 key=0 REPLICATING");
+        assertThat(sent.frames).contains("STREAM_ANSWER epoch=7 key=0 REPLICATING FULL_COPY last=-1");
     }
 
     @Test
@@ -340,7 +341,7 @@ class TestLeaderConnection extends LeaderConnectionHarness {
         sent.frames.clear();
         decode(writeFrames(welcome(EPOCH, 0), stream(0, MAIN)), resumed);
 
-        assertThat(sent.frames).containsExactly("STREAM_ANSWER epoch=7 key=0 SNAPSHOT_NEEDED");
+        assertThat(sent.frames).containsExactly("STREAM_ANSWER epoch=7 key=0 SNAPSHOT_NEEDED FULL_COPY last=-1");
         decode(writeFrames(fragment(64, 0, 5, "ted", LAST)), resumed);
         assertThat(main.getWrites()).as("the rest of a record alone is not applied").isEmpty();
     }
@@ -354,12 +355,12 @@ class TestLeaderConnection extends LeaderConnectionHarness {
         LeaderConnection resumed = newConnection(0);
         sent.frames.clear();
         decode(writeFrames(welcome(EPOCH, 48), stream(0, MAIN)), resumed);
-        assertThat(sent.frames).containsExactly("STREAM_ANSWER epoch=7 key=0 REPLICATING");
+        assertThat(sent.frames).containsExactly("STREAM_ANSWER epoch=7 key=0 REPLICATING FULL_COPY last=-1");
 
         LeaderConnection notResumed = newConnection(0);
         sent.frames.clear();
         decode(writeFrames(welcome(EPOCH, WireFormat.NO_RESUME), stream(0, MAIN)), notResumed);
-        assertThat(sent.frames).containsExactly("STREAM_ANSWER epoch=7 key=0 SNAPSHOT_NEEDED");
+        assertThat(sent.frames).containsExactly("STREAM_ANSWER epoch=7 key=0 SNAPSHOT_NEEDED FULL_COPY last=-1");
         assertThat(followerStreams.getLastAppliedOffset(0)).as("nothing left to resume from").isEqualTo(-1);
     }
 

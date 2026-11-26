@@ -176,11 +176,24 @@ public class FrameEncoder {
         return length;
     }
 
-    public static int streamAnswer(ByteBuffer out, int index, long epoch, int streamKey, StreamAnswer answer) {
-        int length = header(out, index, FrameType.STREAM_ANSWER, 0, epoch, 0);
+    /**
+     * @param lastPosition the last position the follower holds of the stream, -1 for none
+     * @param proof        what {@code check} proves the follower's copy with, {@code proofLength} bytes from
+     *                     {@code proofIndex}, left untouched; null for none
+     */
+    public static int streamAnswer(ByteBuffer out, int index, long epoch, int streamKey, StreamAnswer answer,
+                                   CatchUpCheck check, long lastPosition, @Nullable ByteBuffer proof, int proofIndex,
+                                   int proofLength) {
+        int length = header(out, index, FrameType.STREAM_ANSWER, 0, epoch, proofLength);
         int p = index + HEADER_BYTES;
         out.putInt(p, streamKey);
         out.put(p + 4, (byte) answer.getCode());
+        out.put(p + 5, (byte) check.getCode());
+        out.putShort(p + 6, (short) proofLength);
+        out.putLong(p + 8, lastPosition);
+        if (proof != null) {
+            copy(proof, proofIndex, out, p + 16, proofLength);
+        }
         return length;
     }
 
@@ -229,17 +242,19 @@ public class FrameEncoder {
     }
 
     /**
-     * @param state the stream's state, {@code stateLength} bytes from {@code stateIndex}, left untouched
+     * @param fromPosition the first position the snapshot copies, the follower keeping what it holds before it
+     * @param state        the stream's state, {@code stateLength} bytes from {@code stateIndex}, left untouched
      */
     public static int snapshotBegin(ByteBuffer out, int index, long epoch, int streamKey, long snapshotOffset,
-                                    ByteBuffer state, int stateIndex, int stateLength) {
+                                    long fromPosition, ByteBuffer state, int stateIndex, int stateLength) {
         int length = header(out, index, FrameType.SNAPSHOT_BEGIN, 0, epoch, checkState(stateLength));
         int p = index + HEADER_BYTES;
         out.putInt(p, streamKey);
         out.putShort(p + 4, (short) 0);
         out.putShort(p + 6, (short) stateLength);
         out.putLong(p + 8, snapshotOffset);
-        copy(state, stateIndex, out, p + 16, stateLength);
+        out.putLong(p + 16, fromPosition);
+        copy(state, stateIndex, out, p + 24, stateLength);
         return length;
     }
 

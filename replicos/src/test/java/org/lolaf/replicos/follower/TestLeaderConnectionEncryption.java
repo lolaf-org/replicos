@@ -292,6 +292,7 @@ class TestLeaderConnectionEncryption extends LeaderConnectionHarness {
 
         streamingInSync(encrypting, cipher);
 
-        assertThat(sent.frames).as("opened as the leader opens them").contains("STREAM_ANSWER epoch=7 key=0 REPLICATING");
+        assertThat(sent.frames).as("opened as the leader opens them")
+                .contains("STREAM_ANSWER epoch=7 key=0 REPLICATING FULL_COPY last=-1");
     }
 }

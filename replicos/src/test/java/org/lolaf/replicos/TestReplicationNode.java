@@ -139,7 +139,8 @@ class TestReplicationNode {
         main.append("second");
 
         assertThat(main.awaitAck(ACK_TIMEOUT)).isEqualTo(StreamWriter.Ack.ACKED);
-        assertThat(copyB.getWrites()).containsExactly("begin state=2", "snapshot 1 first", "end state=2", "2 second");
+        assertThat(copyB.getWrites())
+                .containsExactly("begin from=0 state=2", "snapshot 1 first", "end state=2", "2 second");
         assertThat(a.isLeading()).isTrue();
         assertThat(b.isFollowing()).isTrue();
         assertThat(a.getLogBytesWritten()).isPositive();
@@ -242,7 +243,7 @@ class TestReplicationNode {
             restarted.lead(1, stop());
 
             await().untilAsserted(() -> assertThat(copyB.getWrites()).as("its log holds the follower's offset")
-                    .startsWith("begin state=4"));
+                    .startsWith("begin from=0 state=4"));
         } finally {
             restarted.close(stop());
         }
@@ -281,7 +282,8 @@ class TestReplicationNode {
         await().until(() -> a.followers().isStreamInSync(0));
         late.append("second");
         assertThat(late.awaitAck(ACK_TIMEOUT)).isEqualTo(StreamWriter.Ack.ACKED);
-        assertThat(lateCopy.getWrites()).containsExactly("begin state=2", "snapshot 1 first", "end state=2", "2 second");
+        assertThat(lateCopy.getWrites())
+                .containsExactly("begin from=0 state=2", "snapshot 1 first", "end state=2", "2 second");
     }
 
     @Test
@@ -340,7 +342,7 @@ class TestReplicationNode {
 
         a.resync(0);
 
-        await().untilAsserted(() -> assertThat(copyB.getWrites()).startsWith("begin state=2"));
+        await().untilAsserted(() -> assertThat(copyB.getWrites()).startsWith("begin from=0 state=2"));
         assertThat(a.followers().getSnapshots()).isEqualTo(2);
     }
 

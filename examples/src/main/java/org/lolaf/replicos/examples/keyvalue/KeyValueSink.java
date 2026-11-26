@@ -41,7 +41,7 @@ final class KeyValueSink implements ReplicaSink {
     }
 
     @Override
-    public void snapshotBegin(ByteBuffer buffer, int stateIndex, int stateLength) {
+    public void snapshotBegin(long fromPosition, ByteBuffer buffer, int stateIndex, int stateLength) {
         store.clear();
         log.info("Snapshot started, store cleared");
     }

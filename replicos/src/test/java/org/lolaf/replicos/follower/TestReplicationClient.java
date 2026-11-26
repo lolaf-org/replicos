@@ -22,6 +22,7 @@ import org.junit.jupiter.params.ParameterizedClass;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.lolaf.betty.api.ss.WakeupSelectStrategy;
 import org.lolaf.ringos.Deadline;
+import org.lolaf.replicos.CatchUp;
 import org.lolaf.replicos.spi.LatencyRecorder;
 import org.lolaf.replicos.spi.ReplicationMetrics;
 import org.lolaf.replicos.FollowerSettings;
@@ -92,7 +93,7 @@ class TestReplicationClient {
         this.server = server(address, leader);
         this.replica = new JournalReplica();
         this.main = replica.configure(MAIN, StreamReplicationMode.SYNC_APPLIED);
-        this.followerStreams = new FollowerStreams(replica, LatencyRecorder.NONE);
+        this.followerStreams = new FollowerStreams(replica, CatchUp.fullCopy(), LatencyRecorder.NONE);
         this.twoLanesStats = new ReplicationStats(new SlowFollowers(Duration.ZERO, new TestingReplicationClock()), ReplicationMetrics.NONE);
         leaderMain.append("first");
         server.start();
@@ -311,7 +312,7 @@ class TestReplicationClient {
     void aFreshFollowerIsCaughtUpBySnapshotThenStreamedTheLeadersAppends() {
         connect();
         FollowerConnection connection = inSync();
-        assertThat(main.getWrites()).startsWith("begin state=2", "snapshot 1 first", "end state=2");
+        assertThat(main.getWrites()).startsWith("begin from=0 state=2", "snapshot 1 first", "end state=2");
         assertThat(followerStreams.isInSync()).isTrue();
         main.getWrites().clear();
 

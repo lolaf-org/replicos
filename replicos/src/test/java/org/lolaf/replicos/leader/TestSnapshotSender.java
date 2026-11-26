@@ -78,9 +78,9 @@ class TestSnapshotSender extends FollowerConnectionHarness {
         stream("refused").append("");
         connection.onHello(EPOCH, WireFormat.VERSION, Journal.APPLICATION_ID, "follower-b", EPOCH, LEADERSHIP, 0, 0, EncryptionMode.DISABLED, TestingKeyExchanges.NO_NONCE);
         fill();
-        connection.onStreamAnswer(EPOCH, 0, StreamAnswer.REPLICATING);
-        connection.onStreamAnswer(EPOCH, 1, StreamAnswer.SHARED_STORAGE);
-        connection.onStreamAnswer(EPOCH, 2, StreamAnswer.UNKNOWN_STREAM);
+        answer(connection, 0, StreamAnswer.REPLICATING);
+        answer(connection, 1, StreamAnswer.SHARED_STORAGE);
+        answer(connection, 2, StreamAnswer.UNKNOWN_STREAM);
 
         for (int key = 0; key < 3; key++) {
             connection.resync(key);
@@ -104,12 +104,12 @@ class TestSnapshotSender extends FollowerConnectionHarness {
         hello();
         sent.frames.clear();
 
-        connection.onStreamAnswer(EPOCH, 0, StreamAnswer.SNAPSHOT_NEEDED);
+        answer(connection, 0, StreamAnswer.SNAPSHOT_NEEDED);
         snapshot();
 
         long snapshotOffset = journal.getLogs().get(0).getTailOffset();
         assertThat(sent.frames).containsExactly(
-                "SNAPSHOT_BEGIN epoch=7 key=0 snapshotOffset=" + snapshotOffset + " state=3",
+                "SNAPSHOT_BEGIN epoch=7 key=0 snapshotOffset=" + snapshotOffset + " from=0 state=3",
                 "SNAPSHOT_RECORD epoch=7 key=0 type=1 pos=1 payload=one",
                 "SNAPSHOT_RECORD epoch=7 key=0 type=1 pos=2 payload=two",
                 "SNAPSHOT_END epoch=7 key=0 count=2 state=3");
@@ -128,7 +128,7 @@ class TestSnapshotSender extends FollowerConnectionHarness {
         hello();
         sentPlaintext.clear();
 
-        connection.onStreamAnswer(EPOCH, 0, StreamAnswer.SNAPSHOT_NEEDED);
+        answer(connection, 0, StreamAnswer.SNAPSHOT_NEEDED);
         snapshot();
 
         assertThat(sentPlaintext).as("three fragments, then the other record").containsExactly(true, true, true, false);
@@ -139,7 +139,7 @@ class TestSnapshotSender extends FollowerConnectionHarness {
         JournalStream main = streamHolding("main", 1_000);
         JournalStream other = stream("other");
         hello();
-        connection.onStreamAnswer(EPOCH, 0, StreamAnswer.SNAPSHOT_NEEDED);
+        answer(connection, 0, StreamAnswer.SNAPSHOT_NEEDED);
         sent.frames.clear();
 
         connection.getSender().startPendingSnapshot();
@@ -167,7 +167,7 @@ class TestSnapshotSender extends FollowerConnectionHarness {
         connection = connectionChunking(chunkBytes);
         streamHolding("main", 1_000);
         hello();
-        connection.onStreamAnswer(EPOCH, 0, StreamAnswer.SNAPSHOT_NEEDED);
+        answer(connection, 0, StreamAnswer.SNAPSHOT_NEEDED);
         connection.getSender().startPendingSnapshot();
         connection.getSender().sendSnapshotChunk();
         sent.frames.clear();
@@ -185,7 +185,7 @@ class TestSnapshotSender extends FollowerConnectionHarness {
         connection = connectionChunking(4 << 10);
         JournalStream main = streamHolding("main", 1_000);
         hello();
-        connection.onStreamAnswer(EPOCH, 0, StreamAnswer.SNAPSHOT_NEEDED);
+        answer(connection, 0, StreamAnswer.SNAPSHOT_NEEDED);
 
         snapshot();
 
@@ -198,7 +198,7 @@ class TestSnapshotSender extends FollowerConnectionHarness {
     void aSnapshotEndsWithTheRoundThatCaughtUpWithTheStreamsAppends() {
         growsWhileSnapshotted(streamHolding("main", 1_000), 10);
         hello();
-        connection.onStreamAnswer(EPOCH, 0, StreamAnswer.SNAPSHOT_NEEDED);
+        answer(connection, 0, StreamAnswer.SNAPSHOT_NEEDED);
         sent.frames.clear();
 
         snapshot();
@@ -211,7 +211,7 @@ class TestSnapshotSender extends FollowerConnectionHarness {
     void aSnapshotNotCatchingUpSendsItsLastRoundWhole() {
         growsWhileSnapshotted(streamHolding("main", 1_000), 2_000);
         hello();
-        connection.onStreamAnswer(EPOCH, 0, StreamAnswer.SNAPSHOT_NEEDED);
+        answer(connection, 0, StreamAnswer.SNAPSHOT_NEEDED);
         connection.getSender().startPendingSnapshot();
         while (snapshotPositions().size() < 1_000) {
             connection.getSender().sendSnapshotChunk();
@@ -230,7 +230,7 @@ class TestSnapshotSender extends FollowerConnectionHarness {
     void aResetOfTheStreamEndsItsSnapshotAndIsSentAfterItsEnd() {
         JournalStream main = streamHolding("main", 1_000);
         hello();
-        connection.onStreamAnswer(EPOCH, 0, StreamAnswer.SNAPSHOT_NEEDED);
+        answer(connection, 0, StreamAnswer.SNAPSHOT_NEEDED);
         connection.getSender().startPendingSnapshot();
         connection.getSender().sendSnapshotChunk();
         sent.frames.clear();
@@ -255,7 +255,7 @@ class TestSnapshotSender extends FollowerConnectionHarness {
         hello();
         sent.frames.clear();
 
-        connection.onStreamAnswer(EPOCH, 0, StreamAnswer.SNAPSHOT_NEEDED);
+        answer(connection, 0, StreamAnswer.SNAPSHOT_NEEDED);
         snapshot();
 
         assertThat(sent.frames).filteredOn(frame -> !frame.startsWith("SNAPSHOT_BEGIN")).containsExactly(
@@ -271,7 +271,7 @@ class TestSnapshotSender extends FollowerConnectionHarness {
         main.skip(1_000);
         hello();
 
-        connection.onStreamAnswer(EPOCH, 0, StreamAnswer.SNAPSHOT_NEEDED);
+        answer(connection, 0, StreamAnswer.SNAPSHOT_NEEDED);
         snapshot();
 
         List<long[]> ranges = main.getSnapshotRanges();
@@ -289,7 +289,7 @@ class TestSnapshotSender extends FollowerConnectionHarness {
         main.setReadable(false);
         hello();
         sent.frames.clear();
-        connection.onStreamAnswer(EPOCH, 0, StreamAnswer.SNAPSHOT_NEEDED);
+        answer(connection, 0, StreamAnswer.SNAPSHOT_NEEDED);
 
         snapshot();
 
@@ -319,7 +319,7 @@ class TestSnapshotSender extends FollowerConnectionHarness {
         });
         hello();
         sent.frames.clear();
-        connection.onStreamAnswer(EPOCH, 0, StreamAnswer.SNAPSHOT_NEEDED);
+        answer(connection, 0, StreamAnswer.SNAPSHOT_NEEDED);
         TestLogger snapshotLog = TestLoggerFactory.getTestLogger(SnapshotSender.class);
         int loggedBefore = snapshotLog.getLoggingEvents().size();
 
@@ -354,7 +354,7 @@ class TestSnapshotSender extends FollowerConnectionHarness {
         hello();
         sent.frames.clear();
 
-        connection.onStreamAnswer(EPOCH, 0, StreamAnswer.SNAPSHOT_NEEDED);
+        answer(connection, 0, StreamAnswer.SNAPSHOT_NEEDED);
         snapshot();
 
         assertThat(connection.getState()).isEqualTo(FollowerConnection.State.CLOSED);

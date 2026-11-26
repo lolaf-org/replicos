@@ -305,7 +305,7 @@ class TestFollowerConnectionEncryption extends FollowerConnectionHarness {
         quotes.hold(RecordFlag.NONE, ORDER_TEXT);
         streamingEncrypted();
 
-        connection.onStreamAnswer(EPOCH, 0, StreamAnswer.SNAPSHOT_NEEDED);
+        answer(connection, 0, StreamAnswer.SNAPSHOT_NEEDED);
         snapshot();
 
         assertThat(sent.frames).filteredOn(frame -> frame.startsWith("SNAPSHOT_RECORD"))
@@ -327,7 +327,7 @@ class TestFollowerConnectionEncryption extends FollowerConnectionHarness {
         });
         streamingEncrypted();
 
-        connection.onStreamAnswer(EPOCH, 0, StreamAnswer.SNAPSHOT_NEEDED);
+        answer(connection, 0, StreamAnswer.SNAPSHOT_NEEDED);
         snapshot();
 
         assertThat(sent.frames).as("opened in order, the CLOSE included")
@@ -353,7 +353,7 @@ class TestFollowerConnectionEncryption extends FollowerConnectionHarness {
         connection.onKeyConfirmation(EPOCH, followerConfirmation(follower, followerNonce));
         await().alias("the stream's announcement").until(() -> batchesSent.get() == 1);
 
-        connection.onStreamAnswer(EPOCH, 0, StreamAnswer.SNAPSHOT_NEEDED);
+        answer(connection, 0, StreamAnswer.SNAPSHOT_NEEDED);
 
         await().ignoreExceptions().untilAsserted(() -> assertThat(sent.frames).last().asString()
                 .isEqualTo("CLOSE epoch=7 PROTOCOL_ERROR closed mid-snapshot"));

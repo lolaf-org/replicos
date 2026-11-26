@@ -182,11 +182,12 @@ class TestFrameCodec {
     @Test
     void streamAnswer() {
         ByteBuffer buffer = buffer(false);
-        int length = FrameEncoder.streamAnswer(buffer, 0, 7, 3, StreamAnswer.SHARED_STORAGE);
+        int length = FrameEncoder.streamAnswer(buffer, 0, 7, 3, StreamAnswer.SHARED_STORAGE, CatchUpCheck.FULL_COPY, 42,
+                null, 0, 0);
 
         decodeWhole(buffer, 0, length);
 
-        assertThat(handler.frames).containsExactly("STREAM_ANSWER epoch=7 key=3 SHARED_STORAGE");
+        assertThat(handler.frames).containsExactly("STREAM_ANSWER epoch=7 key=3 SHARED_STORAGE FULL_COPY last=42");
     }
 
     @ParameterizedTest
@@ -269,7 +270,7 @@ class TestFrameCodec {
     @Test
     void snapshot() {
         ByteBuffer buffer = buffer(false);
-        int begin = TestingFrameEncoder.snapshotBegin(buffer, 0, 7, 3, 8192, "43");
+        int begin = TestingFrameEncoder.snapshotBegin(buffer, 0, 7, 3, 8192, 40, "43");
         int message = TestingFrameEncoder.snapshotRecord(buffer, begin, 7, 3, CONTENT_TYPE, (byte) 0, 42, message());
         int end = TestingFrameEncoder.snapshotEnd(buffer, begin + message, 7, 3, 1, "44");
 
@@ -278,7 +279,7 @@ class TestFrameCodec {
         decodeWhole(buffer, begin + message, end);
 
         assertThat(handler.frames).containsExactly(
-                "SNAPSHOT_BEGIN epoch=7 key=3 snapshotOffset=8192 state=43",
+                "SNAPSHOT_BEGIN epoch=7 key=3 snapshotOffset=8192 from=40 state=43",
                 "SNAPSHOT_RECORD epoch=7 key=3 type=1 pos=42 payload=" + new String(MESSAGE, StandardCharsets.US_ASCII),
                 "SNAPSHOT_END epoch=7 key=3 count=1 state=44");
     }
@@ -407,7 +408,7 @@ class TestFrameCodec {
         ByteBuffer buffer = buffer(false);
         ByteBuffer state = ByteBuffer.wrap("abc".getBytes(StandardCharsets.US_ASCII));
         int stream = FrameEncoder.stream(buffer, 0, 7, 3, StreamReplicationMode.SYNC_RECEIVED, "any name at all", null);
-        int begin = FrameEncoder.snapshotBegin(buffer, stream, 7, 3, 64, state, 0, 3);
+        int begin = FrameEncoder.snapshotBegin(buffer, stream, 7, 3, 64, 0, state, 0, 3);
         int end = FrameEncoder.snapshotEnd(buffer, stream + begin, 7, 3, 0, state, 0, 0);
         int body = FrameEncoder.recordBody(buffer, stream + begin + end + WireFormat.RECORD_BODY_OFFSET, 3, (byte) 0xC9,
                 (byte) 0, 5, null, 0, 0);
@@ -421,8 +422,8 @@ class TestFrameCodec {
             }
 
             @Override
-            public void onSnapshotBegin(long epoch, int streamKey, long snapshotOffset, ByteBuffer in, int stateIndex,
-                                        int stateLength) {
+            public void onSnapshotBegin(long epoch, int streamKey, long snapshotOffset, long fromPosition, ByteBuffer in,
+                                        int stateIndex, int stateLength) {
                 seen.add("state " + new String(FrameDecoder.bytes(in, stateIndex, stateLength), StandardCharsets.US_ASCII));
             }
 
@@ -453,7 +454,7 @@ class TestFrameCodec {
     void aStateLongerThanItsLengthCanSayIsRefused() {
         ByteBuffer state = ByteBuffer.allocate(WireFormat.MAX_STATE_BYTES + 1);
 
-        assertThatThrownBy(() -> FrameEncoder.snapshotBegin(ByteBuffer.allocate(1 << 17), 0, 7, 3, 64, state, 0,
+        assertThatThrownBy(() -> FrameEncoder.snapshotBegin(ByteBuffer.allocate(1 << 17), 0, 7, 3, 64, 0, state, 0,
                 state.capacity())).isInstanceOf(IllegalArgumentException.class);
     }
 
