@@ -105,7 +105,7 @@ class TestReplicationClient {
 
     private static ReplicationServer server(InetSocketAddress address, Journal leader, ReplicationStats stats) {
         return new ReplicationServer(leader.settings().bindAddress(address).heartbeatInterval(Duration.ofMillis(100)).build(),
-                leader.getLogs(), leader.getFollowers(), () -> EPOCH, LEADERSHIP, "leader-a", new WakeupSelectStrategy(10), stats,
+                leader.getLogs(), leader.getFollowers(), () -> EPOCH, LEADERSHIP, "leader-a", CatchUp.fullCopy(), new WakeupSelectStrategy(10), stats,
                 new TestingReplicationClock(), TestingKeyExchanges.CLEAR);
     }
 

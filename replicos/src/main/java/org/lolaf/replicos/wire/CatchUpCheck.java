@@ -30,7 +30,12 @@ public enum CatchUpCheck {
     /**
      * No proof: the snapshot copies the whole stream.
      */
-    FULL_COPY(0);
+    FULL_COPY(0),
+    /**
+     * A {@link RecordDigest} of the follower's last records: the snapshot copies what follows them when the leader's
+     * records at their positions digest the same.
+     */
+    LAST_RECORDS(1);
 
     private final int code;
 
@@ -38,9 +43,13 @@ public enum CatchUpCheck {
      * @throws WireFormatException for a code no check has
      */
     public static CatchUpCheck from(int code) {
-        if (code == 0) {
-            return FULL_COPY;
+        switch (code) {
+            case 0:
+                return FULL_COPY;
+            case 1:
+                return LAST_RECORDS;
+            default:
+                throw new WireFormatException("Unknown catch-up check " + code);
         }
-        throw new WireFormatException("Unknown catch-up check " + code);
     }
 }

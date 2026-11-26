@@ -15,6 +15,7 @@
  */
 package org.lolaf.replicos.leader;
 
+import org.lolaf.replicos.CatchUp;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.parallel.Isolated;
 import org.lolaf.betty.api.io.IOSession;
@@ -78,7 +79,7 @@ class TestFollowers {
         IOSession ioSession = mock(IOSession.class);
         when(ioSession.borrow(anyInt())).then(invocation -> ByteBuffer.allocate(invocation.getArgument(0)));
         FollowerConnection connection = new FollowerConnection(ioSession, journal.settings().build(), journal.getLogs(),
-                () -> EPOCH, LEADERSHIP, "leader-a", new ReplicationStats(new SlowFollowers(Duration.ZERO, new TestingReplicationClock()), ReplicationMetrics.NONE), loop -> {
+                () -> EPOCH, LEADERSHIP, "leader-a", CatchUp.fullCopy(), new ReplicationStats(new SlowFollowers(Duration.ZERO, new TestingReplicationClock()), ReplicationMetrics.NONE), loop -> {
         }, new TestingReplicationClock(), TestingKeyExchanges.CLEAR);
         connection.onHello(EPOCH, WireFormat.VERSION, Journal.APPLICATION_ID, "follower", EPOCH, LEADERSHIP, 0, 0, EncryptionMode.DISABLED, TestingKeyExchanges.NO_NONCE);
         connection.getSender().fillBatch(ByteBuffer.allocate(1 << 16));
@@ -216,7 +217,7 @@ class TestFollowers {
         IOSession ioSession = mock(IOSession.class);
         when(ioSession.borrow(anyInt())).then(invocation -> ByteBuffer.allocate(invocation.getArgument(0)));
         FollowerConnection connectionOfMain = new FollowerConnection(ioSession, twoLanes.settings().build(),
-                twoLanes.getLogs(), () -> EPOCH, LEADERSHIP, "leader-a",
+                twoLanes.getLogs(), () -> EPOCH, LEADERSHIP, "leader-a", CatchUp.fullCopy(),
                 new ReplicationStats(new SlowFollowers(Duration.ZERO, new TestingReplicationClock()), ReplicationMetrics.NONE), loop -> {
         }, new TestingReplicationClock(), TestingKeyExchanges.CLEAR);
         connectionOfMain.onHello(EPOCH, WireFormat.VERSION, Journal.APPLICATION_ID, "follower", EPOCH, LEADERSHIP, -1, 0, EncryptionMode.DISABLED, TestingKeyExchanges.NO_NONCE);
@@ -249,7 +250,7 @@ class TestFollowers {
         IOSession ioSession = mock(IOSession.class);
         when(ioSession.borrow(anyInt())).then(invocation -> ByteBuffer.allocate(invocation.getArgument(0)));
         FollowerConnection connection = new FollowerConnection(ioSession, twoLanes.settings().build(),
-                twoLanes.getLogs(), () -> EPOCH, LEADERSHIP, "leader-a",
+                twoLanes.getLogs(), () -> EPOCH, LEADERSHIP, "leader-a", CatchUp.fullCopy(),
                 new ReplicationStats(new SlowFollowers(Duration.ZERO, new TestingReplicationClock()), ReplicationMetrics.NONE), loop -> {
         }, new TestingReplicationClock(), TestingKeyExchanges.CLEAR);
         connection.onHello(EPOCH, WireFormat.VERSION, Journal.APPLICATION_ID, "follower", EPOCH, LEADERSHIP, -1, lane, EncryptionMode.DISABLED, TestingKeyExchanges.NO_NONCE);

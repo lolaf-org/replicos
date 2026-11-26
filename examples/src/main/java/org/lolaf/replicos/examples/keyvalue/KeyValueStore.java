@@ -39,16 +39,24 @@ final class KeyValueStore {
 
     synchronized void apply(long position, Change change) {
         journal.put(position, change);
+        enter(change);
+    }
+
+    /**
+     * Forgets the changes from {@code fromPosition} on, and the entries they made.
+     */
+    synchronized void truncate(long fromPosition) {
+        journal.tailMap(fromPosition, true).clear();
+        entries.clear();
+        journal.values().forEach(this::enter);
+    }
+
+    private void enter(Change change) {
         if (change.getKind() == Change.PUT) {
             entries.put(change.getKey(), change.getValue());
         } else {
             entries.remove(change.getKey());
         }
-    }
-
-    synchronized void clear() {
-        journal.clear();
-        entries.clear();
     }
 
     synchronized long lastPosition() {
@@ -57,6 +65,14 @@ final class KeyValueStore {
 
     synchronized List<Map.Entry<Long, Change>> changes(long fromPosition, long toPosition) {
         return new ArrayList<>(journal.subMap(fromPosition, true, toPosition, true).entrySet());
+    }
+
+    /**
+     * The last {@code count} changes, in position order.
+     */
+    synchronized List<Map.Entry<Long, Change>> lastChanges(int count) {
+        List<Map.Entry<Long, Change>> last = new ArrayList<>(journal.entrySet());
+        return last.subList(Math.max(0, last.size() - count), last.size());
     }
 
     synchronized @Nullable String get(String key) {

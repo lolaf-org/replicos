@@ -89,6 +89,7 @@ final class ReplicationNodeImpl implements ReplicationNode {
     private final Supplier<SelectStrategy> selectStrategy;
     private final ReplicationClock clock;
     private final KeyExchange keyExchange;
+    private final CatchUp catchUp;
     private final ReplicationLogs logs;
     private final Followers followers;
     private final ReplicationStats stats;
@@ -108,6 +109,7 @@ final class ReplicationNodeImpl implements ReplicationNode {
         this.selectStrategy = builder.selectStrategy();
         this.clock = builder.clock();
         this.keyExchange = new KeyExchange(builder.encryption());
+        this.catchUp = builder.catchUp();
         this.logs = new ReplicationLogs(leader == null ? 1 : leader.getLanes(), builder.logCapacity());
         this.followers = new Followers(clock);
         ReplicationMetrics metrics = builder.metrics();
@@ -118,7 +120,7 @@ final class ReplicationNodeImpl implements ReplicationNode {
             logFullWaits[lane] = metrics.logFullWait(lane);
         }
         this.followerStreams = new FollowerStreams(follower == null ? NO_SINKS : follower.getSinks(),
-                builder.catchUp(), metrics.receivedWriteLatency());
+                catchUp, metrics.receivedWriteLatency());
         this.followersView = new FollowersViewImpl(followers, stats, logs, leader == null ? NO_STREAMS : leader.getStreams());
         this.leaderView = new LeaderViewImpl(() -> client, followerStreams);
     }
@@ -129,7 +131,7 @@ final class ReplicationNodeImpl implements ReplicationNode {
         standDown(deadline);
         followerStreams.close(deadline);
         ReplicationServer started = new ReplicationServer(leader, logs, followers, () -> epoch, LEADERSHIPS.nextLong(),
-                nodeId, selectStrategy.get(), stats, clock, keyExchange);
+                nodeId, catchUp, selectStrategy.get(), stats, clock, keyExchange);
         started.start();
         server = started;
     }

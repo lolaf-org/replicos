@@ -20,9 +20,11 @@ import org.lolaf.replicos.spi.ReplicaSink;
 import org.lolaf.ringos.Deadline;
 
 import java.nio.ByteBuffer;
+import java.util.Map;
 
 /**
- * Applies each change as it arrives: the store being in memory, there is nothing left to write once applied.
+ * Applies each change as it arrives: the store being in memory, there is nothing left to write once applied. Reads its
+ * last changes back for {@link org.lolaf.replicos.CatchUp#lastRecords}, so a snapshot copies only what follows them.
  */
 @Slf4j
 final class KeyValueSink implements ReplicaSink {
@@ -41,9 +43,20 @@ final class KeyValueSink implements ReplicaSink {
     }
 
     @Override
+    public void readLast(int records, RecordConsumer consumer) {
+        for (Map.Entry<Long, Change> entry : store.lastChanges(records)) {
+            Change change = entry.getValue();
+            ByteBuffer payload = change.encode();
+            if (!consumer.onRecord(change.getKind(), entry.getKey(), payload, 0, payload.limit())) {
+                return;
+            }
+        }
+    }
+
+    @Override
     public void snapshotBegin(long fromPosition, ByteBuffer buffer, int stateIndex, int stateLength) {
-        store.clear();
-        log.info("Snapshot started, store cleared");
+        store.truncate(fromPosition);
+        log.info("Snapshot started from position {}, the store kept before it", fromPosition);
     }
 
     @Override

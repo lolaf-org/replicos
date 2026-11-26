@@ -15,6 +15,7 @@
  */
 package org.lolaf.replicos.leader;
 
+import org.lolaf.replicos.CatchUp;
 import org.junit.jupiter.api.Test;
 import org.lolaf.ringos.Deadline;
 import org.lolaf.replicos.spi.ReplicationMetrics;
@@ -67,7 +68,7 @@ class TestFollowerConnection extends FollowerConnectionHarness {
         JournalStream main = stream("main");
         Thread[] sender = new Thread[1];
         connection = new FollowerConnection(ioSession, journal.settings().heartbeatInterval(Duration.ofHours(1)).build(),
-                journal.getLogs(), () -> EPOCH, LEADERSHIP, "leader-a", stats, loop -> {
+                journal.getLogs(), () -> EPOCH, LEADERSHIP, "leader-a", CatchUp.fullCopy(), stats, loop -> {
             sender[0] = new Thread(loop);
             sender[0].start();
         }, new TestingReplicationClock(), TestingKeyExchanges.CLEAR);
@@ -159,7 +160,7 @@ class TestFollowerConnection extends FollowerConnectionHarness {
         journal = Journal.ofCapacity(1024);
         Runnable[] sender = new Runnable[1];
         connection = new FollowerConnection(ioSession, journal.settings().heartbeatInterval(Duration.ofNanos(1)).build(),
-                journal.getLogs(), () -> EPOCH, LEADERSHIP, "leader-a", stats, loop -> sender[0] = loop, new TestingReplicationClock(),
+                journal.getLogs(), () -> EPOCH, LEADERSHIP, "leader-a", CatchUp.fullCopy(), stats, loop -> sender[0] = loop, new TestingReplicationClock(),
                 TestingKeyExchanges.CLEAR);
         JournalStream stream = stream("main");
         stream.append("");
@@ -458,7 +459,7 @@ class TestFollowerConnection extends FollowerConnectionHarness {
         journal = Journal.ofCapacity(1024);
         Runnable[] sender = new Runnable[1];
         connection = new FollowerConnection(ioSession, journal.settings().heartbeatInterval(Duration.ofHours(1)).build(),
-                journal.getLogs(), () -> EPOCH, LEADERSHIP, "leader-a", stats, loop -> sender[0] = loop, new TestingReplicationClock(),
+                journal.getLogs(), () -> EPOCH, LEADERSHIP, "leader-a", CatchUp.fullCopy(), stats, loop -> sender[0] = loop, new TestingReplicationClock(),
                 TestingKeyExchanges.CLEAR);
         JournalStream stream = stream("main");
         stream.append("");

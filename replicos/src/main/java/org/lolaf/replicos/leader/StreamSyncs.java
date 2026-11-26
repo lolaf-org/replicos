@@ -17,7 +17,11 @@ package org.lolaf.replicos.leader;
 
 import org.jspecify.annotations.Nullable;
 import org.lolaf.replicos.spi.StreamAnswer;
+import org.lolaf.replicos.wire.CatchUpCheck;
+import org.lolaf.replicos.wire.FrameEncoder;
+import org.lolaf.replicos.wire.RecordDigest;
 
+import java.nio.ByteBuffer;
 import java.util.Arrays;
 import java.util.concurrent.atomic.AtomicReferenceFieldUpdater;
 
@@ -84,6 +88,34 @@ final class StreamSyncs {
         streams[streamKey].answer = answer;
     }
 
+    /**
+     * Keeps what the follower's last answer for the stream says it holds; a proof longer than any is kept as none.
+     * Only for an announced stream.
+     */
+    void claimed(int streamKey, CatchUpCheck check, long lastPosition, ByteBuffer proof, int proofIndex,
+                 int proofLength) {
+        Claim claim = streams[streamKey].claim;
+        synchronized (claim) {
+            claim.check = check;
+            claim.lastPosition = lastPosition;
+            claim.proofLength = proofLength > RecordDigest.PROOF_BYTES ? 0 : proofLength;
+            FrameEncoder.copy(proof, proofIndex, claim.proof, 0, claim.proofLength);
+        }
+    }
+
+    /**
+     * Only for an announced stream.
+     */
+    void copyClaim(int streamKey, Claim into) {
+        Claim claim = streams[streamKey].claim;
+        synchronized (claim) {
+            into.check = claim.check;
+            into.lastPosition = claim.lastPosition;
+            into.proofLength = claim.proofLength;
+            FrameEncoder.copy(claim.proof, 0, into.proof, 0, claim.proofLength);
+        }
+    }
+
     boolean isSnapshotInProgress(int streamCount) {
         for (int key = 0; key < streamCount; key++) {
             StreamSyncState state = get(key);
@@ -109,9 +141,31 @@ final class StreamSyncs {
 
         private volatile @Nullable StreamSyncState state;
         private volatile @Nullable StreamAnswer answer;
+        private final Claim claim;
+
+        private StreamSync() {
+            this.claim = new Claim();
+        }
 
         boolean compareAndSet(StreamSyncState expected, StreamSyncState changed) {
             return STATE.compareAndSet(this, expected, changed);
+        }
+    }
+
+    /**
+     * What a follower says it holds of a stream, as its STREAM_ANSWER carried it.
+     */
+    static final class Claim {
+
+        CatchUpCheck check;
+        long lastPosition;
+        int proofLength;
+        final ByteBuffer proof;
+
+        Claim() {
+            this.check = CatchUpCheck.FULL_COPY;
+            this.lastPosition = -1;
+            this.proof = ByteBuffer.allocate(RecordDigest.PROOF_BYTES);
         }
     }
 }

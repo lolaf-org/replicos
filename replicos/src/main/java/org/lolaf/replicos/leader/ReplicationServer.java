@@ -28,6 +28,7 @@ import org.lolaf.betty.api.settings.IOWorkersGroupSettings;
 import org.lolaf.betty.api.ss.SelectStrategy;
 import org.lolaf.betty.api.stats.IOBufferPoolStats;
 import org.lolaf.ringos.Deadline;
+import org.lolaf.replicos.CatchUp;
 import org.lolaf.replicos.LeaderSettings;
 import org.lolaf.replicos.spi.ReplicationClock;
 import org.lolaf.replicos.encryption.KeyExchange;
@@ -60,6 +61,7 @@ public final class ReplicationServer {
     private final LongSupplier nodeEpoch;
     private final long leadership;
     private final String leaderId;
+    private final CatchUp catchUp;
     private final SelectStrategy selectStrategy;
     private final ReplicationStats stats;
     private final ReplicationClock clock;
@@ -155,8 +157,7 @@ public final class ReplicationServer {
                 return;
             }
             FollowerConnection connection = new FollowerConnection(session, settings, logs, nodeEpoch, leadership,
-                    leaderId, stats,
-                    ReplicationServer::launchSender, clock, keyExchange);
+                    leaderId, catchUp, stats, ReplicationServer::launchSender, clock, keyExchange);
             session.setAttachment(connection);
             followers.add(connection);
         }

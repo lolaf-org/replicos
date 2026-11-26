@@ -129,8 +129,16 @@ Per lane:
    `REPLICATING`; one it replicates but does not hold whole is `SNAPSHOT_NEEDED`; the refusals are configuration
    errors the leader reports. A stream refused as unknown or for its mode is answered again once the follower's
    configuration changes. The answer also carries the follower's catch-up check, the last position it holds of the
-   stream (-1 for none) and the check's proof of it, from which the leader picks where a snapshot starts. The only
-   check so far is 0, full copy: no proof, and the snapshot copies the whole stream.
+   stream (-1 for none) and the check's proof of it, from which the leader picks where a snapshot starts:
+   - **0, full copy**: no proof; the snapshot copies the whole stream.
+   - **1, last records**: for a stream needing a snapshot, the follower's last records, at most the count it is
+     configured with, proved by records 4 (that count), first position 8 and SHA-256 32: over each record from the
+     first position to the last, its position 8, content type 1, payload length 4 and payload. The leader digests its
+     own records over those positions: the same digest starts the snapshot after the follower's last position,
+     anything else at 0. No proof, as from a follower holding nothing, gets the whole stream.
+
+   A follower whose check or count is not the leader's gets the whole stream, and the leader logs it once per
+   connection. A follower closes with `PROTOCOL_ERROR` a snapshot starting past its last position + 1.
 
 Every frame after the WELCOME must carry the WELCOME's epoch; any other closes the connection with `STALE_EPOCH`. A
 follower whose connection drops reconnects, sending its new last applied offset.

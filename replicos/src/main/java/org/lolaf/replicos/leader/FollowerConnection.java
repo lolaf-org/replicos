@@ -22,6 +22,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.Nullable;
 import org.lolaf.betty.api.io.IOSession;
 import org.lolaf.ringos.Deadline;
+import org.lolaf.replicos.CatchUp;
 import org.lolaf.replicos.EncryptionMode;
 import org.lolaf.replicos.FollowerLaneStatus;
 import org.lolaf.replicos.LeaderSettings;
@@ -120,8 +121,8 @@ public final class FollowerConnection implements FrameHandler {
      * @param senderLauncher starts the loop streaming the log, on a thread of its own
      */
     FollowerConnection(IOSession ioSession, LeaderSettings settings, ReplicationLogs logs, LongSupplier nodeEpoch,
-                       long leadership, String leaderId, ReplicationStats stats, Consumer<Runnable> senderLauncher,
-                       ReplicationClock clock, KeyExchange keyExchange) {
+                       long leadership, String leaderId, CatchUp catchUp, ReplicationStats stats,
+                       Consumer<Runnable> senderLauncher, ReplicationClock clock, KeyExchange keyExchange) {
         this.syncs = new StreamSyncs();
         this.answerOpener = FrameCipher.CLEAR;
         this.closeSent = new AtomicBoolean();
@@ -139,7 +140,7 @@ public final class FollowerConnection implements FrameHandler {
         this.keyAgreement = KeyAgreement.ofLeader(keyExchange);
         this.acks = new FollowerAcks(stats, clock);
         this.sender = new FollowerSender(this, ioSession, settings, syncs, acks, nodeEpoch, logs.getMaxRecordFrameBytes(),
-                stats, senderLauncher, clock);
+                catchUp, stats, senderLauncher, clock);
     }
 
     @Override
@@ -306,6 +307,7 @@ public final class FollowerConnection implements FrameHandler {
             return;
         }
         syncs.answered(streamKey, answer);
+        syncs.claimed(streamKey, check, lastPosition, buffer, proofIndex, proofLength);
         switch (answer) {
             case REPLICATING:
                 syncs.set(streamKey, StreamSyncState.IN_SYNC);

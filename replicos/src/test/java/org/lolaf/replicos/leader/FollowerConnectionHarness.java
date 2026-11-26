@@ -15,12 +15,14 @@
  */
 package org.lolaf.replicos.leader;
 
+import org.lolaf.replicos.CatchUp;
 import org.lolaf.replicos.spi.ReplicationMetrics;
 import org.lolaf.replicos.encryption.ConnectionEncryptionKeys;
 import org.lolaf.replicos.encryption.KeyExchange;
 import org.lolaf.replicos.testkit.TestingKeyExchanges;
 import org.lolaf.replicos.wire.WireFormat;
 import org.lolaf.replicos.wire.CatchUpCheck;
+import org.lolaf.replicos.wire.RecordDigest;
 import org.lolaf.replicos.spi.StreamAnswer;
 import org.lolaf.replicos.wire.FrameType;
 import java.util.concurrent.CopyOnWriteArrayList;
@@ -71,6 +73,24 @@ abstract class FollowerConnectionHarness {
      */
     static void answer(FollowerConnection connection, int streamKey, StreamAnswer answer) {
         connection.onStreamAnswer(EPOCH, streamKey, answer, CatchUpCheck.FULL_COPY, -1, NO_PROOF, 0, 0);
+    }
+
+    /**
+     * The follower needs a snapshot of the stream and proves it holds {@code texts}, its last records, the last at
+     * {@code lastPosition}.
+     */
+    static void answerHolding(FollowerConnection connection, int streamKey, int records, long lastPosition,
+                              String... texts) {
+        RecordDigest digest = new RecordDigest();
+        for (int i = 0; i < texts.length; i++) {
+            byte[] payload = texts[i].getBytes(StandardCharsets.US_ASCII);
+            digest.onRecord(JournalStream.TEXT, lastPosition - texts.length + 1 + i, ByteBuffer.wrap(payload), 0,
+                    payload.length);
+        }
+        ByteBuffer proof = ByteBuffer.allocate(RecordDigest.PROOF_BYTES);
+        int proofLength = digest.writeProof(records, proof, 0);
+        connection.onStreamAnswer(EPOCH, streamKey, StreamAnswer.SNAPSHOT_NEEDED, CatchUpCheck.LAST_RECORDS,
+                lastPosition, proof, 0, proofLength);
     }
 
     final IOSession ioSession;
@@ -150,8 +170,12 @@ abstract class FollowerConnectionHarness {
     }
 
     FollowerConnection connection() {
+        return connection(CatchUp.fullCopy());
+    }
+
+    FollowerConnection connection(CatchUp catchUp) {
         return new FollowerConnection(ioSession, journal.settings().heartbeatInterval(Duration.ofMillis(100)).build(),
-                journal.getLogs(), () -> EPOCH, LEADERSHIP, "leader-a", stats, loop -> {
+                journal.getLogs(), () -> EPOCH, LEADERSHIP, "leader-a", catchUp, stats, loop -> {
                 }, new TestingReplicationClock(), keyExchange);
     }
 
@@ -261,7 +285,7 @@ abstract class FollowerConnectionHarness {
         IdleStrategy idles = countingIdles();
         return new FollowerConnection(ioSession, journal.settings().heartbeatInterval(Duration.ofHours(1))
                 .followerStallTimeout(stallTimeout).senderIdleStrategy(() -> idles).build(), journal.getLogs(),
-                () -> EPOCH, LEADERSHIP, "leader-a", stats, loop -> {
+                () -> EPOCH, LEADERSHIP, "leader-a", CatchUp.fullCopy(), stats, loop -> {
             sender[0] = new Thread(loop);
             sender[0].start();
         }, senderClock, keyExchange);
@@ -293,7 +317,7 @@ abstract class FollowerConnectionHarness {
         IdleStrategy idles = countingIdles();
         return new FollowerConnection(ioSession, journal.settings().heartbeatInterval(Duration.ofHours(1))
                 .snapshotChunkBytes(snapshotChunkBytes).senderIdleStrategy(() -> idles).build(), journal.getLogs(),
-                () -> EPOCH, LEADERSHIP, "leader-a", stats, loop -> new Thread(loop).start(), new TestingReplicationClock(),
+                () -> EPOCH, LEADERSHIP, "leader-a", CatchUp.fullCopy(), stats, loop -> new Thread(loop).start(), new TestingReplicationClock(),
                 keyExchange);
     }
 

@@ -15,6 +15,8 @@
  */
 package org.lolaf.replicos.examples.keyvalue;
 
+import com.github.valfirst.slf4jtest.LoggingEvent;
+import com.github.valfirst.slf4jtest.TestLoggerFactory;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.lolaf.replicos.StreamWriter;
@@ -66,6 +68,31 @@ class TestKeyValueNode {
         KeyValueNode follower = followerOf(leader);
 
         assertThat(follower.entries()).isEqualTo(Map.of("size", "large"));
+    }
+
+    @Test
+    void aDeposedLeaderFollowingTheNewOneGetsWhatItMissedAndKeepsTheRest() {
+        KeyValueNode first = leader();
+        InetSocketAddress secondAddress = new InetSocketAddress("localhost", freePort());
+        KeyValueNode second = start("second", secondAddress);
+        second.follow(leaderAddress, 1);
+        await().atMost(Duration.ofSeconds(10)).until(() -> second.isInSync() && first.isInSync());
+        assertThat(first.put("colour", "blue")).isEqualTo(StreamWriter.Ack.ACKED);
+        assertThat(first.put("size", "large")).isEqualTo(StreamWriter.Ack.ACKED);
+        first.standDown();
+        second.standDown();
+        second.lead(2);
+        second.put("shape", "round");
+        TestLoggerFactory.clearAll();
+
+        first.follow(secondAddress, 2);
+
+        await().atMost(Duration.ofSeconds(10)).until(() -> first.isInSync() && second.isInSync());
+        assertThat(first.entries()).isEqualTo(Map.of("colour", "blue", "size", "large", "shape", "round"));
+        assertThat(TestLoggerFactory.getTestLogger(KeyValueSink.class).getAllLoggingEvents())
+                .extracting(LoggingEvent::getFormattedMessage)
+                .as("copied from the change it missed")
+                .contains("Snapshot started from position 3, the store kept before it");
     }
 
     private KeyValueNode leader() {

@@ -18,12 +18,14 @@ package org.lolaf.replicos.follower;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.Setter;
+import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.Nullable;
 import org.lolaf.ringos.Deadline;
 import org.lolaf.replicos.ReplicaStream;
 import org.lolaf.replicos.spi.ReplicaSink;
 import org.lolaf.replicos.spi.StreamAnswer;
 import org.lolaf.replicos.spi.StreamReplicationMode;
+import org.lolaf.replicos.wire.RecordDigest;
 import org.lolaf.replicos.wire.WireFormat;
 
 import java.nio.ByteBuffer;
@@ -32,6 +34,7 @@ import java.nio.ByteBuffer;
  * One of the leader's streams as this follower holds it: its sink, none when it is not replicated here, and how far a
  * snapshot and the log brought it.
  */
+@Slf4j
 final class BoundStream implements ReplicaStream {
 
     @Getter
@@ -57,6 +60,10 @@ final class BoundStream implements ReplicaStream {
     @Getter
     private volatile boolean handedOver;
     private int snapshotRecordCount;
+    /**
+     * The last position the follower told the leader it holds, past which no snapshot may start; -1 for none.
+     */
+    private long claimedLastPosition;
     private boolean assembling;
     private long assembledPosition;
     private byte assembledContentType;
@@ -72,6 +79,7 @@ final class BoundStream implements ReplicaStream {
         this.sink = sink;
         this.notReplicatedAnswer = notReplicatedAnswer;
         this.leaderStorageIdentity = leaderStorageIdentity;
+        this.claimedLastPosition = -1;
     }
 
     static BoundStream replicated(String streamName, StreamReplicationMode leaderMode, ReplicaSink sink) {
@@ -138,14 +146,41 @@ final class BoundStream implements ReplicaStream {
     }
 
     /**
-     * Only for a stream replicated here.
+     * Digests the sink's last records, which a snapshot may then start after.
+     *
+     * @return the last position digested, -1 for none, as when the sink fails to read them back
      */
-    void snapshotBegin(long fromPosition, ByteBuffer state, int stateIndex, int stateLength) {
+    long claim(int records, RecordDigest digest) {
+        digest.reset();
+        try {
+            sink.readLast(records, digest);
+        } catch (RuntimeException e) {
+            log.warn("Stream {} could not read its last records back, caught up by a full copy", streamName, e);
+            digest.reset();
+        }
+        claimedLastPosition = digest.getLastPosition();
+        return claimedLastPosition;
+    }
+
+    void unclaim() {
+        claimedLastPosition = -1;
+    }
+
+    /**
+     * Only for a stream replicated here.
+     *
+     * @return false for a snapshot starting past what the follower claimed it holds
+     */
+    boolean snapshotBegin(long fromPosition, ByteBuffer state, int stateIndex, int stateLength) {
+        if (fromPosition > claimedLastPosition + 1) {
+            return false;
+        }
         inSync = false;
         discardAssembledPayload();
         discardPending();
         snapshotRecordCount = 0;
         sink.snapshotBegin(fromPosition, state, stateIndex, stateLength);
+        return true;
     }
 
     /**

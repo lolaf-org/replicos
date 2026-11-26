@@ -19,15 +19,18 @@ import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.Nullable;
 import org.lolaf.ringos.idling.BackoffIdleStrategy;
 import org.lolaf.ringos.idling.IdleStrategy;
+import org.lolaf.replicos.CatchUp;
 import org.lolaf.replicos.spi.LeaderStream;
 import org.lolaf.replicos.spi.LeaderStreams;
 import org.lolaf.replicos.spi.RecordFlag;
 import org.lolaf.replicos.spi.ReplicationClock;
 import org.lolaf.replicos.spi.SnapshotSource;
+import org.lolaf.replicos.wire.CatchUpCheck;
 import org.lolaf.replicos.wire.CloseReason;
 import org.lolaf.replicos.wire.FrameCipher;
 import org.lolaf.replicos.wire.FrameEncoder;
 import org.lolaf.replicos.wire.FrameType;
+import org.lolaf.replicos.wire.RecordDigest;
 import org.lolaf.replicos.wire.WireFormat;
 
 import java.nio.ByteBuffer;
@@ -41,7 +44,7 @@ import java.util.function.LongSupplier;
  * and the follower applies the stream in position order as from the log. It copies in rounds, each up to the last
  * position the stream's state covers when it starts, and ends with a round that fits in one chunk; a round no shorter
  * than the one before, the stream written faster than it is copied, is sent whole, holding the other streams for its
- * time.
+ * time. It starts where the follower's copy and the leader's agree, as the node's {@link CatchUp} checks it.
  *
  * <p>Sender thread only, but for {@link #request()}; allocates nothing once built.
  */
@@ -61,6 +64,13 @@ final class SnapshotSender {
     private final ReplicationStats stats;
     private final LongSupplier nodeEpoch;
     private final ReplicationClock clock;
+    private final CatchUp catchUp;
+    private final StreamSyncs.Claim claim;
+    private final RecordDigest lastRecords;
+    /**
+     * A follower catching up otherwise than this leader is logged once per connection.
+     */
+    private boolean catchUpMismatchLogged;
     private final int maxRecordFrameBytes;
     private final int chunkBytes;
     private final ChunkWriter writer;
@@ -107,8 +117,8 @@ final class SnapshotSender {
      * @param chunkBytes the most bytes sent between two live batches, at most a batch
      */
     SnapshotSender(FollowerConnection connection, LeaderStreams streams, StreamSyncs syncs, BatchBuffers batches,
-                   ReplicationStats stats, LongSupplier nodeEpoch, ReplicationClock clock, int maxRecordFrameBytes,
-                   int chunkBytes) {
+                   ReplicationStats stats, LongSupplier nodeEpoch, ReplicationClock clock, CatchUp catchUp,
+                   int maxRecordFrameBytes, int chunkBytes) {
         this.writer = new ChunkWriter();
         this.roomWait = new BackoffIdleStrategy();
         this.state = ByteBuffer.allocate(WireFormat.MAX_STATE_BYTES);
@@ -121,6 +131,9 @@ final class SnapshotSender {
         this.stats = stats;
         this.nodeEpoch = nodeEpoch;
         this.clock = clock;
+        this.catchUp = catchUp;
+        this.claim = new StreamSyncs.Claim();
+        this.lastRecords = new RecordDigest();
         this.maxRecordFrameBytes = maxRecordFrameBytes;
         this.chunkBytes = Math.min(chunkBytes, batches.getBatchBytes());
     }
@@ -177,7 +190,7 @@ final class SnapshotSender {
             }
             SnapshotSource streamSource = streams.get(key).newSnapshotSource();
             if (streamSource.isReadable()) {
-                start(key, streamSource, snapshotOffset, WHOLE_STREAM);
+                start(key, streamSource, snapshotOffset);
                 // others may be pending, started once this one ends
                 requested = true;
                 return;
@@ -198,6 +211,11 @@ final class SnapshotSender {
         LeaderStream stream = streams.get(streamKey);
         writer.start(nodeEpoch.getAsLong(), sealer);
         try {
+            if (!begun) {
+                // before the state is captured, so the first round covers every record past the follower's
+                fromPosition = startPosition(stream);
+                next = fromPosition;
+            }
             boolean roundStarted = next > roundEnd;
             long lastPosition = roundEnd;
             if (roundStarted || resetAhead) {
@@ -245,13 +263,13 @@ final class SnapshotSender {
         }
     }
 
-    private void start(int key, SnapshotSource streamSource, long offset, long from) {
+    private void start(int key, SnapshotSource streamSource, long offset) {
         streamKey = key;
         source = streamSource;
         snapshotOffset = offset;
-        fromPosition = from;
+        fromPosition = WHOLE_STREAM;
         begun = false;
-        next = from;
+        next = WHOLE_STREAM;
         roundEnd = -1;
         previousRoundLength = Long.MAX_VALUE;
         whole = false;
@@ -259,6 +277,43 @@ final class SnapshotSender {
         recordCount = 0;
         readSpan = INITIAL_READ_SPAN;
         resetAhead = false;
+    }
+
+    private long startPosition(LeaderStream stream) {
+        syncs.copyClaim(streamKey, claim);
+        if (claim.check != catchUp.getCheck()) {
+            logCatchUpMismatch(stream, claim.check, 0);
+            return WHOLE_STREAM;
+        }
+        if (catchUp.getCheck() == CatchUpCheck.FULL_COPY || claim.proofLength != RecordDigest.PROOF_BYTES) {
+            return WHOLE_STREAM;
+        }
+        int records = RecordDigest.proofRecords(claim.proof, 0);
+        if (records != catchUp.getRecords()) {
+            logCatchUpMismatch(stream, claim.check, records);
+            return WHOLE_STREAM;
+        }
+        long firstPosition = RecordDigest.proofFirstPosition(claim.proof, 0);
+        if (firstPosition < 0 || firstPosition > claim.lastPosition) {
+            return WHOLE_STREAM;
+        }
+        lastRecords.reset();
+        source.read(firstPosition, claim.lastPosition, lastRecords);
+        if (!lastRecords.matches(claim.proof, 0)) {
+            log.info("Follower {} holds other records of stream {} up to position {} than this leader: "
+                    + "copying it whole", connection.getFollowerId(), stream.getStreamName(), claim.lastPosition);
+            return WHOLE_STREAM;
+        }
+        return claim.lastPosition + 1;
+    }
+
+    private void logCatchUpMismatch(LeaderStream stream, CatchUpCheck followerCheck, int followerRecords) {
+        if (!catchUpMismatchLogged) {
+            catchUpMismatchLogged = true;
+            log.warn("Follower {} catches up by {} of {} records and this leader by {}: its streams are copied whole, "
+                    + "stream {} first", connection.getFollowerId(), followerCheck, followerRecords, catchUp,
+                    stream.getStreamName());
+        }
     }
 
     private void startRound(long lastPosition) {
@@ -288,8 +343,8 @@ final class SnapshotSender {
         int records = recordCount;
         cancel();
         stats.snapshotSent(records);
-        log.info("Snapshot of stream {} sent to follower {}: {} records", stream.getStreamName(),
-                connection.getFollowerId(), records);
+        log.info("Snapshot of stream {} sent to follower {}: {} records from position {}", stream.getStreamName(),
+                connection.getFollowerId(), records, fromPosition);
     }
 
     /**

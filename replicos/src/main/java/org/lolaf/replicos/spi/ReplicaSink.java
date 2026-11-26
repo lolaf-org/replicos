@@ -35,16 +35,25 @@ public interface ReplicaSink {
     /**
      * The last position the copy holds, read from its storage, so that the node's
      * {@link org.lolaf.replicos.CatchUp} may copy only what follows it; -1, the default, holds nothing and gets the
-     * whole stream. Not read under {@link org.lolaf.replicos.CatchUp#fullCopy()}.
+     * whole stream. Not read under {@link org.lolaf.replicos.CatchUp#fullCopy()} nor
+     * {@link org.lolaf.replicos.CatchUp#lastRecords}.
      */
     default long lastPosition() {
         return -1;
     }
 
     /**
-     * Discards the copy from {@code fromPosition} on, keeping what it holds before, always 0 for a sink keeping
-     * {@link #lastPosition()}'s default: the snapshot's records and its end follow, unless the leader gives the
-     * snapshot up, its source having stopped; live records then follow until another snapshot starts over.
+     * Hands {@code consumer} the copy's last {@code records} records, read from its storage, fewer if it holds fewer,
+     * in position order, until it returns false; under {@link org.lolaf.replicos.CatchUp#lastRecords} only, as the
+     * stream needs a snapshot. The default hands none, which gets the whole stream.
+     */
+    default void readLast(int records, RecordConsumer consumer) {
+    }
+
+    /**
+     * Discards the copy from {@code fromPosition} on, keeping what it holds before, always 0 for a sink reading none
+     * of its records back: the snapshot's records and its end follow, unless the leader gives the snapshot up, its
+     * source having stopped; live records then follow until another snapshot starts over.
      */
     void snapshotBegin(long fromPosition, ByteBuffer buffer, int stateIndex, int stateLength);
 
@@ -65,4 +74,14 @@ public interface ReplicaSink {
     long getPendingWrites();
 
     void stop(Deadline deadline);
+
+    @FunctionalInterface
+    interface RecordConsumer {
+
+        /**
+         * @param buffer holds the payload at {@code payloadIndex}, read during the call only and left untouched
+         * @return false to stop before the next record
+         */
+        boolean onRecord(byte contentType, long position, ByteBuffer buffer, int payloadIndex, int payloadLength);
+    }
 }

@@ -26,13 +26,16 @@ import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.NavigableMap;
+import java.util.concurrent.ConcurrentSkipListMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.CountDownLatch;
 
 /**
  * A journal as a follower holds it. Records each call as one line in {@link #getWrites()}, so a test compares them
  * all at once: {@code "3 hello"} for an entry, {@code "snapshot 3 hello"} for one a snapshot copied, the content type
- * after the position when not {@link JournalStream#TEXT}.
+ * after the position when not {@link JournalStream#TEXT}. Keeps what it wrote by position too, as storage would, which
+ * {@link #readLast} reads back and a snapshot discards from its start.
  */
 public final class JournalCopy implements ReplicaSink {
 
@@ -47,7 +50,8 @@ public final class JournalCopy implements ReplicaSink {
      */
     @Setter
     private volatile boolean batching;
-    private final List<String> pending;
+    private final List<Write> pending;
+    private final NavigableMap<Long, Write> stored;
     /**
      * What {@link #getPendingWrites()} reports.
      */
@@ -75,6 +79,7 @@ public final class JournalCopy implements ReplicaSink {
         this.mode = StreamReplicationMode.ASYNC;
         this.writes = new CopyOnWriteArrayList<>();
         this.pending = new ArrayList<>();
+        this.stored = new ConcurrentSkipListMap<>();
         this.writesHeld = new CountDownLatch(0);
     }
 
@@ -83,16 +88,23 @@ public final class JournalCopy implements ReplicaSink {
         this.storageIdentity = storageIdentity;
     }
 
-    private static String entry(byte contentType, long position, ByteBuffer buffer, int index, int length) {
+    /**
+     * An entry stored before this process started, as a copy left by an earlier run.
+     */
+    public void hold(long position, String text) {
+        stored.put(position, new Write(JournalStream.TEXT, position, text.getBytes(StandardCharsets.US_ASCII), ""));
+    }
+
+    private static Write entry(byte contentType, long position, ByteBuffer buffer, int index, int length) {
         byte[] bytes = new byte[length];
         buffer.duplicate().position(index).get(bytes);
         String type = contentType == JournalStream.TEXT ? "" : " type=" + contentType;
-        return position + type + " " + new String(bytes, StandardCharsets.US_ASCII);
+        return new Write(contentType, position, bytes, position + type + " " + new String(bytes, StandardCharsets.US_ASCII));
     }
 
     @Override
     public void apply(byte contentType, long position, ByteBuffer buffer, int payloadIndex, int payloadLength) {
-        String entry = entry(contentType, position, buffer, payloadIndex, payloadLength);
+        Write entry = entry(contentType, position, buffer, payloadIndex, payloadLength);
         if (batching) {
             synchronized (pending) {
                 pending.add(entry);
@@ -102,7 +114,19 @@ public final class JournalCopy implements ReplicaSink {
         }
     }
 
-    private void write(List<String> entries) {
+    @Override
+    public void readLast(int records, RecordConsumer consumer) {
+        List<Write> last = new ArrayList<>(stored.descendingMap().values()).subList(0, Math.min(records, stored.size()));
+        for (int i = last.size() - 1; i >= 0; i--) {
+            Write entry = last.get(i);
+            if (!consumer.onRecord(entry.contentType, entry.position, ByteBuffer.wrap(entry.payload), 0,
+                    entry.payload.length)) {
+                return;
+            }
+        }
+    }
+
+    private void write(List<Write> entries) {
         if (entries.isEmpty()) {
             return;
         }
@@ -115,17 +139,23 @@ public final class JournalCopy implements ReplicaSink {
             heldWriteInterrupted = true;
             Thread.currentThread().interrupt();
         }
-        writes.addAll(entries);
+        for (Write entry : entries) {
+            stored.put(entry.position, entry);
+            writes.add(entry.line);
+        }
     }
 
     @Override
     public void snapshotBegin(long fromPosition, ByteBuffer buffer, int stateIndex, int stateLength) {
+        stored.tailMap(fromPosition, true).clear();
         writes.add("begin from=" + fromPosition + " " + state(buffer, stateIndex, stateLength));
     }
 
     @Override
     public void snapshotRecord(byte contentType, long position, ByteBuffer buffer, int payloadIndex, int payloadLength) {
-        writes.add("snapshot " + entry(contentType, position, buffer, payloadIndex, payloadLength));
+        Write entry = entry(contentType, position, buffer, payloadIndex, payloadLength);
+        stored.put(position, entry);
+        writes.add("snapshot " + entry.line);
     }
 
     @Override
@@ -141,7 +171,7 @@ public final class JournalCopy implements ReplicaSink {
 
     @Override
     public void writePending() {
-        List<String> entries;
+        List<Write> entries;
         synchronized (pending) {
             entries = List.copyOf(pending);
             pending.clear();
@@ -164,5 +194,23 @@ public final class JournalCopy implements ReplicaSink {
     @Override
     public void stop(Deadline deadline) {
         stopped = true;
+    }
+
+    private static final class Write {
+
+        private final byte contentType;
+        private final long position;
+        private final byte[] payload;
+        /**
+         * As {@link #getWrites()} shows it.
+         */
+        private final String line;
+
+        private Write(byte contentType, long position, byte[] payload, String line) {
+            this.contentType = contentType;
+            this.position = position;
+            this.payload = payload;
+            this.line = line;
+        }
     }
 }

@@ -26,6 +26,8 @@ import org.lolaf.replicos.spi.LatencyRecorder;
 import org.lolaf.replicos.spi.ReplicaSinks;
 import org.lolaf.replicos.spi.StreamAnswer;
 import org.lolaf.replicos.spi.StreamReplicationMode;
+import org.lolaf.replicos.wire.CatchUpCheck;
+import org.lolaf.replicos.wire.RecordDigest;
 import org.lolaf.replicos.wire.WireFormat;
 
 import java.nio.ByteBuffer;
@@ -294,15 +296,30 @@ public final class FollowerStreams {
     }
 
     /**
-     * @return false for a key the leader never bound, of another lane, or not replicated here
+     * @return false for a key the leader never bound, of another lane, not replicated here, or for a snapshot starting
+     * past what the stream claimed it holds
      */
     boolean snapshotBegin(int lane, int key, long fromPosition, ByteBuffer state, int stateIndex, int stateLength) {
         BoundStream stream = replicatedStream(lane, key);
+        return stream != null && stream.snapshotBegin(fromPosition, state, stateIndex, stateLength);
+    }
+
+    /**
+     * What the follower tells the leader it holds of a stream it answers: under {@link CatchUp#lastRecords} its last
+     * records, digested, when it needs a snapshot; nothing otherwise.
+     *
+     * @return the last position digested, -1 for none
+     */
+    long claim(int lane, int key, StreamAnswer answer, RecordDigest digest) {
+        BoundStream stream = replicatedStream(lane, key);
         if (stream == null) {
-            return false;
+            return -1;
         }
-        stream.snapshotBegin(fromPosition, state, stateIndex, stateLength);
-        return true;
+        if (answer != StreamAnswer.SNAPSHOT_NEEDED || catchUp.getCheck() != CatchUpCheck.LAST_RECORDS) {
+            stream.unclaim();
+            return -1;
+        }
+        return stream.claim(catchUp.getRecords(), digest);
     }
 
     boolean snapshotRecord(int lane, int key, byte contentType, byte flags, long position, ByteBuffer receiveBuffer,

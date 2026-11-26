@@ -19,6 +19,7 @@ import lombok.Getter;
 import org.jspecify.annotations.Nullable;
 import org.lolaf.betty.api.io.IOSession;
 import org.lolaf.ringos.idling.IdleStrategy;
+import org.lolaf.replicos.CatchUp;
 import org.lolaf.replicos.LeaderSettings;
 import org.lolaf.replicos.log.ReplicationLog;
 import org.lolaf.replicos.spi.RecordFlag;
@@ -89,8 +90,8 @@ final class FollowerSender {
     private long filledRecordOffset;
 
     FollowerSender(FollowerConnection connection, IOSession ioSession, LeaderSettings settings, StreamSyncs syncs,
-                   FollowerAcks acks, LongSupplier nodeEpoch, int maxRecordFrameBytes, ReplicationStats stats,
-                   Consumer<Runnable> launcher, ReplicationClock clock) {
+                   FollowerAcks acks, LongSupplier nodeEpoch, int maxRecordFrameBytes, CatchUp catchUp,
+                   ReplicationStats stats, Consumer<Runnable> launcher, ReplicationClock clock) {
         this.sealer = FrameCipher.CLEAR;
         this.sentOffset = -1;
         this.lastSentRecordOffset = -1;
@@ -106,7 +107,7 @@ final class FollowerSender {
         this.batches = new BatchBuffers(ioSession, settings.getSendBuffers(),
                 WireFormat.bufferBytes(maxRecordFrameBytes + WireFormat.TAG_BYTES), stats);
         this.snapshots = new SnapshotSender(connection, settings.getStreams(), syncs, batches, stats, nodeEpoch, clock,
-                maxRecordFrameBytes, settings.getSnapshotChunkBytes());
+                catchUp, maxRecordFrameBytes, settings.getSnapshotChunkBytes());
         this.announcer = new StreamAnnouncer(connection, settings.getStreams(), syncs, snapshots);
     }
 

@@ -21,6 +21,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.Nullable;
 import org.lolaf.betty.api.io.IOSession;
 import org.lolaf.ringos.Deadline;
+import org.lolaf.replicos.CatchUp;
 import org.lolaf.replicos.EncryptionMode;
 import org.lolaf.replicos.encryption.ConnectionEncryptionKeys;
 import org.lolaf.replicos.encryption.KeyAgreement;
@@ -35,6 +36,7 @@ import org.lolaf.replicos.wire.FrameDecoder;
 import org.lolaf.replicos.wire.FrameEncoder;
 import org.lolaf.replicos.wire.FrameHandler;
 import org.lolaf.replicos.wire.FrameType;
+import org.lolaf.replicos.wire.RecordDigest;
 import org.lolaf.replicos.wire.WireFormat;
 
 import java.net.InetSocketAddress;
@@ -74,6 +76,11 @@ public final class LeaderConnection implements FrameHandler {
     private final KeyExchange keyExchange;
     private final KeyAgreement keyAgreement;
     /**
+     * Digests a stream's last records for its answer, into {@link #proof}; the thread applying the frames only.
+     */
+    private final RecordDigest lastRecords;
+    private final ByteBuffer proof;
+    /**
      * Opens the leader's frames once both peers encrypt; the thread applying them only.
      */
     private FrameCipher frameOpener;
@@ -109,6 +116,8 @@ public final class LeaderConnection implements FrameHandler {
                             int lane, LeaderLanes leaderLanes, long checkIntervalNanos, AnswerSender answers,
                             boolean receivedAckedByNetworkThread, ReplicationClock clock, KeyExchange keyExchange) {
         this.sendBoundAnswer = (answer, streamKey) -> sendStreamAnswer(streamKey, answer);
+        this.lastRecords = new RecordDigest();
+        this.proof = ByteBuffer.allocate(RecordDigest.PROOF_BYTES);
         this.frameOpener = FrameCipher.CLEAR;
         this.state = State.AWAITING_WELCOME;
         this.keyExchange = keyExchange;
@@ -290,9 +299,12 @@ public final class LeaderConnection implements FrameHandler {
     }
 
     private void sendStreamAnswer(int streamKey, StreamAnswer answer) {
-        ByteBuffer frame = answers.claim(FrameEncoder.fixedBytes(FrameType.STREAM_ANSWER));
-        answers.send(frame, FrameEncoder.streamAnswer(frame, 0, streamEpoch, streamKey, answer,
-                followerStreams.getCatchUp().getCheck(), -1, null, 0, 0));
+        CatchUp catchUp = followerStreams.getCatchUp();
+        long lastPosition = followerStreams.claim(lane, streamKey, answer, lastRecords);
+        int proofLength = lastPosition < 0 ? 0 : lastRecords.writeProof(catchUp.getRecords(), proof, 0);
+        ByteBuffer frame = answers.claim(FrameEncoder.fixedBytes(FrameType.STREAM_ANSWER) + proofLength);
+        answers.send(frame, FrameEncoder.streamAnswer(frame, 0, streamEpoch, streamKey, answer, catchUp.getCheck(),
+                lastPosition, proof, 0, proofLength));
     }
 
     @Override
@@ -492,7 +504,8 @@ public final class LeaderConnection implements FrameHandler {
                                 int stateIndex, int stateLength) {
         if (acceptsFrame(epoch)
                 && !followerStreams.snapshotBegin(lane, streamKey, fromPosition, buffer, stateIndex, stateLength)) {
-            close(CloseReason.PROTOCOL_ERROR, "a snapshot of stream key " + streamKey + ", not replicated here");
+            close(CloseReason.PROTOCOL_ERROR, "a snapshot of stream key " + streamKey + " from position "
+                    + fromPosition + ", not replicated here or past what it holds");
         }
     }
 

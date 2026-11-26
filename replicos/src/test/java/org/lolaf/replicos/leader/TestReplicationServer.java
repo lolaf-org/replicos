@@ -15,6 +15,7 @@
  */
 package org.lolaf.replicos.leader;
 
+import org.lolaf.replicos.CatchUp;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.lolaf.betty.api.Client;
@@ -67,7 +68,7 @@ class TestReplicationServer {
         this.journal = Journal.ofCapacity(1 << 16);
         this.address = new InetSocketAddress("localhost", TestingPorts.findFree());
         this.server = new ReplicationServer(journal.settings().bindAddress(address).heartbeatInterval(Duration.ofMillis(100))
-                .build(), journal.getLogs(), journal.getFollowers(), () -> EPOCH, LEADERSHIP, "leader-a", new WakeupSelectStrategy(10),
+                .build(), journal.getLogs(), journal.getFollowers(), () -> EPOCH, LEADERSHIP, "leader-a", CatchUp.fullCopy(), new WakeupSelectStrategy(10),
                 new ReplicationStats(new SlowFollowers(Duration.ZERO, new TestingReplicationClock()), ReplicationMetrics.NONE), new TestingReplicationClock(),
                 TestingKeyExchanges.CLEAR);
         this.received = new RecordingHandler(Journal.APPLICATION_ID);

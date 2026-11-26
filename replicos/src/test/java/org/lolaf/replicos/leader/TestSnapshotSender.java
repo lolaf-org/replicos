@@ -15,6 +15,7 @@
  */
 package org.lolaf.replicos.leader;
 
+import org.lolaf.replicos.CatchUp;
 import com.github.valfirst.slf4jtest.LoggingEvent;
 import com.github.valfirst.slf4jtest.TestLogger;
 import com.github.valfirst.slf4jtest.TestLoggerFactory;
@@ -51,7 +52,7 @@ class TestSnapshotSender extends FollowerConnectionHarness {
 
     private FollowerConnection connectionChunking(int snapshotChunkBytes) {
         return new FollowerConnection(ioSession, journal.settings().heartbeatInterval(Duration.ofMillis(100))
-                .snapshotChunkBytes(snapshotChunkBytes).build(), journal.getLogs(), () -> EPOCH, LEADERSHIP, "leader-a", stats, loop -> {
+                .snapshotChunkBytes(snapshotChunkBytes).build(), journal.getLogs(), () -> EPOCH, LEADERSHIP, "leader-a", CatchUp.fullCopy(), stats, loop -> {
         }, new TestingReplicationClock(), TestingKeyExchanges.CLEAR);
     }
 
@@ -117,6 +118,123 @@ class TestSnapshotSender extends FollowerConnectionHarness {
         assertThat(connection.getSyncState(0)).isEqualTo(StreamSyncState.SNAPSHOT_SENT);
         assertThat(stats.getSnapshots()).isEqualTo(1);
         assertThat(stats.getSnapshotRecords()).isEqualTo(2);
+    }
+
+    @Test
+    void aFollowerHoldingTheLeadersLastRecordsIsCopiedOnlyWhatFollowsThem() {
+        JournalStream main = stream("main");
+        main.append("one");
+        main.append("two");
+        main.append("three");
+        main.append("four");
+        connection = connection(CatchUp.lastRecords(2));
+        hello();
+        sent.frames.clear();
+
+        answerHolding(connection, 0, 2, 3, "two", "three");
+        snapshot();
+
+        long snapshotOffset = journal.getLogs().get(0).getTailOffset();
+        assertThat(sent.frames).containsExactly(
+                "SNAPSHOT_BEGIN epoch=7 key=0 snapshotOffset=" + snapshotOffset + " from=4 state=5",
+                "SNAPSHOT_RECORD epoch=7 key=0 type=1 pos=4 payload=four",
+                "SNAPSHOT_END epoch=7 key=0 count=1 state=5");
+        assertThat(main.getSnapshotRanges()).as("the check, then the copy")
+                .containsExactly(new long[]{2, 3}, new long[]{4, 4});
+    }
+
+    @Test
+    void aFollowerUpToDateIsCopiedNoRecord() {
+        stream("main").append("one");
+        connection = connection(CatchUp.lastRecords(2));
+        hello();
+        sent.frames.clear();
+
+        answerHolding(connection, 0, 2, 1, "one");
+        snapshot();
+
+        assertThat(sent.frames).hasSize(2).last().isEqualTo("SNAPSHOT_END epoch=7 key=0 count=0 state=2");
+        assertThat(sent.frames.get(0)).contains(" from=2 ");
+    }
+
+    @Test
+    void aFollowerWhoseLastRecordsDifferFromTheLeadersIsCopiedTheWholeStream() {
+        JournalStream main = stream("main");
+        main.append("one");
+        main.append("two");
+        main.append("three");
+        connection = connection(CatchUp.lastRecords(2));
+        hello();
+        sent.frames.clear();
+
+        answerHolding(connection, 0, 2, 3, "two", "its own three");
+        snapshot();
+
+        assertThat(sent.frames.get(0)).contains(" from=0 ");
+        assertThat(sent.frames).last().isEqualTo("SNAPSHOT_END epoch=7 key=0 count=3 state=4");
+    }
+
+    @Test
+    void aFollowerHoldingMoreThanTheLeaderIsCopiedTheWholeStream() {
+        stream("main").append("one");
+        connection = connection(CatchUp.lastRecords(2));
+        hello();
+        sent.frames.clear();
+
+        answerHolding(connection, 0, 2, 2, "one", "a record the leader never had");
+        snapshot();
+
+        assertThat(sent.frames.get(0)).contains(" from=0 ");
+    }
+
+    @Test
+    void aFollowerCatchingUpOtherwiseThanTheLeaderIsCopiedWholeAndLoggedOnce() {
+        stream("main").append("one");
+        stream("other").append("two");
+        connection = connection(CatchUp.lastRecords(2));
+        hello();
+        sent.frames.clear();
+        TestLogger snapshotLog = TestLoggerFactory.getTestLogger(SnapshotSender.class);
+        int loggedBefore = snapshotLog.getLoggingEvents().size();
+
+        answer(connection, 0, StreamAnswer.SNAPSHOT_NEEDED);
+        answerHolding(connection, 1, 3, 1, "two");
+        snapshot();
+        snapshot();
+
+        assertThat(sent.frames).filteredOn(frame -> frame.startsWith("SNAPSHOT_BEGIN"))
+                .hasSize(2).allMatch(frame -> frame.contains(" from=0 "));
+        assertThat(snapshotLog.getLoggingEvents().subList(loggedBefore, snapshotLog.getLoggingEvents().size()))
+                .filteredOn(event -> event.getLevel() == Level.WARN).singleElement()
+                .extracting(LoggingEvent::getFormattedMessage).asString().contains("by FULL_COPY");
+    }
+
+    @Test
+    void aLeaderCopyingWholeIgnoresWhatTheFollowerHolds() {
+        stream("main").append("one");
+        hello();
+        sent.frames.clear();
+
+        answerHolding(connection, 0, 2, 1, "one");
+        snapshot();
+
+        assertThat(sent.frames.get(0)).contains(" from=0 ");
+    }
+
+    @Test
+    void aResyncCopiesTheWholeStreamWhateverTheFollowerHeldBefore() {
+        stream("main").append("one");
+        connection = connection(CatchUp.lastRecords(2));
+        hello();
+        answerHolding(connection, 0, 2, 1, "one");
+        snapshot();
+        answer(connection, 0, StreamAnswer.REPLICATING);
+        sent.frames.clear();
+
+        connection.resync(0);
+        snapshot();
+
+        assertThat(sent.frames.get(0)).contains(" from=0 ");
     }
 
     @Test

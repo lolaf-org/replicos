@@ -45,12 +45,15 @@ abstract class LeaderConnectionHarness extends AbstractLeaderConnectionHarness {
     final JournalCopy main;
 
     LeaderConnectionHarness() {
-        this(new JournalReplica());
+        this(CatchUp.fullCopy());
     }
 
-    private LeaderConnectionHarness(JournalReplica replica) {
-        super(new FollowerStreams(replica, CatchUp.fullCopy(), LatencyRecorder.NONE),
-                new RecordingHandler(Journal.APPLICATION_ID));
+    LeaderConnectionHarness(CatchUp catchUp) {
+        this(new JournalReplica(), catchUp);
+    }
+
+    private LeaderConnectionHarness(JournalReplica replica, CatchUp catchUp) {
+        super(new FollowerStreams(replica, catchUp, LatencyRecorder.NONE), new RecordingHandler(Journal.APPLICATION_ID));
         this.replica = replica;
         this.main = replica.configure(MAIN, StreamReplicationMode.ASYNC);
     }
@@ -86,7 +89,12 @@ abstract class LeaderConnectionHarness extends AbstractLeaderConnectionHarness {
     }
 
     static ToIntBiFunction<ByteBuffer, Integer> snapshotBegin(long snapshotOffset, String state) {
-        return (out, index) -> TestingFrameEncoder.snapshotBegin(out, index, EPOCH, 0, snapshotOffset, 0, state);
+        return snapshotBegin(snapshotOffset, 0, state);
+    }
+
+    static ToIntBiFunction<ByteBuffer, Integer> snapshotBegin(long snapshotOffset, long fromPosition, String state) {
+        return (out, index) -> TestingFrameEncoder.snapshotBegin(out, index, EPOCH, 0, snapshotOffset, fromPosition,
+                state);
     }
 
     static ToIntBiFunction<ByteBuffer, Integer> snapshotRecord(long position, String text) {

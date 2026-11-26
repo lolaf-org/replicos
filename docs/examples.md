@@ -26,3 +26,7 @@ it is written. `-XX:-RestrictContended` lets ringos pad its ring buffers; withou
 A `put` on the leader returns `ACKED` once the follower applied it, `NO_FOLLOWER_IN_SYNC` with none following, and
 `TIMED_OUT` when the follower did not answer in time. With no election here, both nodes use epoch 1; an application
 takes its epochs from its election.
+
+Both nodes catch up with `CatchUp.lastRecords(16)`: `KeyValueSink` reads its last changes back, and a snapshot keeps
+the changes before its start. A node that led and then follows the new leader gets only the changes it missed. The
+store being in memory, a restarted node holds nothing and gets the whole journal.

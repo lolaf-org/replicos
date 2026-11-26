@@ -98,7 +98,7 @@ class TestReplicationEncryptionHandshake {
         InetSocketAddress address = new InetSocketAddress("localhost", TestingPorts.findFree());
         server = new ReplicationServer(leader.settings().bindAddress(address).heartbeatInterval(Duration.ofMillis(100))
                 .followerStallTimeout(Duration.ofSeconds(5)).build(), leader.getLogs(), leader.getFollowers(),
-                () -> EPOCH, LEADERSHIP, leaderId, new WakeupSelectStrategy(10),
+                () -> EPOCH, LEADERSHIP, leaderId, CatchUp.fullCopy(), new WakeupSelectStrategy(10),
                 new ReplicationStats(new SlowFollowers(Duration.ZERO, new TestingReplicationClock()), ReplicationMetrics.NONE), new TestingReplicationClock(),
                 leaderExchange);
         server.start();

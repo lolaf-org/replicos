@@ -16,6 +16,7 @@
 package org.lolaf.replicos.examples.keyvalue;
 
 import org.jspecify.annotations.Nullable;
+import org.lolaf.replicos.CatchUp;
 import org.lolaf.replicos.FollowerSettings;
 import org.lolaf.replicos.LeaderSettings;
 import org.lolaf.replicos.ReplicationNode;
@@ -55,6 +56,7 @@ public final class KeyValueNode implements AutoCloseable {
                 .follower(FollowerSettings.builder()
                         .sinks(new KeyValueSinks(store, storageIdentity))
                         .build())
+                .catchUp(CatchUp.lastRecords(16))
                 .build();
         stream.writeThrough(node.writer(KeyValueStream.KEY));
     }
@@ -65,6 +67,13 @@ public final class KeyValueNode implements AutoCloseable {
 
     public void follow(InetSocketAddress leaderAddress, long epoch) {
         node.follow(leaderAddress, () -> epoch, Deadline.of(TIMEOUT));
+    }
+
+    /**
+     * Stops leading or following, keeping the store, as when another node is elected.
+     */
+    public void standDown() {
+        node.standDown(Deadline.of(TIMEOUT));
     }
 
     public boolean isLeading() {

@@ -75,6 +75,11 @@ class TestReplicationNode {
 
     private ReplicationNode node(String nodeId, InetSocketAddress bindAddress, Journal journal, JournalReplica replica,
                                  ReplicationEncryptionSettings encryption) {
+        return node(nodeId, bindAddress, journal, replica, encryption, CatchUp.fullCopy());
+    }
+
+    private ReplicationNode node(String nodeId, InetSocketAddress bindAddress, Journal journal, JournalReplica replica,
+                                 ReplicationEncryptionSettings encryption, CatchUp catchUp) {
         ReplicationNode node = ReplicationNode.builder()
                 .nodeId(nodeId)
                 .leader(LeaderSettings.builder()
@@ -88,6 +93,7 @@ class TestReplicationNode {
                         .checkInterval(Duration.ofMillis(50))
                         .build())
                 .encryption(encryption)
+                .catchUp(catchUp)
                 .logCapacity(1 << 16)
                 .metrics(new ReplicationMetrics() {
                     @Override
@@ -246,6 +252,35 @@ class TestReplicationNode {
                     .startsWith("begin from=0 state=4"));
         } finally {
             restarted.close(stop());
+        }
+    }
+
+    @Test
+    void aFollowerRestartedWithItsCopyIsCaughtUpWithOnlyWhatItMissed() {
+        Journal leaderJournal = new Journal();
+        ReplicationEncryptionSettings clear = ReplicationEncryptionSettings.builder().build();
+        ReplicationNode leader = node("a", addressA, leaderJournal, new JournalReplica(), clear, CatchUp.lastRecords(2));
+        ReplicationNode follower = node("b", addressB, new Journal(), replicaB, clear, CatchUp.lastRecords(2));
+        ReplicationNode restarted = node("b", addressB, new Journal(), replicaB, clear, CatchUp.lastRecords(2));
+        try {
+            JournalStream main = leaderJournal.add(MAIN, StreamReplicationMode.SYNC_APPLIED);
+            main.append("first");
+            main.append("second");
+            leader.lead(1, stop());
+            follower.follow(addressA, () -> 1, stop());
+            await().until(() -> follower.leader().isInSync());
+            follower.close(stop());
+            main.append("third");
+            copyB.getWrites().clear();
+
+            restarted.follow(addressA, () -> 1, stop());
+
+            await().untilAsserted(() -> assertThat(copyB.getWrites()).as("its lane positions lost, its copy kept")
+                    .containsExactly("begin from=3 state=4", "snapshot 3 third", "end state=4"));
+        } finally {
+            restarted.close(stop());
+            follower.close(stop());
+            leader.close(stop());
         }
     }
 

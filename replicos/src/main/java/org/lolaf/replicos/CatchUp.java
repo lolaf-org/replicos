@@ -29,9 +29,13 @@ import org.lolaf.replicos.wire.CatchUpCheck;
 @AllArgsConstructor(access = AccessLevel.PRIVATE)
 public class CatchUp {
 
-    private static final CatchUp FULL_COPY = new CatchUp(CatchUpCheck.FULL_COPY);
+    private static final CatchUp FULL_COPY = new CatchUp(CatchUpCheck.FULL_COPY, 0);
 
     CatchUpCheck check;
+    /**
+     * How many of its last records a follower proves its copy with, 0 for none.
+     */
+    int records;
 
     /**
      * Copies the whole stream every time: the costliest, but it needs nothing of the application and no copy can keep
@@ -39,5 +43,22 @@ public class CatchUp {
      */
     public static CatchUp fullCopy() {
         return FULL_COPY;
+    }
+
+    /**
+     * Copies only what follows the follower's last {@code records} records when the leader holds the same at their
+     * positions, else the whole stream. Needs no storage beyond the streams': the sinks implement
+     * {@link org.lolaf.replicos.spi.ReplicaSink#readLast} and keep what precedes a snapshot's start. Incremental after
+     * a follower restart or a failover it followed; a deposed leader holding records the new one never got is copied
+     * whole. Blind spot: two histories that parted earlier yet hold byte-identical records at those positions, as
+     * records that repeat may; more records narrow it.
+     *
+     * @throws IllegalArgumentException for fewer than one record
+     */
+    public static CatchUp lastRecords(int records) {
+        if (records < 1) {
+            throw new IllegalArgumentException("lastRecords needs at least one record, got " + records);
+        }
+        return new CatchUp(CatchUpCheck.LAST_RECORDS, records);
     }
 }
