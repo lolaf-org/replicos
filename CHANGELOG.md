@@ -19,19 +19,27 @@ The first release, extracted from the high availability of [staffix](https://git
 
 - **Streams of records replicated from a leader to its followers over TCP.** Your application stores its records and
   announces its streams; replicos carries the bytes, never reads them, and has each follower apply them into its own
-  storage. The wire protocol is documented in `docs/protocol.md`.
+  storage. `docs/how-it-works.md` explains how, with diagrams; the wire protocol is in `docs/protocol.md`.
 - **Three replication modes, per stream.** `ASYNC` waits for nothing; `SYNC_RECEIVED` and `SYNC_APPLIED` let a write
   wait until a follower received or applied it. The wait has a timeout, and tells a timed-out write from one with no
   follower in sync.
 - **Snapshots catch up a follower missing history** while the stream keeps being written. `resync` sends a stream
   again from scratch.
-- **Followers recover on their own.** A follower reconnects after a failure and resumes after the last record it
-  wrote. A follower too slow to keep up is dropped, so it cannot hold back the leader for long, and caught up again by
-  snapshot after a hold-off that grows if it keeps falling behind.
+- **A follower can be copied only what it misses.** With `CatchUp.byLastRecords()` on every node, a follower that
+  restarted, was dropped, or followed the previous leader keeps its copy and receives only the records after it,
+  once its last 16 records match the leader's; one holding records the leader never had gets the whole stream. Its
+  sink reads its last records back with `readLast`. The default, `CatchUp.fullCopy()`, copies the whole stream every
+  time.
+- **Followers recover on their own.** A follower that reconnects to the same leader resumes from where it was, as
+  long as the leader's log still holds it; otherwise it is caught up by snapshot. A follower too slow to keep up is
+  dropped, so it cannot hold back the leader for long, and caught up again by snapshot after a hold-off that grows if
+  it keeps falling behind.
 - **Lanes split the streams over several connections**, so a snapshot or a slow stream holds back only its own lane's
   streams, and a follower applies the lanes in parallel. Sink writer threads let a follower keep receiving while its
   storage writes.
-- **Your election decides who leads.** A node leads or follows when told, with the epoch your election gives it.
+- **Your election decides who leads.** A node leads or follows when told, with the epoch your election gives it. Each
+  `lead()` is a new leadership, even at an epoch used before, so a follower is never resumed from a log it did not
+  follow.
   `handOver` before a clean stop tells the followers they hold everything, so the next leader takes over where this one
   left off.
 - **A leader reachable over several networks.** A follower can be given all of its leader's addresses, and connects

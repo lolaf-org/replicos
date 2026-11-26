@@ -35,8 +35,9 @@ application's election, such as [primos](https://github.com/lolaf-org/primos).
   off, the default, spares the cores; busy spinning on the leader's senders and ack waits, the follower's sink
   writers and both network threads trades cores for the lowest round trip. Lanes and sink writer threads add
   parallelism where the load needs it.
-- **Catching up**: a follower missing history gets a snapshot while the stream keeps being written; one that
-  reconnects resumes after the last record it wrote; one too slow is dropped rather than holding the leader back.
+- **Catching up**: a follower that reconnects to the same leader resumes from the leader's log; one missing history
+  gets a snapshot while the stream keeps being written, of the whole stream or, with `CatchUp.byLastRecords()`, only
+  of what it misses; one too slow is dropped rather than holding the leader back.
 - **Failover support**: your election decides who leads; `handOver` on a clean stop tells the followers they hold
   every write; a follower can be given every address its leader listens on.
 - **Optional encryption** with a secret the nodes share: AES-CTR with HMAC-SHA256 by default, AES-GCM, ChaCha20 with
@@ -55,8 +56,10 @@ application's election, such as [primos](https://github.com/lolaf-org/primos).
 - **A snapshot** copies a stream's state and records to a follower that is missing history, while the stream keeps
   being written.
 
-The wire format is in [docs/protocol.md](docs/protocol.md), a runnable example in [docs/examples.md](docs/examples.md),
-and the benchmarks in [docs/benchmarks.md](docs/benchmarks.md).
+**Start with [docs/how-it-works.md](docs/how-it-works.md)**: a record's path, the log, how a follower catches up
+after a disconnect, a restart or a failover, and what each catch-up setting costs, with diagrams. The wire format is
+in [docs/protocol.md](docs/protocol.md), a runnable example in [docs/examples.md](docs/examples.md), and the
+benchmarks in [docs/benchmarks.md](docs/benchmarks.md).
 
 ## What the application implements
 
@@ -67,7 +70,7 @@ The interfaces of `org.lolaf.replicos.spi`:
 | `LeaderStreams`, `LeaderStream` | the streams the leader announces: key, name, mode, where it stores them |
 | `SnapshotSource` | reads a stream's state and records back from the application's storage, for a snapshot |
 | `ReplicaSinks` | on a follower, opens the sink each announced stream is applied into, or refuses it |
-| `ReplicaSink` | applies one stream's records and snapshots into the follower's storage |
+| `ReplicaSink` | applies one stream's records and snapshots into the follower's storage; under `CatchUp.byLastRecords()` it also reads its last records back |
 
 `ReplicationClock`, `ReplicationMetrics` and `LatencyRecorder` are optional: the defaults are the system clock and no
 metrics.
@@ -99,8 +102,8 @@ writer.awaitAck(offset, StreamReplicationMode.SYNC_APPLIED, timeoutNanos);
 Both nodes give the same `ReplicaSinks.getApplicationId()`; a peer replicating another application is refused.
 `handOver` before stopping a leader lets the next one take over each stream where it was left.
 
-A node holds what both roles read (log capacity, encryption, network threads' waiting, clock, metrics) and each
-role's own settings: `LeaderSettings` (lanes, timeouts, send buffers, snapshot chunks) and `FollowerSettings`
+A node holds what both roles read (log capacity, encryption, catch-up, network threads' waiting, clock, metrics) and
+each role's own settings: `LeaderSettings` (lanes, timeouts, send buffers, snapshot chunks) and `FollowerSettings`
 (reconnection, sink writer threads). Everything but the bind address, the streams and the sinks has a default. A node
 given one role's settings only refuses to take the other.
 

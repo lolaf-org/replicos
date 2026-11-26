@@ -2,7 +2,8 @@
 
 How a leader replicates an application's streams to one follower over TCP: the frames, the handshake, the
 acknowledgements, snapshots and encryption. The library never reads what it replicates: records, their content types
-and a stream's state are the application's bytes.
+and a stream's state are the application's bytes. For the behaviour behind the frames, when a follower resumes and
+when it is caught up by snapshot, read [how-it-works.md](how-it-works.md) first.
 
 ## Model
 
