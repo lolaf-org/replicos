@@ -58,7 +58,7 @@ abstract class LeaderConnectionHarness extends AbstractLeaderConnectionHarness {
     }
 
     static ToIntBiFunction<ByteBuffer, Integer> welcome(long epoch, long resumeOffset, int lanes) {
-        return (out, index) -> TestingFrameEncoder.welcome(out, index, epoch, "leader-a", resumeOffset, lanes,
+        return (out, index) -> TestingFrameEncoder.welcome(out, index, epoch, "leader-a", LEADERSHIP, resumeOffset, lanes,
                 EncryptionMode.DISABLED, TestingKeyExchanges.NO_NONCE);
     }
 

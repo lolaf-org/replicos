@@ -20,6 +20,8 @@ and a stream's state are the application's bytes.
   dropped.
 - **An epoch** numbers leaderships; every frame carries the sender's. The source of epochs (an election) is outside
   the library.
+- **A leadership** is 8 random bytes a node draws each time it starts leading. Log offsets mean nothing outside the
+  leadership that wrote them, so a leader restarted at the same epoch never resumes a follower of its previous run.
 
 ## Frames
 
@@ -42,8 +44,8 @@ The fixed payload follows, then the variable part, then a 16-byte tag on an encr
 
 | code | frame | direction | fixed payload, then variable part |
 |---|---|---|---|
-| 1 | HELLO | follower to leader | magic 4, version 2, node id length 2, last applied epoch 8, last applied offset 8, lane 2, encryption mode 1, reserved 1, application id 4, nonce 16; node id |
-| 2 | WELCOME | leader to follower | magic 4, version 2, leader id length 2, resume offset 8, lane count 2, encryption mode 1, reserved 1, application id 4, nonce 16; leader id |
+| 1 | HELLO | follower to leader | magic 4, version 2, node id length 2, last applied epoch 8, last applied leadership 8, last applied offset 8, lane 2, encryption mode 1, reserved 1, application id 4, nonce 16; node id |
+| 2 | WELCOME | leader to follower | magic 4, version 2, leader id length 2, leadership 8, resume offset 8, lane count 2, encryption mode 1, reserved 1, application id 4, nonce 16; leader id |
 | 3 | STREAM | leader to follower | stream key 4, replication mode 1, reserved 1, name length 2, storage identity length 2; name, storage identity |
 | 4 | STREAM_ANSWER | follower to leader | stream key 4, answer 1 |
 | 5 | RECORD | leader to follower | log offset 8, record body 24; payload |
@@ -111,15 +113,15 @@ payload length 4, reserved 4.
 
 Per lane:
 
-1. The follower sends **HELLO**: its epoch, the last epoch and log offset it applied on this lane (-1 when none), the
-   lane, its encryption mode and a nonce (16 random bytes when it encrypts, zeros otherwise).
+1. The follower sends **HELLO**: its epoch, the last epoch, leadership and log offset it applied on this lane (offset
+   -1 when none), the lane, its encryption mode and a nonce (16 random bytes when it encrypts, zeros otherwise).
 2. The leader checks the version, the application, that the follower's epoch is not newer than its own (the leader
    would be deposed) and the lane, then [negotiates encryption](#negotiation). A follower dropped as too slow and
    still held off gets `RETRY_LATER`.
-3. The leader sends **WELCOME**: its epoch, the lane count, its mode, its nonce and the **resume offset**. It resumes
-   when the follower's last applied epoch is the leader's current one and the record at its last applied offset is
-   still in the log; the resume offset is then where the log reads next. Otherwise it is -1, and every stream of the
-   lane needs a snapshot.
+3. The leader sends **WELCOME**: its epoch, its leadership, the lane count, its mode, its nonce and the **resume
+   offset**. It resumes when the follower's last applied epoch and leadership are the leader's current ones and the
+   record at its last applied offset is still in the log; the resume offset is then where the log reads next.
+   Otherwise it is -1, and every stream of the lane needs a snapshot.
 4. When both encrypt, the follower sends **KEY_CONFIRMATION**, and the leader streams only once it verified it.
 5. The leader announces each stream of the lane with a **STREAM**, then **STREAMS_ANNOUNCED** with the count it sent,
    which the follower checks. A stream registered or reconfigured later is announced again with a STREAM at any time.

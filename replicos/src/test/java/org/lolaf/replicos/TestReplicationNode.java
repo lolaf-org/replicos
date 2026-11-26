@@ -224,6 +224,31 @@ class TestReplicationNode {
     }
 
     @Test
+    void aLeaderRestartedAtTheSameEpochCatchesItsFollowerUpBySnapshot() {
+        JournalStream main = aLeadsBInSync();
+        main.append("second");
+        assertThat(main.awaitAck(ACK_TIMEOUT)).isEqualTo(StreamWriter.Ack.ACKED);
+        a.close(stop());
+        Journal restartedJournal = new Journal();
+        ReplicationNode restarted = node("a", addressA, restartedJournal, new JournalReplica(),
+                ReplicationEncryptionSettings.builder().build());
+        try {
+            JournalStream restartedMain = restartedJournal.add(MAIN, StreamReplicationMode.SYNC_APPLIED);
+            restartedMain.append("first");
+            restartedMain.append("second");
+            restartedMain.append("third");
+            copyB.getWrites().clear();
+
+            restarted.lead(1, stop());
+
+            await().untilAsserted(() -> assertThat(copyB.getWrites()).as("its log holds the follower's offset")
+                    .startsWith("begin state=4"));
+        } finally {
+            restarted.close(stop());
+        }
+    }
+
+    @Test
     void aStreamTheFollowerRefusesIsReportedToTheLeaderAndNotWaitedFor() {
         replicaB.configure(MAIN, StreamReplicationMode.SYNC_APPLIED, "leader-storage");
         JournalStream main = journalA.add(MAIN, StreamReplicationMode.SYNC_APPLIED);

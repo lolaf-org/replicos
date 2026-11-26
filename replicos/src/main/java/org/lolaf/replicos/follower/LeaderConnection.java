@@ -86,6 +86,7 @@ public final class LeaderConnection implements FrameHandler {
      * are stamped with it.
      */
     private volatile long streamEpoch;
+    private long streamLeadership;
     private int streamLanes;
     private long streamResumeOffset;
     private boolean ackDue;
@@ -127,7 +128,8 @@ public final class LeaderConnection implements FrameHandler {
     public void hello() {
         ByteBuffer frame = answers.claim(FrameEncoder.bytesWith(FrameType.HELLO, nodeId));
         int length = FrameEncoder.hello(frame, 0, nodeEpoch.getAsLong(), followerStreams.getApplicationId(), nodeId,
-                followerStreams.getLastAppliedEpoch(lane), followerStreams.getLastAppliedOffset(lane), lane,
+                followerStreams.getLastAppliedEpoch(lane), followerStreams.getLastAppliedLeadership(lane),
+                followerStreams.getLastAppliedOffset(lane), lane,
                 keyExchange.getMode(), keyAgreement.getNonce());
         keyAgreement.hello(FrameDecoder.bytes(frame, 0, length));
         answers.send(frame, length);
@@ -172,8 +174,8 @@ public final class LeaderConnection implements FrameHandler {
     }
 
     @Override
-    public void onWelcome(long epoch, int version, int applicationId, String leaderId, long resumeOffset, int lanes,
-                          EncryptionMode leaderMode, byte[] leaderNonce) {
+    public void onWelcome(long epoch, int version, int applicationId, String leaderId, long leadership,
+                          long resumeOffset, int lanes, EncryptionMode leaderMode, byte[] leaderNonce) {
         if (state != State.AWAITING_WELCOME) {
             close(CloseReason.PROTOCOL_ERROR, "a second WELCOME");
             return;
@@ -209,10 +211,11 @@ public final class LeaderConnection implements FrameHandler {
             return;
         }
         streamEpoch = epoch;
+        streamLeadership = leadership;
         streamLanes = lanes;
         streamResumeOffset = resumeOffset;
         if (negotiation == Negotiation.ENCRYPTED) {
-            confirmKeys(epoch, applicationId, leaderId, resumeOffset, lanes, leaderMode, leaderNonce);
+            confirmKeys(epoch, applicationId, leaderId, leadership, resumeOffset, lanes, leaderMode, leaderNonce);
             state = State.AWAITING_KEY_ACCEPTANCE;
             return;
         }
@@ -226,7 +229,7 @@ public final class LeaderConnection implements FrameHandler {
     private void startStreaming() {
         leaderLanes.lanesAnnounced(streamLanes);
         boolean resumed = streamResumeOffset != WireFormat.NO_RESUME;
-        followerStreams.streamStarted(lane, resumed);
+        followerStreams.streamStarted(lane, resumed, streamEpoch, streamLeadership);
         state = State.STREAMING;
         ackDue = true;
         if (keyAgreement.getKeys() != null) {
@@ -239,10 +242,10 @@ public final class LeaderConnection implements FrameHandler {
     /**
      * Sent before anything else this connection answers, so the leader verifies it before it streams.
      */
-    private void confirmKeys(long epoch, int applicationId, String leaderId, long resumeOffset, int lanes,
-                             EncryptionMode leaderMode, byte[] leaderNonce) {
-        keyAgreement.agree(leaderNonce, FrameEncoder.welcomeBytes(epoch, applicationId, leaderId, resumeOffset, lanes,
-                leaderMode, leaderNonce));
+    private void confirmKeys(long epoch, int applicationId, String leaderId, long leadership, long resumeOffset,
+                             int lanes, EncryptionMode leaderMode, byte[] leaderNonce) {
+        keyAgreement.agree(leaderNonce, FrameEncoder.welcomeBytes(epoch, applicationId, leaderId, leadership,
+                resumeOffset, lanes, leaderMode, leaderNonce));
         byte[] confirmation = keyAgreement.confirmation();
         frameOpener = keyAgreement.newOpener();
         ByteBuffer frame = answers.claim(FrameEncoder.fixedBytes(FrameType.KEY_CONFIRMATION));
@@ -297,7 +300,7 @@ public final class LeaderConnection implements FrameHandler {
         if (!acceptsFrame(epoch)) {
             return;
         }
-        if (!followerStreams.apply(lane, epoch, logOffset, streamKey, contentType, flags, position, buffer,
+        if (!followerStreams.apply(lane, logOffset, streamKey, contentType, flags, position, buffer,
                 payloadIndex, payloadLength)) {
             close(CloseReason.PROTOCOL_ERROR, "a RECORD for stream key " + streamKey
                     + " never announced on this lane, or a fragment out of its payload");

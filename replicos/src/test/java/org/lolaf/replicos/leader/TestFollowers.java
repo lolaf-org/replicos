@@ -48,6 +48,7 @@ import static org.mockito.Mockito.when;
 class TestFollowers {
 
     private static final long EPOCH = 7;
+    private static final long LEADERSHIP = 41;
     private static final long NO_TIMEOUT = 0;
     private static final int KEY = 0;
 
@@ -77,9 +78,9 @@ class TestFollowers {
         IOSession ioSession = mock(IOSession.class);
         when(ioSession.borrow(anyInt())).then(invocation -> ByteBuffer.allocate(invocation.getArgument(0)));
         FollowerConnection connection = new FollowerConnection(ioSession, journal.settings().build(), journal.getLogs(),
-                () -> EPOCH, "leader-a", new ReplicationStats(new SlowFollowers(Duration.ZERO, new TestingReplicationClock()), ReplicationMetrics.NONE), loop -> {
+                () -> EPOCH, LEADERSHIP, "leader-a", new ReplicationStats(new SlowFollowers(Duration.ZERO, new TestingReplicationClock()), ReplicationMetrics.NONE), loop -> {
         }, new TestingReplicationClock(), TestingKeyExchanges.CLEAR);
-        connection.onHello(EPOCH, WireFormat.VERSION, Journal.APPLICATION_ID, "follower", EPOCH, 0, 0, EncryptionMode.DISABLED, TestingKeyExchanges.NO_NONCE);
+        connection.onHello(EPOCH, WireFormat.VERSION, Journal.APPLICATION_ID, "follower", EPOCH, LEADERSHIP, 0, 0, EncryptionMode.DISABLED, TestingKeyExchanges.NO_NONCE);
         connection.getSender().fillBatch(ByteBuffer.allocate(1 << 16));
         connection.onStreamAnswer(EPOCH, KEY, StreamAnswer.REPLICATING);
         connection.onAck(EPOCH, appliedOffset, true, 0);
@@ -215,10 +216,10 @@ class TestFollowers {
         IOSession ioSession = mock(IOSession.class);
         when(ioSession.borrow(anyInt())).then(invocation -> ByteBuffer.allocate(invocation.getArgument(0)));
         FollowerConnection connectionOfMain = new FollowerConnection(ioSession, twoLanes.settings().build(),
-                twoLanes.getLogs(), () -> EPOCH, "leader-a",
+                twoLanes.getLogs(), () -> EPOCH, LEADERSHIP, "leader-a",
                 new ReplicationStats(new SlowFollowers(Duration.ZERO, new TestingReplicationClock()), ReplicationMetrics.NONE), loop -> {
         }, new TestingReplicationClock(), TestingKeyExchanges.CLEAR);
-        connectionOfMain.onHello(EPOCH, WireFormat.VERSION, Journal.APPLICATION_ID, "follower", EPOCH, -1, 0, EncryptionMode.DISABLED, TestingKeyExchanges.NO_NONCE);
+        connectionOfMain.onHello(EPOCH, WireFormat.VERSION, Journal.APPLICATION_ID, "follower", EPOCH, LEADERSHIP, -1, 0, EncryptionMode.DISABLED, TestingKeyExchanges.NO_NONCE);
         connectionOfMain.getSender().fillBatch(ByteBuffer.allocate(1 << 16));
         connectionOfMain.onStreamAnswer(EPOCH, 0, StreamAnswer.REPLICATING);
         connectionOfMain.onAck(EPOCH, twoLanes.getLogs().get(0).getTailOffset(), true, 0);
@@ -248,10 +249,10 @@ class TestFollowers {
         IOSession ioSession = mock(IOSession.class);
         when(ioSession.borrow(anyInt())).then(invocation -> ByteBuffer.allocate(invocation.getArgument(0)));
         FollowerConnection connection = new FollowerConnection(ioSession, twoLanes.settings().build(),
-                twoLanes.getLogs(), () -> EPOCH, "leader-a",
+                twoLanes.getLogs(), () -> EPOCH, LEADERSHIP, "leader-a",
                 new ReplicationStats(new SlowFollowers(Duration.ZERO, new TestingReplicationClock()), ReplicationMetrics.NONE), loop -> {
         }, new TestingReplicationClock(), TestingKeyExchanges.CLEAR);
-        connection.onHello(EPOCH, WireFormat.VERSION, Journal.APPLICATION_ID, "follower", EPOCH, -1, lane, EncryptionMode.DISABLED, TestingKeyExchanges.NO_NONCE);
+        connection.onHello(EPOCH, WireFormat.VERSION, Journal.APPLICATION_ID, "follower", EPOCH, LEADERSHIP, -1, lane, EncryptionMode.DISABLED, TestingKeyExchanges.NO_NONCE);
         connection.getSender().fillBatch(ByteBuffer.allocate(1 << 16));
         followers.add(connection);
         return connection;

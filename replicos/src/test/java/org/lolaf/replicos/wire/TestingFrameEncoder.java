@@ -79,15 +79,16 @@ public class TestingFrameEncoder {
     }
 
     public static int hello(ByteBuffer out, int index, long epoch, String nodeId, long lastAppliedEpoch,
-                            long lastAppliedOffset, int lane, EncryptionMode encryptionMode, byte[] nonce) {
+                            long lastAppliedLeadership, long lastAppliedOffset, int lane, EncryptionMode encryptionMode,
+                            byte[] nonce) {
         return FrameEncoder.hello(out, index, epoch, Journal.APPLICATION_ID, nodeId, lastAppliedEpoch,
-                lastAppliedOffset, lane, encryptionMode, nonce);
+                lastAppliedLeadership, lastAppliedOffset, lane, encryptionMode, nonce);
     }
 
-    public static int welcome(ByteBuffer out, int index, long epoch, String leaderId, long resumeOffset, int lanes,
-                              EncryptionMode encryptionMode, byte[] nonce) {
-        return FrameEncoder.welcome(out, index, epoch, Journal.APPLICATION_ID, leaderId, resumeOffset, lanes,
-                encryptionMode, nonce);
+    public static int welcome(ByteBuffer out, int index, long epoch, String leaderId, long leadership,
+                              long resumeOffset, int lanes, EncryptionMode encryptionMode, byte[] nonce) {
+        return FrameEncoder.welcome(out, index, epoch, Journal.APPLICATION_ID, leaderId, leadership, resumeOffset,
+                lanes, encryptionMode, nonce);
     }
 
     public static ByteBuffer ascii(String text) {

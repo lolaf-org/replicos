@@ -55,6 +55,7 @@ import static org.awaitility.Awaitility.await;
 class TestReplicationServer {
 
     private static final long EPOCH = 7;
+    private static final long LEADERSHIP = 41;
 
     private final Journal journal;
     private final InetSocketAddress address;
@@ -66,7 +67,7 @@ class TestReplicationServer {
         this.journal = Journal.ofCapacity(1 << 16);
         this.address = new InetSocketAddress("localhost", TestingPorts.findFree());
         this.server = new ReplicationServer(journal.settings().bindAddress(address).heartbeatInterval(Duration.ofMillis(100))
-                .build(), journal.getLogs(), journal.getFollowers(), () -> EPOCH, "leader-a", new WakeupSelectStrategy(10),
+                .build(), journal.getLogs(), journal.getFollowers(), () -> EPOCH, LEADERSHIP, "leader-a", new WakeupSelectStrategy(10),
                 new ReplicationStats(new SlowFollowers(Duration.ZERO, new TestingReplicationClock()), ReplicationMetrics.NONE), new TestingReplicationClock(),
                 TestingKeyExchanges.CLEAR);
         this.received = new RecordingHandler(Journal.APPLICATION_ID);
@@ -87,7 +88,7 @@ class TestReplicationServer {
                     @Override
                     public void onConnected(IOSession session) {
                         ByteBuffer hello = session.borrow(FrameEncoder.bytesWith(FrameType.HELLO, "follower-b"));
-                        int length = TestingFrameEncoder.hello(hello, 0, EPOCH, "follower-b", lastAppliedEpoch, lastAppliedOffset, 0, EncryptionMode.DISABLED, TestingKeyExchanges.NO_NONCE);
+                        int length = TestingFrameEncoder.hello(hello, 0, EPOCH, "follower-b", lastAppliedEpoch, LEADERSHIP, lastAppliedOffset, 0, EncryptionMode.DISABLED, TestingKeyExchanges.NO_NONCE);
                         session.send(hello.position(length), true);
                     }
 
@@ -136,7 +137,7 @@ class TestReplicationServer {
         await().untilAsserted(() -> assertThat(received())
                 .filteredOn(frame -> !frame.startsWith("HEARTBEAT"))
                 .containsExactly(
-                        "WELCOME epoch=7 version=1 leader=leader-a resume=48 lanes=1",
+                        "WELCOME epoch=7 version=1 leader=leader-a leadership=41 resume=48 lanes=1",
                         "STREAM epoch=7 key=0 ASYNC name=main identity=leader-storage",
                         "STREAMS_ANNOUNCED epoch=7 count=1",
                         "RECORD epoch=7 offset=48 key=0 type=1 pos=2 payload=",

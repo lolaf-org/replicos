@@ -78,6 +78,11 @@ public final class FollowerConnection implements FrameHandler {
      * This node's current election epoch, stamped on every frame it sends.
      */
     private final LongSupplier nodeEpoch;
+    /**
+     * Sent in WELCOME and expected back in a HELLO that resumes: offsets in this node's log mean nothing to a follower
+     * of another leadership, even of the same epoch, as a leader restarted with its epoch.
+     */
+    private final long leadership;
     private final String leaderId;
     @Getter
     private volatile int lane;
@@ -115,7 +120,7 @@ public final class FollowerConnection implements FrameHandler {
      * @param senderLauncher starts the loop streaming the log, on a thread of its own
      */
     FollowerConnection(IOSession ioSession, LeaderSettings settings, ReplicationLogs logs, LongSupplier nodeEpoch,
-                       String leaderId, ReplicationStats stats, Consumer<Runnable> senderLauncher,
+                       long leadership, String leaderId, ReplicationStats stats, Consumer<Runnable> senderLauncher,
                        ReplicationClock clock, KeyExchange keyExchange) {
         this.syncs = new StreamSyncs();
         this.answerOpener = FrameCipher.CLEAR;
@@ -127,6 +132,7 @@ public final class FollowerConnection implements FrameHandler {
         this.logs = logs;
         this.streams = settings.getStreams();
         this.nodeEpoch = nodeEpoch;
+        this.leadership = leadership;
         this.leaderId = leaderId;
         this.stats = stats;
         this.keyExchange = keyExchange;
@@ -138,7 +144,8 @@ public final class FollowerConnection implements FrameHandler {
 
     @Override
     public void onHello(long epoch, int version, int applicationId, String nodeId, long lastAppliedEpoch,
-                        long lastAppliedOffset, int lane, EncryptionMode followerMode, byte[] followerNonce) {
+                        long lastAppliedLeadership, long lastAppliedOffset, int lane, EncryptionMode followerMode,
+                        byte[] followerNonce) {
         followerId = nodeId;
         long currentEpoch = nodeEpoch.getAsLong();
         if (!acceptsHello(epoch, version, applicationId, lane, currentEpoch)) {
@@ -158,7 +165,8 @@ public final class FollowerConnection implements FrameHandler {
             return;
         }
         reader = replicationLog.newReader(this::droppedAsTooSlow);
-        boolean resumed = lastAppliedEpoch == currentEpoch && resume(lastAppliedOffset);
+        boolean resumed = lastAppliedEpoch == currentEpoch && lastAppliedLeadership == leadership
+                && resume(lastAppliedOffset);
         if (!resumed) {
             reader.seekToTail();
         }
@@ -181,7 +189,7 @@ public final class FollowerConnection implements FrameHandler {
         }
         long resumeOffset = resumed ? reader.getOffset() : WireFormat.NO_RESUME;
         byte @Nullable [] helloToConfirm = encrypted ? FrameEncoder.helloBytes(epoch, applicationId, nodeId, lastAppliedEpoch,
-                lastAppliedOffset, lane, followerMode, followerNonce) : null;
+                lastAppliedLeadership, lastAppliedOffset, lane, followerMode, followerNonce) : null;
         sender.start(replicationLog, reader, sendWelcome(currentEpoch, resumeOffset, helloToConfirm, followerNonce));
     }
 
@@ -214,7 +222,7 @@ public final class FollowerConnection implements FrameHandler {
                                     byte[] followerNonce) {
         ByteBuffer frame = ioSession.borrow(FrameEncoder.bytesWith(FrameType.WELCOME, leaderId));
         int length = FrameEncoder.welcome(frame.clear(), 0, currentEpoch, streams.getApplicationId(), leaderId,
-                resumeOffset, logs.count(), keyExchange.getMode(), keyAgreement.getNonce());
+                leadership, resumeOffset, logs.count(), keyExchange.getMode(), keyAgreement.getNonce());
         FrameCipher sealer = FrameCipher.CLEAR;
         if (helloToConfirm != null) {
             keyAgreement.hello(helloToConfirm);

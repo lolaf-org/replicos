@@ -111,7 +111,7 @@ class TestFollowerConnectionEncryption extends FollowerConnectionHarness {
     }
 
     private void hello(EncryptionMode followerMode, byte[] followerNonce) {
-        connection.onHello(EPOCH, WireFormat.VERSION, Journal.APPLICATION_ID, "follower-b", 0, -1, 0, followerMode, followerNonce);
+        connection.onHello(EPOCH, WireFormat.VERSION, Journal.APPLICATION_ID, "follower-b", 0, LEADERSHIP, -1, 0, followerMode, followerNonce);
     }
 
     private long errors() {
@@ -123,8 +123,8 @@ class TestFollowerConnectionEncryption extends FollowerConnectionHarness {
      */
     private byte[] followerConfirmation(KeyExchange follower, byte[] followerNonce) {
         byte[] leaderNonce = sent.lastNonce;
-        byte[] helloBytes = FrameEncoder.helloBytes(EPOCH, Journal.APPLICATION_ID, "follower-b", 0, -1, 0, EncryptionMode.REQUIRED, followerNonce);
-        byte[] welcomeBytes = FrameEncoder.welcomeBytes(EPOCH, Journal.APPLICATION_ID, "leader-a", WireFormat.NO_RESUME, 1,
+        byte[] helloBytes = FrameEncoder.helloBytes(EPOCH, Journal.APPLICATION_ID, "follower-b", 0, LEADERSHIP, -1, 0, EncryptionMode.REQUIRED, followerNonce);
+        byte[] welcomeBytes = FrameEncoder.welcomeBytes(EPOCH, Journal.APPLICATION_ID, "leader-a", LEADERSHIP, WireFormat.NO_RESUME, 1,
                 EncryptionMode.REQUIRED, leaderNonce);
         return follower.confirm(follower.deriveKeys(followerNonce, leaderNonce), helloBytes, welcomeBytes);
     }

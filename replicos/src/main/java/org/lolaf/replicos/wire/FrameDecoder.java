@@ -148,16 +148,18 @@ public class FrameDecoder {
 
     private static void decodeHello(ByteBuffer in, int p, long epoch, int variableBytes, FrameHandler handler) {
         checkMagic(in, p);
-        String nodeId = string(in, p + 48, unsignedShort(in, p + 6), variableBytes, FrameType.HELLO);
-        handler.onHello(epoch, in.getShort(p + 4), in.getInt(p + 28), nodeId, in.getLong(p + 8), in.getLong(p + 16),
-                unsignedShort(in, p + 24), EncryptionMode.from(in.get(p + 26)), bytes(in, p + 32, WireFormat.NONCE_BYTES));
+        String nodeId = string(in, p + 56, unsignedShort(in, p + 6), variableBytes, FrameType.HELLO);
+        handler.onHello(epoch, in.getShort(p + 4), in.getInt(p + 36), nodeId, in.getLong(p + 8), in.getLong(p + 16),
+                in.getLong(p + 24), unsignedShort(in, p + 32), EncryptionMode.from(in.get(p + 34)),
+                bytes(in, p + 40, WireFormat.NONCE_BYTES));
     }
 
     private static void decodeWelcome(ByteBuffer in, int p, long epoch, int variableBytes, FrameHandler handler) {
         checkMagic(in, p);
-        String leaderId = string(in, p + 40, unsignedShort(in, p + 6), variableBytes, FrameType.WELCOME);
-        handler.onWelcome(epoch, in.getShort(p + 4), in.getInt(p + 20), leaderId, in.getLong(p + 8),
-                unsignedShort(in, p + 16), EncryptionMode.from(in.get(p + 18)), bytes(in, p + 24, WireFormat.NONCE_BYTES));
+        String leaderId = string(in, p + 48, unsignedShort(in, p + 6), variableBytes, FrameType.WELCOME);
+        handler.onWelcome(epoch, in.getShort(p + 4), in.getInt(p + 28), leaderId, in.getLong(p + 8),
+                in.getLong(p + 16), unsignedShort(in, p + 24), EncryptionMode.from(in.get(p + 26)),
+                bytes(in, p + 32, WireFormat.NONCE_BYTES));
     }
 
     private static void decodeStream(ByteBuffer in, int p, int flags, long epoch, int variableBytes, FrameHandler handler) {

@@ -36,21 +36,25 @@ public interface FrameHandler {
     /**
      * A follower's first frame.
      *
-     * @param lastAppliedOffset the offset of the last record it applied in {@code lastAppliedEpoch}, -1 for none: the
-     *                          leader resumes after it when its log still holds it in the same epoch
-     * @param lane              which of the leader's lanes this connection carries, 0 for the first, the one that
-     *                          learns how many there are
-     * @param applicationId     what the follower replicates, which must be the leader's: two applications' streams
-     *                          do not mix
-     * @param encryptionMode    the follower's, which with the leader's decides whether the connection encrypts
-     * @param nonce             the follower's random part of this connection's keys, zeros when it does not encrypt
+     * @param lastAppliedLeadership the leadership of {@code lastAppliedEpoch} the last record applied came from
+     * @param lastAppliedOffset     the offset of the last record it applied, -1 for none: the leader resumes after it
+     *                              when its log still holds it in the same epoch and leadership
+     * @param lane                  which of the leader's lanes this connection carries, 0 for the first, the one that
+     *                              learns how many there are
+     * @param applicationId         what the follower replicates, which must be the leader's: two applications' streams
+     *                              do not mix
+     * @param encryptionMode        the follower's, which with the leader's decides whether the connection encrypts
+     * @param nonce                 the follower's random part of this connection's keys, zeros when it does not encrypt
      */
     default void onHello(long epoch, int version, int applicationId, String nodeId, long lastAppliedEpoch,
-                         long lastAppliedOffset, int lane, EncryptionMode encryptionMode, byte[] nonce) {
+                         long lastAppliedLeadership, long lastAppliedOffset, int lane, EncryptionMode encryptionMode,
+                         byte[] nonce) {
         throw unexpected(FrameType.HELLO);
     }
 
     /**
+     * @param leadership   drawn at random each time the leader starts leading: its log's offsets mean nothing to
+     *                     another leadership, even of the same epoch
      * @param resumeOffset where the stream resumes, or {@link WireFormat#NO_RESUME} when every stream is caught up
      *                     by snapshot
      * @param lanes        how many lanes the leader splits its streams over; the follower opens the others
@@ -58,8 +62,8 @@ public interface FrameHandler {
      * @param encryptionMode the leader's, as in {@link #onHello}
      * @param nonce          the leader's, as in {@link #onHello}
      */
-    default void onWelcome(long epoch, int version, int applicationId, String leaderId, long resumeOffset, int lanes,
-                           EncryptionMode encryptionMode, byte[] nonce) {
+    default void onWelcome(long epoch, int version, int applicationId, String leaderId, long leadership,
+                           long resumeOffset, int lanes, EncryptionMode encryptionMode, byte[] nonce) {
         throw unexpected(FrameType.WELCOME);
     }
 

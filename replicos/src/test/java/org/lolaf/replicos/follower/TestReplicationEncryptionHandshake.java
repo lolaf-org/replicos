@@ -56,6 +56,7 @@ import static org.awaitility.Awaitility.await;
 class TestReplicationEncryptionHandshake {
 
     private static final long EPOCH = 7;
+    private static final long LEADERSHIP = 41;
     private static final String ENTRY = "an order-text entry";
     private static final String MAIN = "main";
 
@@ -96,7 +97,7 @@ class TestReplicationEncryptionHandshake {
         InetSocketAddress address = new InetSocketAddress("localhost", TestingPorts.findFree());
         server = new ReplicationServer(leader.settings().bindAddress(address).heartbeatInterval(Duration.ofMillis(100))
                 .followerStallTimeout(Duration.ofSeconds(5)).build(), leader.getLogs(), leader.getFollowers(),
-                () -> EPOCH, leaderId, new WakeupSelectStrategy(10),
+                () -> EPOCH, LEADERSHIP, leaderId, new WakeupSelectStrategy(10),
                 new ReplicationStats(new SlowFollowers(Duration.ZERO, new TestingReplicationClock()), ReplicationMetrics.NONE), new TestingReplicationClock(),
                 leaderExchange);
         server.start();

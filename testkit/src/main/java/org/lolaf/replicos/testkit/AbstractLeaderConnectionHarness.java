@@ -49,6 +49,7 @@ import static org.mockito.Mockito.when;
 public abstract class AbstractLeaderConnectionHarness {
 
     protected static final long EPOCH = 7;
+    protected static final long LEADERSHIP = 41;
     private static final int MAX_FRAME_BYTES = 1 << 20;
     protected static final int FIRST = WireFormat.MORE_FRAGMENTS;
     protected static final int MIDDLE = WireFormat.MORE_FRAGMENTS | WireFormat.CONTINUED_FRAGMENT;

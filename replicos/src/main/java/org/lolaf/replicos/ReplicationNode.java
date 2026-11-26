@@ -34,7 +34,8 @@ public interface ReplicationNode {
 
     /**
      * Stands down, stops the sinks of what the node held as a follower, so the application can take over its streams,
-     * then accepts followers on the bind address.
+     * then accepts followers on the bind address. Each call is a new leadership: a follower of an earlier one, even at
+     * the same epoch, catches up by snapshot rather than from the log.
      *
      * @param epoch    the leadership this node holds, sent with every frame so its followers refuse a deposed leader
      * @param deadline for standing down and stopping the sinks

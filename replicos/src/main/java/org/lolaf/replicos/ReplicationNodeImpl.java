@@ -37,6 +37,7 @@ import org.lolaf.replicos.spi.StreamAnswer;
 import org.lolaf.replicos.spi.StreamReplicationMode;
 
 import java.net.InetSocketAddress;
+import java.security.SecureRandom;
 import java.time.Duration;
 import java.util.List;
 import java.util.function.LongSupplier;
@@ -48,6 +49,7 @@ import java.util.function.Supplier;
  */
 final class ReplicationNodeImpl implements ReplicationNode {
 
+    private static final SecureRandom LEADERSHIPS = new SecureRandom();
     private static final LeaderStreams NO_STREAMS = new LeaderStreams() {
         @Override
         public int getApplicationId() {
@@ -126,8 +128,8 @@ final class ReplicationNodeImpl implements ReplicationNode {
         LeaderSettings leader = requireLeaderSettings();
         standDown(deadline);
         followerStreams.close(deadline);
-        ReplicationServer started = new ReplicationServer(leader, logs, followers, () -> epoch, nodeId,
-                selectStrategy.get(), stats, clock, keyExchange);
+        ReplicationServer started = new ReplicationServer(leader, logs, followers, () -> epoch, LEADERSHIPS.nextLong(),
+                nodeId, selectStrategy.get(), stats, clock, keyExchange);
         started.start();
         server = started;
     }

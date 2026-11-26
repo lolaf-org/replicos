@@ -31,13 +31,14 @@ class CountingHandler implements FrameHandler {
 
     @Override
     public void onHello(long epoch, int version, int applicationId, String nodeId, long lastAppliedEpoch,
-                        long lastAppliedOffset, int lane, EncryptionMode encryptionMode, byte[] nonce) {
+                        long lastAppliedLeadership, long lastAppliedOffset, int lane, EncryptionMode encryptionMode,
+                        byte[] nonce) {
         frames++;
     }
 
     @Override
-    public void onWelcome(long epoch, int version, int applicationId, String leaderId, long resumeOffset, int lanes,
-                          EncryptionMode encryptionMode, byte[] nonce) {
+    public void onWelcome(long epoch, int version, int applicationId, String leaderId, long leadership,
+                          long resumeOffset, int lanes, EncryptionMode encryptionMode, byte[] nonce) {
         frames++;
     }
 

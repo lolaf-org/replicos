@@ -71,27 +71,27 @@ class TestFrameCodec {
     @Test
     void hello() {
         ByteBuffer buffer = buffer(false);
-        int length = TestingFrameEncoder.hello(buffer, 0, 7, "node-b", 6, 1234, 3, EncryptionMode.DISABLED, TestingKeyExchanges.NO_NONCE);
+        int length = TestingFrameEncoder.hello(buffer, 0, 7, "node-b", 6, 5, 1234, 3, EncryptionMode.DISABLED, TestingKeyExchanges.NO_NONCE);
 
         decodeWhole(buffer, 0, length);
 
-        assertThat(handler.frames).containsExactly("HELLO epoch=7 version=1 node=node-b lastEpoch=6 lastOffset=1234 lane=3");
+        assertThat(handler.frames).containsExactly("HELLO epoch=7 version=1 node=node-b lastEpoch=6 lastLeadership=5 lastOffset=1234 lane=3");
     }
 
     @Test
     void anEncryptingHelloAndWelcomeCarryTheModeAndTheNonce() {
         ByteBuffer buffer = buffer(false);
         byte[] nonce = TestingKeyExchanges.of(EncryptionMode.REQUIRED).newNonce();
-        int hello = TestingFrameEncoder.hello(buffer, 0, 7, "node-b", 6, 1234, 3, EncryptionMode.REQUIRED, nonce);
-        int welcome = TestingFrameEncoder.welcome(buffer, hello, 7, "node-a", 99, 4, EncryptionMode.PREFERRED, nonce);
+        int hello = TestingFrameEncoder.hello(buffer, 0, 7, "node-b", 6, 5, 1234, 3, EncryptionMode.REQUIRED, nonce);
+        int welcome = TestingFrameEncoder.welcome(buffer, hello, 7, "node-a", 41, 99, 4, EncryptionMode.PREFERRED, nonce);
 
         decodeWhole(buffer, 0, hello);
         assertThat(handler.lastNonce).isEqualTo(nonce);
         decodeWhole(buffer, hello, welcome);
 
         assertThat(handler.frames).containsExactly(
-                "HELLO epoch=7 version=1 node=node-b lastEpoch=6 lastOffset=1234 lane=3 encryption=REQUIRED nonce=random",
-                "WELCOME epoch=7 version=1 leader=node-a resume=99 lanes=4 encryption=PREFERRED nonce=random");
+                "HELLO epoch=7 version=1 node=node-b lastEpoch=6 lastLeadership=5 lastOffset=1234 lane=3 encryption=REQUIRED nonce=random",
+                "WELCOME epoch=7 version=1 leader=node-a leadership=41 resume=99 lanes=4 encryption=PREFERRED nonce=random");
         assertThat(handler.lastNonce).isEqualTo(nonce);
     }
 
@@ -111,8 +111,8 @@ class TestFrameCodec {
     @Test
     void anUnknownEncryptionModeIsRefused() {
         ByteBuffer buffer = buffer(false);
-        int length = TestingFrameEncoder.hello(buffer, 0, 7, "node-b", 6, 1234, 3, EncryptionMode.DISABLED, TestingKeyExchanges.NO_NONCE);
-        buffer.put(WireFormat.HEADER_BYTES + 26, (byte) 9);
+        int length = TestingFrameEncoder.hello(buffer, 0, 7, "node-b", 6, 5, 1234, 3, EncryptionMode.DISABLED, TestingKeyExchanges.NO_NONCE);
+        buffer.put(WireFormat.HEADER_BYTES + 34, (byte) 9);
 
         assertThatThrownBy(() -> decoder.decode(buffer, 0, length, handler))
                 .isInstanceOf(WireFormatException.class).hasMessageContaining("encryption mode");
@@ -131,11 +131,11 @@ class TestFrameCodec {
     @Test
     void welcome() {
         ByteBuffer buffer = buffer(false);
-        int length = TestingFrameEncoder.welcome(buffer, 0, 7, "node-a", WireFormat.NO_RESUME, 4, EncryptionMode.DISABLED, TestingKeyExchanges.NO_NONCE);
+        int length = TestingFrameEncoder.welcome(buffer, 0, 7, "node-a", 41, WireFormat.NO_RESUME, 4, EncryptionMode.DISABLED, TestingKeyExchanges.NO_NONCE);
 
         decodeWhole(buffer, 0, length);
 
-        assertThat(handler.frames).containsExactly("WELCOME epoch=7 version=1 leader=node-a resume=-1 lanes=4");
+        assertThat(handler.frames).containsExactly("WELCOME epoch=7 version=1 leader=node-a leadership=41 resume=-1 lanes=4");
     }
 
     @Test
@@ -369,7 +369,7 @@ class TestFrameCodec {
     @Test
     void aPeerThatIsNotAReplicationEndpointIsRefused() {
         ByteBuffer buffer = buffer(false);
-        int length = TestingFrameEncoder.hello(buffer, 0, 7, "node-b", 6, 1234, 0, EncryptionMode.DISABLED, TestingKeyExchanges.NO_NONCE);
+        int length = TestingFrameEncoder.hello(buffer, 0, 7, "node-b", 6, 5, 1234, 0, EncryptionMode.DISABLED, TestingKeyExchanges.NO_NONCE);
         buffer.putInt(WireFormat.HEADER_BYTES, 0x47455420);
 
         assertThatThrownBy(() -> decoder.decode(buffer, 0, length, handler))
@@ -389,17 +389,17 @@ class TestFrameCodec {
     @Test
     void helloAndWelcomeCarryTheApplication() {
         ByteBuffer buffer = buffer(false);
-        int hello = FrameEncoder.hello(buffer, 0, 7, 0x41505031, "node-b", 6, 1234, 3, EncryptionMode.DISABLED,
+        int hello = FrameEncoder.hello(buffer, 0, 7, 0x41505031, "node-b", 6, 5, 1234, 3, EncryptionMode.DISABLED,
                 TestingKeyExchanges.NO_NONCE);
-        int welcome = FrameEncoder.welcome(buffer, hello, 7, 0x41505031, "node-a", 99, 2, EncryptionMode.DISABLED,
+        int welcome = FrameEncoder.welcome(buffer, hello, 7, 0x41505031, "node-a", 41, 99, 2, EncryptionMode.DISABLED,
                 TestingKeyExchanges.NO_NONCE);
 
         decodeWhole(buffer, 0, hello);
         decodeWhole(buffer, hello, welcome);
 
         assertThat(handler.frames).containsExactly(
-                "HELLO epoch=7 version=1 application=41505031 node=node-b lastEpoch=6 lastOffset=1234 lane=3",
-                "WELCOME epoch=7 version=1 application=41505031 leader=node-a resume=99 lanes=2");
+                "HELLO epoch=7 version=1 application=41505031 node=node-b lastEpoch=6 lastLeadership=5 lastOffset=1234 lane=3",
+                "WELCOME epoch=7 version=1 application=41505031 leader=node-a leadership=41 resume=99 lanes=2");
     }
 
     @Test

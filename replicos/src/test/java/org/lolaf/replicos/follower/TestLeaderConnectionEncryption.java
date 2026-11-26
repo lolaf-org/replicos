@@ -60,7 +60,7 @@ class TestLeaderConnectionEncryption extends LeaderConnectionHarness {
     }
 
     private static ToIntBiFunction<ByteBuffer, Integer> welcome(EncryptionMode leaderMode, byte[] leaderNonce) {
-        return (out, index) -> TestingFrameEncoder.welcome(out, index, EPOCH, "leader-a", WireFormat.NO_RESUME, 1, leaderMode,
+        return (out, index) -> TestingFrameEncoder.welcome(out, index, EPOCH, "leader-a", LEADERSHIP, WireFormat.NO_RESUME, 1, leaderMode,
                 leaderNonce);
     }
 
@@ -135,7 +135,8 @@ class TestLeaderConnectionEncryption extends LeaderConnectionHarness {
         assertThat(sent.frames.get(1)).isEqualTo("KEY_CONFIRMATION epoch=7 bytes=32");
         ByteBuffer hello = ByteBuffer.allocate(FrameEncoder.bytesWith(FrameType.HELLO, "follower-b"));
         int helloLength = TestingFrameEncoder.hello(hello, 0, EPOCH, "follower-b", followerStreams.getLastAppliedEpoch(0),
-                followerStreams.getLastAppliedOffset(0), 0, EncryptionMode.PREFERRED, followerNonce);
+                followerStreams.getLastAppliedLeadership(0), followerStreams.getLastAppliedOffset(0), 0,
+                EncryptionMode.PREFERRED, followerNonce);
         ByteBuffer welcome = ByteBuffer.allocate(FrameEncoder.bytesWith(FrameType.WELCOME, "leader-a"));
         int welcomeLength = welcome(EncryptionMode.REQUIRED, leaderNonce).applyAsInt(welcome, 0);
         assertThat(leader.confirms(leader.deriveKeys(followerNonce, leaderNonce), bytes(hello, helloLength),

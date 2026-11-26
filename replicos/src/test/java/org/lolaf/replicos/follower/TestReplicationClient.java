@@ -61,6 +61,7 @@ import static org.junit.jupiter.api.Assumptions.assumeTrue;
 class TestReplicationClient {
 
     private static final long EPOCH = 7;
+    private static final long LEADERSHIP = 41;
     private static final String MAIN = "main";
     private static final String OTHER = "other";
     private static final Duration ACK_TIMEOUT = Duration.ofSeconds(5);
@@ -103,7 +104,7 @@ class TestReplicationClient {
 
     private static ReplicationServer server(InetSocketAddress address, Journal leader, ReplicationStats stats) {
         return new ReplicationServer(leader.settings().bindAddress(address).heartbeatInterval(Duration.ofMillis(100)).build(),
-                leader.getLogs(), leader.getFollowers(), () -> EPOCH, "leader-a", new WakeupSelectStrategy(10), stats,
+                leader.getLogs(), leader.getFollowers(), () -> EPOCH, LEADERSHIP, "leader-a", new WakeupSelectStrategy(10), stats,
                 new TestingReplicationClock(), TestingKeyExchanges.CLEAR);
     }
 

@@ -88,6 +88,10 @@ public final class FollowerStreams {
         return positions.getLastAppliedEpoch(lane);
     }
 
+    public long getLastAppliedLeadership(int lane) {
+        return positions.getLastAppliedLeadership(lane);
+    }
+
     /**
      * The offset in the lane's log of the last record written, -1 for none.
      */
@@ -107,9 +111,9 @@ public final class FollowerStreams {
      * Starts a lane's stream, ending any handover of its streams: one that did not resume leaves each a gap only a
      * snapshot fills, and nothing to resume from.
      */
-    void streamStarted(int lane, boolean resumed) {
+    void streamStarted(int lane, boolean resumed, long epoch, long leadership) {
         forEachOf(lane, stream -> stream.streamStarted(resumed));
-        positions.streamStarted(lane, resumed);
+        positions.streamStarted(lane, resumed, epoch, leadership);
     }
 
     /**
@@ -274,14 +278,14 @@ public final class FollowerStreams {
     /**
      * @return false for a key the leader never bound, or of another lane
      */
-    boolean apply(int lane, long epoch, long offset, int key, byte contentType, byte flags, long position,
+    boolean apply(int lane, long offset, int key, byte contentType, byte flags, long position,
                   ByteBuffer receiveBuffer, int payloadIndex, int payloadLength) {
         BoundStream stream = stream(lane, key);
         if (stream == null || !stream.apply(contentType, position, receiveBuffer, payloadIndex, payloadLength,
                 fragmentFlags(flags))) {
             return false;
         }
-        positions.applied(lane, epoch, offset, stream.getLeaderMode() == StreamReplicationMode.SYNC_RECEIVED);
+        positions.applied(lane, offset, stream.getLeaderMode() == StreamReplicationMode.SYNC_RECEIVED);
         return true;
     }
 

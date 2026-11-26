@@ -74,7 +74,7 @@ class TestLeaderConnection extends LeaderConnectionHarness {
 
     @Test
     void aLeaderOfAnotherApplicationClosesTheStream() {
-        decode(writeFrames((out, index) -> FrameEncoder.welcome(out, index, EPOCH, 0x41505031, "leader-a",
+        decode(writeFrames((out, index) -> FrameEncoder.welcome(out, index, EPOCH, 0x41505031, "leader-a", LEADERSHIP,
                 WireFormat.NO_RESUME, 1, EncryptionMode.DISABLED, TestingKeyExchanges.NO_NONCE)), connection);
 
         assertThat(connection.getState()).isEqualTo(LeaderConnection.State.CLOSED);
@@ -102,15 +102,15 @@ class TestLeaderConnection extends LeaderConnectionHarness {
         second.hello();
 
         assertThat(sent.frames).containsExactly(
-                "HELLO epoch=7 version=1 node=follower-b lastEpoch=0 lastOffset=-1 lane=0",
-                "HELLO epoch=7 version=1 node=follower-b lastEpoch=7 lastOffset=96 lane=1");
+                "HELLO epoch=7 version=1 node=follower-b lastEpoch=0 lastLeadership=0 lastOffset=-1 lane=0",
+                "HELLO epoch=7 version=1 node=follower-b lastEpoch=7 lastLeadership=41 lastOffset=96 lane=1");
     }
 
     @Test
     void theHelloCarriesTheLastRecordApplied() {
         connection.hello();
 
-        assertThat(sent.frames).containsExactly("HELLO epoch=7 version=1 node=follower-b lastEpoch=0 lastOffset=-1 lane=0");
+        assertThat(sent.frames).containsExactly("HELLO epoch=7 version=1 node=follower-b lastEpoch=0 lastLeadership=0 lastOffset=-1 lane=0");
     }
 
     @Test
@@ -241,7 +241,7 @@ class TestLeaderConnection extends LeaderConnectionHarness {
         next.hello();
         decode(writeFrames(welcome(EPOCH, 48), stream(0, MAIN)), next);
 
-        assertThat(sent.frames).startsWith("HELLO epoch=7 version=1 node=follower-b lastEpoch=7 lastOffset=0 lane=0");
+        assertThat(sent.frames).startsWith("HELLO epoch=7 version=1 node=follower-b lastEpoch=7 lastLeadership=41 lastOffset=0 lane=0");
         assertThat(followerStreams.find(MAIN)).isSameAs(stream);
         assertThat(stream.getSink()).isSameAs(main);
         assertThat(main.getWrites()).containsExactly("3 three");

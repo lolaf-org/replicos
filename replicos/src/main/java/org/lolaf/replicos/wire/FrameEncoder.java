@@ -70,8 +70,8 @@ public class FrameEncoder {
      * @param nonce {@link WireFormat#NONCE_BYTES} bytes
      */
     public static int hello(ByteBuffer out, int index, long epoch, int applicationId, String nodeId,
-                            long lastAppliedEpoch, long lastAppliedOffset, int lane, EncryptionMode encryptionMode,
-                            byte[] nonce) {
+                            long lastAppliedEpoch, long lastAppliedLeadership, long lastAppliedOffset, int lane,
+                            EncryptionMode encryptionMode, byte[] nonce) {
         byte[] id = utf8(nodeId);
         int length = header(out, index, FrameType.HELLO, 0, epoch, id.length);
         int p = index + HEADER_BYTES;
@@ -79,8 +79,32 @@ public class FrameEncoder {
         out.putShort(p + 4, WireFormat.VERSION);
         out.putShort(p + 6, (short) id.length);
         out.putLong(p + 8, lastAppliedEpoch);
-        out.putLong(p + 16, lastAppliedOffset);
-        out.putShort(p + 24, (short) lane);
+        out.putLong(p + 16, lastAppliedLeadership);
+        out.putLong(p + 24, lastAppliedOffset);
+        out.putShort(p + 32, (short) lane);
+        out.put(p + 34, encryptionMode.getCode());
+        out.put(p + 35, (byte) 0);
+        out.putInt(p + 36, applicationId);
+        putNonce(out, p + 40, nonce);
+        putBytes(out, p + 56, id);
+        return length;
+    }
+
+    /**
+     * @param nonce {@link WireFormat#NONCE_BYTES} bytes
+     */
+    public static int welcome(ByteBuffer out, int index, long epoch, int applicationId, String leaderId,
+                              long leadership, long resumeOffset, int lanes, EncryptionMode encryptionMode,
+                              byte[] nonce) {
+        byte[] id = utf8(leaderId);
+        int length = header(out, index, FrameType.WELCOME, 0, epoch, id.length);
+        int p = index + HEADER_BYTES;
+        out.putInt(p, WireFormat.MAGIC);
+        out.putShort(p + 4, WireFormat.VERSION);
+        out.putShort(p + 6, (short) id.length);
+        out.putLong(p + 8, leadership);
+        out.putLong(p + 16, resumeOffset);
+        out.putShort(p + 24, (short) lanes);
         out.put(p + 26, encryptionMode.getCode());
         out.put(p + 27, (byte) 0);
         out.putInt(p + 28, applicationId);
@@ -90,44 +114,25 @@ public class FrameEncoder {
     }
 
     /**
-     * @param nonce {@link WireFormat#NONCE_BYTES} bytes
-     */
-    public static int welcome(ByteBuffer out, int index, long epoch, int applicationId, String leaderId,
-                              long resumeOffset, int lanes, EncryptionMode encryptionMode, byte[] nonce) {
-        byte[] id = utf8(leaderId);
-        int length = header(out, index, FrameType.WELCOME, 0, epoch, id.length);
-        int p = index + HEADER_BYTES;
-        out.putInt(p, WireFormat.MAGIC);
-        out.putShort(p + 4, WireFormat.VERSION);
-        out.putShort(p + 6, (short) id.length);
-        out.putLong(p + 8, resumeOffset);
-        out.putShort(p + 16, (short) lanes);
-        out.put(p + 18, encryptionMode.getCode());
-        out.put(p + 19, (byte) 0);
-        out.putInt(p + 20, applicationId);
-        putNonce(out, p + 24, nonce);
-        putBytes(out, p + 40, id);
-        return length;
-    }
-
-    /**
      * The HELLO {@link #hello} encodes, as bytes: what the KEY_CONFIRMATION covers.
      */
     public static byte[] helloBytes(long epoch, int applicationId, String nodeId, long lastAppliedEpoch,
-                                    long lastAppliedOffset, int lane, EncryptionMode encryptionMode, byte[] nonce) {
+                                    long lastAppliedLeadership, long lastAppliedOffset, int lane,
+                                    EncryptionMode encryptionMode, byte[] nonce) {
         ByteBuffer frame = ByteBuffer.allocate(bytesWith(FrameType.HELLO, nodeId));
-        int length = hello(frame, 0, epoch, applicationId, nodeId, lastAppliedEpoch, lastAppliedOffset, lane,
-                encryptionMode, nonce);
+        int length = hello(frame, 0, epoch, applicationId, nodeId, lastAppliedEpoch, lastAppliedLeadership,
+                lastAppliedOffset, lane, encryptionMode, nonce);
         return FrameDecoder.bytes(frame, 0, length);
     }
 
     /**
      * The WELCOME {@link #welcome} encodes, as bytes: what the KEY_CONFIRMATION covers.
      */
-    public static byte[] welcomeBytes(long epoch, int applicationId, String leaderId, long resumeOffset, int lanes,
-                                      EncryptionMode encryptionMode, byte[] nonce) {
+    public static byte[] welcomeBytes(long epoch, int applicationId, String leaderId, long leadership,
+                                      long resumeOffset, int lanes, EncryptionMode encryptionMode, byte[] nonce) {
         ByteBuffer frame = ByteBuffer.allocate(bytesWith(FrameType.WELCOME, leaderId));
-        int length = welcome(frame, 0, epoch, applicationId, leaderId, resumeOffset, lanes, encryptionMode, nonce);
+        int length = welcome(frame, 0, epoch, applicationId, leaderId, leadership, resumeOffset, lanes,
+                encryptionMode, nonce);
         return FrameDecoder.bytes(frame, 0, length);
     }
 

@@ -27,10 +27,11 @@ import org.lolaf.replicos.spi.WireFormatException;
  * <pre>
  * frame              direction           fixed payload
  * HELLO              follower to leader  magic 4, version 2, node id length 2, last applied epoch 8,
- *                                        last applied offset 8, lane 2, encryption mode 1, reserved 1,
- *                                        application 4, nonce 16; then the node id
- * WELCOME            leader to follower  magic 4, version 2, leader id length 2, resume offset 8, lane count 2,
- *                                        encryption mode 1, reserved 1, application 4, nonce 16; then the leader id
+ *                                        last applied leadership 8, last applied offset 8, lane 2, encryption mode 1,
+ *                                        reserved 1, application 4, nonce 16; then the node id
+ * WELCOME            leader to follower  magic 4, version 2, leader id length 2, leadership 8, resume offset 8,
+ *                                        lane count 2, encryption mode 1, reserved 1, application 4, nonce 16; then
+ *                                        the leader id
  * KEY_CONFIRMATION   follower to leader  HMAC-SHA256 32 of the HELLO and WELCOME, when both peers encrypt
  * STREAM             leader to follower  stream key 4, replication mode 1, reserved 1, stream name length 2,
  *                                        storage identity length 2; then the name, then the identity
@@ -59,8 +60,8 @@ import org.lolaf.replicos.spi.WireFormatException;
 @RequiredArgsConstructor
 public enum FrameType {
 
-    HELLO(1, 48),
-    WELCOME(2, 40),
+    HELLO(1, 56),
+    WELCOME(2, 48),
     STREAM(3, 10),
     STREAM_ANSWER(4, 5),
     RECORD(5, 32),

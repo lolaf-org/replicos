@@ -58,6 +58,10 @@ final class LanePositions {
         return position(lane).lastAppliedEpoch;
     }
 
+    long getLastAppliedLeadership(int lane) {
+        return position(lane).lastAppliedLeadership;
+    }
+
     long getLastAppliedOffset(int lane) {
         return position(lane).lastAppliedOffset;
     }
@@ -75,14 +79,18 @@ final class LanePositions {
     }
 
     /**
-     * @param resumed false leaves nothing to resume from
+     * @param resumed    false leaves nothing to resume from
+     * @param leadership the WELCOME's, which the records applied from now on come from, with {@code epoch}
      */
-    void streamStarted(int lane, boolean resumed) {
+    void streamStarted(int lane, boolean resumed, long epoch, long leadership) {
         Position position = positions[lane];
         if (!resumed) {
             position.lastAppliedOffset = -1;
         }
+        position.streamEpoch = epoch;
+        position.streamLeadership = leadership;
         position.pendingEpoch = position.lastAppliedEpoch;
+        position.pendingLeadership = position.lastAppliedLeadership;
         position.pendingOffset = position.lastAppliedOffset;
         position.receivedToAck = false;
         position.announcing = true;
@@ -111,9 +119,10 @@ final class LanePositions {
     /**
      * @param acksOnReceipt the record's stream is acknowledged as received
      */
-    void applied(int lane, long epoch, long offset, boolean acksOnReceipt) {
+    void applied(int lane, long offset, boolean acksOnReceipt) {
         Position position = positions[lane];
-        position.pendingEpoch = epoch;
+        position.pendingEpoch = position.streamEpoch;
+        position.pendingLeadership = position.streamLeadership;
         position.pendingOffset = offset;
         position.receivedToAck |= acksOnReceipt;
     }
@@ -124,6 +133,7 @@ final class LanePositions {
     void written(int lane) {
         Position position = positions[lane];
         position.lastAppliedEpoch = position.pendingEpoch;
+        position.lastAppliedLeadership = position.pendingLeadership;
         position.lastAppliedOffset = position.pendingOffset;
     }
 
@@ -134,9 +144,13 @@ final class LanePositions {
 
     private static final class Position {
         private volatile long lastAppliedEpoch;
+        private volatile long lastAppliedLeadership;
         private volatile long lastAppliedOffset;
         private volatile boolean announcing;
+        private long streamEpoch;
+        private long streamLeadership;
         private long pendingEpoch;
+        private long pendingLeadership;
         private long pendingOffset;
         private boolean receivedToAck;
 

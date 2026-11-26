@@ -44,14 +44,14 @@ import static org.awaitility.Awaitility.await;
 class TestSnapshotSender extends FollowerConnectionHarness {
 
     private void hello() {
-        connection.onHello(EPOCH, WireFormat.VERSION, Journal.APPLICATION_ID, "follower-b", 0, -1, 0, EncryptionMode.DISABLED,
+        connection.onHello(EPOCH, WireFormat.VERSION, Journal.APPLICATION_ID, "follower-b", 0, LEADERSHIP, -1, 0, EncryptionMode.DISABLED,
                 TestingKeyExchanges.NO_NONCE);
         fill();
     }
 
     private FollowerConnection connectionChunking(int snapshotChunkBytes) {
         return new FollowerConnection(ioSession, journal.settings().heartbeatInterval(Duration.ofMillis(100))
-                .snapshotChunkBytes(snapshotChunkBytes).build(), journal.getLogs(), () -> EPOCH, "leader-a", stats, loop -> {
+                .snapshotChunkBytes(snapshotChunkBytes).build(), journal.getLogs(), () -> EPOCH, LEADERSHIP, "leader-a", stats, loop -> {
         }, new TestingReplicationClock(), TestingKeyExchanges.CLEAR);
     }
 
@@ -76,7 +76,7 @@ class TestSnapshotSender extends FollowerConnectionHarness {
         stream("main").append("");
         stream("shared").append("");
         stream("refused").append("");
-        connection.onHello(EPOCH, WireFormat.VERSION, Journal.APPLICATION_ID, "follower-b", EPOCH, 0, 0, EncryptionMode.DISABLED, TestingKeyExchanges.NO_NONCE);
+        connection.onHello(EPOCH, WireFormat.VERSION, Journal.APPLICATION_ID, "follower-b", EPOCH, LEADERSHIP, 0, 0, EncryptionMode.DISABLED, TestingKeyExchanges.NO_NONCE);
         fill();
         connection.onStreamAnswer(EPOCH, 0, StreamAnswer.REPLICATING);
         connection.onStreamAnswer(EPOCH, 1, StreamAnswer.SHARED_STORAGE);

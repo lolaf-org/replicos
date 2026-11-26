@@ -60,6 +60,7 @@ import static org.mockito.Mockito.when;
 abstract class FollowerConnectionHarness {
 
     static final long EPOCH = 7;
+    static final long LEADERSHIP = 41;
     static final int MESSAGE_BYTES = 1_000;
 
     final IOSession ioSession;
@@ -140,7 +141,7 @@ abstract class FollowerConnectionHarness {
 
     FollowerConnection connection() {
         return new FollowerConnection(ioSession, journal.settings().heartbeatInterval(Duration.ofMillis(100)).build(),
-                journal.getLogs(), () -> EPOCH, "leader-a", stats, loop -> {
+                journal.getLogs(), () -> EPOCH, LEADERSHIP, "leader-a", stats, loop -> {
                 }, new TestingReplicationClock(), keyExchange);
     }
 
@@ -250,7 +251,7 @@ abstract class FollowerConnectionHarness {
         IdleStrategy idles = countingIdles();
         return new FollowerConnection(ioSession, journal.settings().heartbeatInterval(Duration.ofHours(1))
                 .followerStallTimeout(stallTimeout).senderIdleStrategy(() -> idles).build(), journal.getLogs(),
-                () -> EPOCH, "leader-a", stats, loop -> {
+                () -> EPOCH, LEADERSHIP, "leader-a", stats, loop -> {
             sender[0] = new Thread(loop);
             sender[0].start();
         }, senderClock, keyExchange);
@@ -282,7 +283,7 @@ abstract class FollowerConnectionHarness {
         IdleStrategy idles = countingIdles();
         return new FollowerConnection(ioSession, journal.settings().heartbeatInterval(Duration.ofHours(1))
                 .snapshotChunkBytes(snapshotChunkBytes).senderIdleStrategy(() -> idles).build(), journal.getLogs(),
-                () -> EPOCH, "leader-a", stats, loop -> new Thread(loop).start(), new TestingReplicationClock(),
+                () -> EPOCH, LEADERSHIP, "leader-a", stats, loop -> new Thread(loop).start(), new TestingReplicationClock(),
                 keyExchange);
     }
 

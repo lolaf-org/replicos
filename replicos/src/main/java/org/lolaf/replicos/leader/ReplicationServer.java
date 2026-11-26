@@ -58,6 +58,7 @@ public final class ReplicationServer {
     private final ReplicationLogs logs;
     private final Followers followers;
     private final LongSupplier nodeEpoch;
+    private final long leadership;
     private final String leaderId;
     private final SelectStrategy selectStrategy;
     private final ReplicationStats stats;
@@ -153,7 +154,8 @@ public final class ReplicationServer {
                 session.stop(Deadline.immediate());
                 return;
             }
-            FollowerConnection connection = new FollowerConnection(session, settings, logs, nodeEpoch, leaderId, stats,
+            FollowerConnection connection = new FollowerConnection(session, settings, logs, nodeEpoch, leadership,
+                    leaderId, stats,
                     ReplicationServer::launchSender, clock, keyExchange);
             session.setAttachment(connection);
             followers.add(connection);
