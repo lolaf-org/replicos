@@ -15,9 +15,7 @@
  */
 package org.lolaf.replicos.wire;
 
-import org.lolaf.replicos.spi.RecordFlag;
 import org.lolaf.replicos.spi.ReplicaSink;
-import org.lolaf.replicos.spi.SnapshotSource;
 
 import java.nio.ByteBuffer;
 import java.security.DigestException;
@@ -30,7 +28,7 @@ import java.security.NoSuchAlgorithmException;
  * records over those positions digest the same. Not a flag, which a follower does not keep. Allocates nothing once
  * built; one thread at a time.
  */
-public final class RecordDigest implements ReplicaSink.RecordConsumer, SnapshotSource.RecordConsumer {
+public final class RecordDigest implements ReplicaSink.RecordConsumer {
 
     /**
      * Records 4, first position 8, digest 32.
@@ -95,12 +93,6 @@ public final class RecordDigest implements ReplicaSink.RecordConsumer, SnapshotS
             sha256.update(scratch, 0, length);
         }
         return true;
-    }
-
-    @Override
-    public boolean onRecord(byte contentType, RecordFlag flag, long position, ByteBuffer buffer, int payloadIndex,
-                            int payloadLength) {
-        return onRecord(contentType, position, buffer, payloadIndex, payloadLength);
     }
 
     /**

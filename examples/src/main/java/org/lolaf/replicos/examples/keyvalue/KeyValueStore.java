@@ -18,6 +18,7 @@ package org.lolaf.replicos.examples.keyvalue;
 import org.jspecify.annotations.Nullable;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.NavigableMap;
@@ -71,8 +72,15 @@ final class KeyValueStore {
      * The last {@code count} changes, in position order.
      */
     synchronized List<Map.Entry<Long, Change>> lastChanges(int count) {
-        List<Map.Entry<Long, Change>> last = new ArrayList<>(journal.entrySet());
-        return last.subList(Math.max(0, last.size() - count), last.size());
+        List<Map.Entry<Long, Change>> last = new ArrayList<>();
+        for (Map.Entry<Long, Change> change : journal.descendingMap().entrySet()) {
+            if (last.size() == count) {
+                break;
+            }
+            last.add(change);
+        }
+        Collections.reverse(last);
+        return last;
     }
 
     synchronized @Nullable String get(String key) {

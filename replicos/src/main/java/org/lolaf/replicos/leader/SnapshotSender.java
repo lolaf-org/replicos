@@ -68,6 +68,10 @@ final class SnapshotSender {
     private final StreamSyncs.Claim claim;
     private final RecordDigest lastRecords;
     /**
+     * Digests no more records than the follower may prove, whatever range it claims.
+     */
+    private final SnapshotSource.RecordConsumer lastRecordsReader;
+    /**
      * A follower catching up otherwise than this leader is logged once per connection.
      */
     private boolean catchUpMismatchLogged;
@@ -134,6 +138,9 @@ final class SnapshotSender {
         this.catchUp = catchUp;
         this.claim = new StreamSyncs.Claim();
         this.lastRecords = new RecordDigest();
+        this.lastRecordsReader = (contentType, flag, position, buffer, payloadIndex, payloadLength) ->
+                lastRecords.onRecord(contentType, position, buffer, payloadIndex, payloadLength)
+                        && lastRecords.getRecordCount() < catchUp.getRecords();
         this.maxRecordFrameBytes = maxRecordFrameBytes;
         this.chunkBytes = Math.min(chunkBytes, batches.getBatchBytes());
     }
@@ -282,7 +289,7 @@ final class SnapshotSender {
     private long startPosition(LeaderStream stream) {
         syncs.copyClaim(streamKey, claim);
         if (claim.check != catchUp.getCheck()) {
-            logCatchUpMismatch(stream, claim.check, 0);
+            logCatchUpMismatch(stream);
             return WHOLE_STREAM;
         }
         if (catchUp.getCheck() == CatchUpCheck.FULL_COPY || claim.proofLength != RecordDigest.PROOF_BYTES) {
@@ -290,7 +297,7 @@ final class SnapshotSender {
         }
         int records = RecordDigest.proofRecords(claim.proof, 0);
         if (records != catchUp.getRecords()) {
-            logCatchUpMismatch(stream, claim.check, records);
+            logCatchUpMismatch(stream);
             return WHOLE_STREAM;
         }
         long firstPosition = RecordDigest.proofFirstPosition(claim.proof, 0);
@@ -298,7 +305,7 @@ final class SnapshotSender {
             return WHOLE_STREAM;
         }
         lastRecords.reset();
-        source.read(firstPosition, claim.lastPosition, lastRecords);
+        source.read(firstPosition, claim.lastPosition, lastRecordsReader);
         if (!lastRecords.matches(claim.proof, 0)) {
             log.info("Follower {} holds other records of stream {} up to position {} than this leader: "
                     + "copying it whole", connection.getFollowerId(), stream.getStreamName(), claim.lastPosition);
@@ -307,12 +314,25 @@ final class SnapshotSender {
         return claim.lastPosition + 1;
     }
 
-    private void logCatchUpMismatch(LeaderStream stream, CatchUpCheck followerCheck, int followerRecords) {
+    private void logCatchUpMismatch(LeaderStream stream) {
         if (!catchUpMismatchLogged) {
             catchUpMismatchLogged = true;
-            log.warn("Follower {} catches up by {} of {} records and this leader by {}: its streams are copied whole, "
-                    + "stream {} first", connection.getFollowerId(), followerCheck, followerRecords, catchUp,
-                    stream.getStreamName());
+            int followerRecords = claim.proofLength == RecordDigest.PROOF_BYTES
+                    ? RecordDigest.proofRecords(claim.proof, 0) : 0;
+            log.warn("Follower {} catches up by {} and this leader by {}: its streams are copied whole, stream {} first",
+                    connection.getFollowerId(), describe(claim.check, followerRecords),
+                    describe(catchUp.getCheck(), catchUp.getRecords()), stream.getStreamName());
+        }
+    }
+
+    private static String describe(CatchUpCheck check, int records) {
+        switch (check) {
+            case FULL_COPY:
+                return "full copy";
+            case LAST_RECORDS:
+                return records > 0 ? "its last " + records + " records" : "its last records";
+            default:
+                return "a check this version does not know";
         }
     }
 

@@ -33,16 +33,6 @@ public interface ReplicaSink {
     void apply(byte contentType, long position, ByteBuffer buffer, int payloadIndex, int payloadLength);
 
     /**
-     * The last position the copy holds, read from its storage, so that the node's
-     * {@link org.lolaf.replicos.CatchUp} may copy only what follows it; -1, the default, holds nothing and gets the
-     * whole stream. Not read under {@link org.lolaf.replicos.CatchUp#fullCopy()} nor
-     * {@link org.lolaf.replicos.CatchUp#byLastRecords()}.
-     */
-    default long lastPosition() {
-        return -1;
-    }
-
-    /**
      * Hands {@code consumer} the copy's last {@code records} records, read from its storage, fewer if it holds fewer,
      * in position order, until it returns false; under {@link org.lolaf.replicos.CatchUp#byLastRecords()} only, as
      * the stream needs a snapshot. The default hands none, which gets the whole stream.

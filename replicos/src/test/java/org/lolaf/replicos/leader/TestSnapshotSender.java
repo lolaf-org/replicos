@@ -36,6 +36,7 @@ import java.nio.ByteBuffer;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
@@ -208,7 +209,27 @@ class TestSnapshotSender extends FollowerConnectionHarness {
                 .hasSize(2).allMatch(frame -> frame.contains(" from=0 "));
         assertThat(snapshotLog.getLoggingEvents().subList(loggedBefore, snapshotLog.getLoggingEvents().size()))
                 .filteredOn(event -> event.getLevel() == Level.WARN).singleElement()
-                .extracting(LoggingEvent::getFormattedMessage).asString().contains("by FULL_COPY");
+                .extracting(LoggingEvent::getFormattedMessage).asString()
+                .contains("catches up by full copy and this leader by its last 2 records");
+    }
+
+    @Test
+    void aProofIsCheckedOverNoMoreRecordsThanTheLeaderCompares() {
+        JournalStream main = stream("main");
+        for (int i = 1; i <= 10; i++) {
+            main.append("record " + i);
+        }
+        List<Long> readPositions = new CopyOnWriteArrayList<>();
+        main.setSnapshotReads(readPositions::add);
+        connection = connection(CatchUp.byLastRecords(2));
+        hello();
+        sent.frames.clear();
+
+        answerHolding(connection, 0, 2, 10, "a", "b", "c", "d", "e", "f", "g", "h", "i", "j");
+        snapshot();
+
+        assertThat(sent.frames.get(0)).contains(" from=0 ");
+        assertThat(readPositions).as("the check, then the copy").startsWith(1L, 2L, 1L, 2L, 3L);
     }
 
     @Test

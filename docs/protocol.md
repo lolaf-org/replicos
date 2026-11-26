@@ -218,7 +218,6 @@ finds exactly where a follower's copy parts from its own: no blind spot, and a d
 | Check code 2 | STREAM_ANSWER | never sent; read as unknown, a full copy | the follower proving its copy by its leadership history |
 | The proof | STREAM_ANSWER | check 1's digest | the leadership of the follower's record at its last position, 8 bytes |
 | Boundary count 2, then the boundaries after the state, 16 bytes each | SNAPSHOT_END | count 0; any boundary received is skipped | the leader's history over the positions copied (leadership 8, first position 8), replacing the follower's from the snapshot's start |
-| `ReplicaSink.lastPosition()` | the Java SPI, default -1 | never called | the copy's last durable position, claimed without reading its records back |
 
 The check: the follower claims its last position `p` and the leadership `L` of its record there. The leader starts the
 snapshot after `min(p, the end of L in its own history)`, and at 0 for a leadership it does not know. A history keeps
