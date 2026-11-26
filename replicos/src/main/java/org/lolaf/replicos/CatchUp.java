@@ -29,7 +29,12 @@ import org.lolaf.replicos.wire.CatchUpCheck;
 @AllArgsConstructor(access = AccessLevel.PRIVATE)
 public class CatchUp {
 
+    /**
+     * The records {@link #byLastRecords()} compares.
+     */
+    public static final int DEFAULT_LAST_RECORDS = 16;
     private static final CatchUp FULL_COPY = new CatchUp(CatchUpCheck.FULL_COPY, 0);
+    private static final CatchUp BY_LAST_RECORDS = new CatchUp(CatchUpCheck.LAST_RECORDS, DEFAULT_LAST_RECORDS);
 
     CatchUpCheck check;
     /**
@@ -46,18 +51,28 @@ public class CatchUp {
     }
 
     /**
-     * Copies only what follows the follower's last {@code records} records when the leader holds the same at their
-     * positions, else the whole stream. Needs no storage beyond the streams': the sinks implement
-     * {@link org.lolaf.replicos.spi.ReplicaSink#readLast} and keep what precedes a snapshot's start. Incremental after
-     * a follower restart or a failover it followed; a deposed leader holding records the new one never got is copied
-     * whole. Blind spot: two histories that parted earlier yet hold byte-identical records at those positions, as
-     * records that repeat may; more records narrow it.
+     * Compares the follower's last {@value #DEFAULT_LAST_RECORDS} records with the leader's at the same positions:
+     * byte for byte the same, the follower is copied only what follows them; else the whole stream. Needs no storage
+     * beyond the streams': the sinks implement {@link org.lolaf.replicos.spi.ReplicaSink#readLast} and keep what
+     * precedes a snapshot's start. Incremental after a follower restart or a failover it followed; a deposed leader
+     * holding records the new one never got is copied whole. Blind spot: two histories that parted earlier yet end
+     * with the same records, which only records repeating byte for byte allow; see {@link #byLastRecords(int)}.
+     */
+    public static CatchUp byLastRecords() {
+        return BY_LAST_RECORDS;
+    }
+
+    /**
+     * As {@link #byLastRecords()}, comparing {@code records} records. Raise it for records that often repeat byte for
+     * byte, as the same change written twice: more records narrow the blind spot, each costing a read on both sides
+     * once per stream caught up. Records carrying something unique, as a timestamp or an id, need no more than the
+     * default.
      *
      * @throws IllegalArgumentException for fewer than one record
      */
-    public static CatchUp lastRecords(int records) {
+    public static CatchUp byLastRecords(int records) {
         if (records < 1) {
-            throw new IllegalArgumentException("lastRecords needs at least one record, got " + records);
+            throw new IllegalArgumentException("byLastRecords needs at least one record, got " + records);
         }
         return new CatchUp(CatchUpCheck.LAST_RECORDS, records);
     }

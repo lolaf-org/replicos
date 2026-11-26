@@ -27,6 +27,6 @@ A `put` on the leader returns `ACKED` once the follower applied it, `NO_FOLLOWER
 `TIMED_OUT` when the follower did not answer in time. With no election here, both nodes use epoch 1; an application
 takes its epochs from its election.
 
-Both nodes catch up with `CatchUp.lastRecords(16)`: `KeyValueSink` reads its last changes back, and a snapshot keeps
-the changes before its start. A node that led and then follows the new leader gets only the changes it missed. The
-store being in memory, a restarted node holds nothing and gets the whole journal.
+Both nodes catch up with `CatchUp.byLastRecords()`: `KeyValueSink` reads its last changes back, and a snapshot
+keeps the changes before its start. A node that led and then follows the new leader gets only the changes it missed.
+The store being in memory, a restarted node holds nothing and gets the whole journal.

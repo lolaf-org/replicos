@@ -305,8 +305,8 @@ public final class FollowerStreams {
     }
 
     /**
-     * What the follower tells the leader it holds of a stream it answers: under {@link CatchUp#lastRecords} its last
-     * records, digested, when it needs a snapshot; nothing otherwise.
+     * What the follower tells the leader it holds of a stream it answers: under {@link CatchUp#byLastRecords()} its
+     * last records, digested, when it needs a snapshot; nothing otherwise.
      *
      * @return the last position digested, -1 for none
      */

@@ -24,7 +24,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 class TestLeaderConnectionCatchUp extends LeaderConnectionHarness {
 
     TestLeaderConnectionCatchUp() {
-        super(CatchUp.lastRecords(2));
+        super(CatchUp.byLastRecords(2));
     }
 
     @Test

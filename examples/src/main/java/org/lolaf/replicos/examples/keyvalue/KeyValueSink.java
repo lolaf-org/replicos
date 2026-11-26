@@ -24,7 +24,8 @@ import java.util.Map;
 
 /**
  * Applies each change as it arrives: the store being in memory, there is nothing left to write once applied. Reads its
- * last changes back for {@link org.lolaf.replicos.CatchUp#lastRecords}, so a snapshot copies only what follows them.
+ * last changes back for {@link org.lolaf.replicos.CatchUp#byLastRecords()}, so a snapshot copies only what follows
+ * them.
  */
 @Slf4j
 final class KeyValueSink implements ReplicaSink {

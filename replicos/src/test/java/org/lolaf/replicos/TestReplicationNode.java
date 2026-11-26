@@ -259,9 +259,10 @@ class TestReplicationNode {
     void aFollowerRestartedWithItsCopyIsCaughtUpWithOnlyWhatItMissed() {
         Journal leaderJournal = new Journal();
         ReplicationEncryptionSettings clear = ReplicationEncryptionSettings.builder().build();
-        ReplicationNode leader = node("a", addressA, leaderJournal, new JournalReplica(), clear, CatchUp.lastRecords(2));
-        ReplicationNode follower = node("b", addressB, new Journal(), replicaB, clear, CatchUp.lastRecords(2));
-        ReplicationNode restarted = node("b", addressB, new Journal(), replicaB, clear, CatchUp.lastRecords(2));
+        ReplicationNode leader = node("a", addressA, leaderJournal, new JournalReplica(), clear,
+                CatchUp.byLastRecords(2));
+        ReplicationNode follower = node("b", addressB, new Journal(), replicaB, clear, CatchUp.byLastRecords(2));
+        ReplicationNode restarted = node("b", addressB, new Journal(), replicaB, clear, CatchUp.byLastRecords(2));
         try {
             JournalStream main = leaderJournal.add(MAIN, StreamReplicationMode.SYNC_APPLIED);
             main.append("first");

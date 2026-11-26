@@ -56,7 +56,7 @@ public final class KeyValueNode implements AutoCloseable {
                 .follower(FollowerSettings.builder()
                         .sinks(new KeyValueSinks(store, storageIdentity))
                         .build())
-                .catchUp(CatchUp.lastRecords(16))
+                .catchUp(CatchUp.byLastRecords())
                 .build();
         stream.writeThrough(node.writer(KeyValueStream.KEY));
     }

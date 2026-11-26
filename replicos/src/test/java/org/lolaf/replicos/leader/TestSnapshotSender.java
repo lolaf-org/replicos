@@ -127,7 +127,7 @@ class TestSnapshotSender extends FollowerConnectionHarness {
         main.append("two");
         main.append("three");
         main.append("four");
-        connection = connection(CatchUp.lastRecords(2));
+        connection = connection(CatchUp.byLastRecords(2));
         hello();
         sent.frames.clear();
 
@@ -146,7 +146,7 @@ class TestSnapshotSender extends FollowerConnectionHarness {
     @Test
     void aFollowerUpToDateIsCopiedNoRecord() {
         stream("main").append("one");
-        connection = connection(CatchUp.lastRecords(2));
+        connection = connection(CatchUp.byLastRecords(2));
         hello();
         sent.frames.clear();
 
@@ -163,7 +163,7 @@ class TestSnapshotSender extends FollowerConnectionHarness {
         main.append("one");
         main.append("two");
         main.append("three");
-        connection = connection(CatchUp.lastRecords(2));
+        connection = connection(CatchUp.byLastRecords(2));
         hello();
         sent.frames.clear();
 
@@ -177,7 +177,7 @@ class TestSnapshotSender extends FollowerConnectionHarness {
     @Test
     void aFollowerHoldingMoreThanTheLeaderIsCopiedTheWholeStream() {
         stream("main").append("one");
-        connection = connection(CatchUp.lastRecords(2));
+        connection = connection(CatchUp.byLastRecords(2));
         hello();
         sent.frames.clear();
 
@@ -191,7 +191,7 @@ class TestSnapshotSender extends FollowerConnectionHarness {
     void aFollowerCatchingUpOtherwiseThanTheLeaderIsCopiedWholeAndLoggedOnce() {
         stream("main").append("one");
         stream("other").append("two");
-        connection = connection(CatchUp.lastRecords(2));
+        connection = connection(CatchUp.byLastRecords(2));
         hello();
         sent.frames.clear();
         TestLogger snapshotLog = TestLoggerFactory.getTestLogger(SnapshotSender.class);
@@ -224,7 +224,7 @@ class TestSnapshotSender extends FollowerConnectionHarness {
     @Test
     void aResyncCopiesTheWholeStreamWhateverTheFollowerHeldBefore() {
         stream("main").append("one");
-        connection = connection(CatchUp.lastRecords(2));
+        connection = connection(CatchUp.byLastRecords(2));
         hello();
         answerHolding(connection, 0, 2, 1, "one");
         snapshot();
