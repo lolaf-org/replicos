@@ -190,6 +190,31 @@ class TestFrameCodec {
         assertThat(handler.frames).containsExactly("STREAM_ANSWER epoch=7 key=3 SHARED_STORAGE FULL_COPY last=42");
     }
 
+    @Test
+    void aCatchUpCheckOfANewerVersionDecodesAsUnknown() {
+        ByteBuffer buffer = buffer(false);
+        int length = FrameEncoder.streamAnswer(buffer, 0, 7, 3, StreamAnswer.SNAPSHOT_NEEDED, CatchUpCheck.FULL_COPY, 42,
+                null, 0, 0);
+        buffer.put(WireFormat.HEADER_BYTES + 5, (byte) 2);
+
+        decodeWhole(buffer, 0, length);
+
+        assertThat(handler.frames).containsExactly("STREAM_ANSWER epoch=7 key=3 SNAPSHOT_NEEDED UNKNOWN last=42");
+    }
+
+    @Test
+    void aSnapshotEndSkipsTheLeadershipBoundariesANewerLeaderSends() {
+        ByteBuffer buffer = buffer(false);
+        int length = TestingFrameEncoder.snapshotEnd(buffer, 0, 7, 3, 1, "44");
+        buffer.putShort(WireFormat.HEADER_BYTES + 8, (short) 2);
+        int withBoundaries = length + 2 * WireFormat.LEADERSHIP_BOUNDARY_BYTES;
+        buffer.putInt(WireFormat.OFFSET_LENGTH, withBoundaries);
+
+        decodeWhole(buffer, 0, withBoundaries);
+
+        assertThat(handler.frames).containsExactly("SNAPSHOT_END epoch=7 key=3 count=1 state=44");
+    }
+
     @ParameterizedTest
     @ValueSource(booleans = {false, true})
     void aRecordCarriesItsPayloadAndLeavesItsBufferAlone(boolean direct) {

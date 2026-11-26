@@ -51,7 +51,7 @@ The fixed payload follows, then the variable part, then a 16-byte tag on an encr
 | 5 | RECORD | leader to follower | log offset 8, record body 24; payload |
 | 6 | SNAPSHOT_BEGIN | leader to follower | stream key 4, reserved 2, state length 2, snapshot offset 8, from position 8; state |
 | 7 | SNAPSHOT_RECORD | leader to follower | record body 24; payload |
-| 8 | SNAPSHOT_END | leader to follower | stream key 4, record count 4, reserved 2, state length 2; state |
+| 8 | SNAPSHOT_END | leader to follower | stream key 4, record count 4, boundary count 2, state length 2; state, boundaries |
 | 9 | ACK | follower to leader | applied offset 8, pending writes 8 |
 | 10 | HEARTBEAT | leader to follower | log tail offset 8 |
 | 11 | CLOSE | either | reason 2, text length 2; text |
@@ -136,6 +136,8 @@ Per lane:
      first position to the last, its position 8, content type 1, payload length 4 and payload. The leader digests its
      own records over those positions: the same digest starts the snapshot after the follower's last position,
      anything else at 0. No proof, as from a follower holding nothing, gets the whole stream.
+   - **2, reserved** for a check by the history of the leaderships that wrote each stream. A leader reads a check it
+     does not know as a mismatch.
 
    A follower whose check or count is not the leader's gets the whole stream, and the leader logs it once per
    connection. A follower closes with `PROTOCOL_ERROR` a snapshot starting past its last position + 1.
@@ -180,7 +182,8 @@ time per lane, in chunks between the lane's live batches so the other streams ke
 2. **SNAPSHOT_RECORD** frames carry the stream's records by position, fragmented as RECORD's.
 3. **SNAPSHOT_END** carries the record count, which the follower checks against what it received, and the state when
    the snapshot caught up, which supersedes the one it began with. The follower answers `REPLICATING`, and the
-   stream's `SYNC` appends wait for it from then on.
+   stream's `SYNC` appends wait for it from then on. The boundaries after the state, 16 bytes each (leadership 8,
+   first position 8), are reserved for check 2: this version sends none and skips any it receives.
 
 Meanwhile the leader skips the stream's records in the log, except a `RESET`, which ends the snapshot; from its end,
 the stream's records come through the log again. The log may then bring a record the snapshot already held, which the

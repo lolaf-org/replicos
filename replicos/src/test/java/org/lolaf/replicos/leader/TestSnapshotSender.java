@@ -26,11 +26,13 @@ import org.lolaf.replicos.journal.Journal;
 import org.lolaf.replicos.journal.JournalStream;
 import org.lolaf.replicos.spi.RecordFlag;
 import org.lolaf.replicos.spi.TestingReplicationClock;
+import org.lolaf.replicos.wire.CatchUpCheck;
 import org.lolaf.replicos.wire.FrameEncoder;
 import org.lolaf.replicos.spi.StreamAnswer;
 import org.lolaf.replicos.wire.WireFormat;
 import org.slf4j.event.Level;
 
+import java.nio.ByteBuffer;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
@@ -207,6 +209,20 @@ class TestSnapshotSender extends FollowerConnectionHarness {
         assertThat(snapshotLog.getLoggingEvents().subList(loggedBefore, snapshotLog.getLoggingEvents().size()))
                 .filteredOn(event -> event.getLevel() == Level.WARN).singleElement()
                 .extracting(LoggingEvent::getFormattedMessage).asString().contains("by FULL_COPY");
+    }
+
+    @Test
+    void aFollowerCatchingUpByACheckThisVersionDoesNotKnowIsCopiedWhole() {
+        stream("main").append("one");
+        connection = connection(CatchUp.byLastRecords(2));
+        hello();
+        sent.frames.clear();
+
+        connection.onStreamAnswer(EPOCH, 0, StreamAnswer.SNAPSHOT_NEEDED, CatchUpCheck.UNKNOWN, 1,
+                ByteBuffer.allocate(0), 0, 0);
+        snapshot();
+
+        assertThat(sent.frames.get(0)).contains(" from=0 ");
     }
 
     @Test

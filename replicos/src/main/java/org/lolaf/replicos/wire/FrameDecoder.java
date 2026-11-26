@@ -222,8 +222,10 @@ public class FrameDecoder {
     }
 
     private static void decodeSnapshotEnd(ByteBuffer in, int p, long epoch, int variableBytes, FrameHandler handler) {
+        int boundaries = unsignedShort(in, p + 8);
         int stateLength = unsignedShort(in, p + 10);
-        checkVariableBytes(FrameType.SNAPSHOT_END, stateLength, variableBytes);
+        checkVariableBytes(FrameType.SNAPSHOT_END, stateLength + boundaries * WireFormat.LEADERSHIP_BOUNDARY_BYTES,
+                variableBytes);
         handler.onSnapshotEnd(epoch, in.getInt(p), in.getInt(p + 4), in, p + 12, stateLength);
     }
 

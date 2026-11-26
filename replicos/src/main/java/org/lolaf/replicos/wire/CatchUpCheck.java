@@ -17,7 +17,6 @@ package org.lolaf.replicos.wire;
 
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
-import org.lolaf.replicos.spi.WireFormatException;
 
 /**
  * How a follower proves, in a {@link FrameType#STREAM_ANSWER}, which part of a stream it holds that the leader's copy
@@ -35,12 +34,17 @@ public enum CatchUpCheck {
      * A {@link RecordDigest} of the follower's last records: the snapshot copies what follows them when the leader's
      * records at their positions digest the same.
      */
-    LAST_RECORDS(1);
+    LAST_RECORDS(1),
+    /**
+     * A check this version does not know, from a newer peer: never sent, it gets the whole stream. Code 2 is reserved
+     * for a check by the history of the leaderships that wrote each stream.
+     */
+    UNKNOWN(-1);
 
     private final int code;
 
     /**
-     * @throws WireFormatException for a code no check has
+     * @return {@link #UNKNOWN} for a code no check of this version has
      */
     public static CatchUpCheck from(int code) {
         switch (code) {
@@ -49,7 +53,7 @@ public enum CatchUpCheck {
             case 1:
                 return LAST_RECORDS;
             default:
-                throw new WireFormatException("Unknown catch-up check " + code);
+                return UNKNOWN;
         }
     }
 }

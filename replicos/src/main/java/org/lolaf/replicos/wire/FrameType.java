@@ -42,7 +42,8 @@ import org.lolaf.replicos.spi.WireFormatException;
  * SNAPSHOT_BEGIN     leader to follower  stream key 4, reserved 2, state length 2, snapshot offset 8,
  *                                        from position 8; then the state
  * SNAPSHOT_RECORD    leader to follower  a record body, as RECORD's; then the payload
- * SNAPSHOT_END       leader to follower  stream key 4, record count 4, reserved 2, state length 2; then the state
+ * SNAPSHOT_END       leader to follower  stream key 4, record count 4, boundary count 2, state length 2; then the
+ *                                        state, then the boundaries, none in this version
  * ACK                follower to leader  applied offset 8, pending writes 8
  * RECEIVED           follower to leader  received offset 8
  * HEARTBEAT          leader to follower  log tail offset 8
