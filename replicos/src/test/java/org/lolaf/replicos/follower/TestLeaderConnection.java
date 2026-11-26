@@ -24,6 +24,7 @@ import org.lolaf.replicos.journal.JournalCopy;
 import org.lolaf.replicos.wire.CloseReason;
 import org.lolaf.replicos.wire.FrameDecoder;
 import org.lolaf.replicos.wire.FrameEncoder;
+import org.lolaf.replicos.spi.RecordFlag;
 import org.lolaf.replicos.spi.StreamReplicationMode;
 import org.lolaf.replicos.wire.WireFormat;
 
@@ -306,6 +307,29 @@ class TestLeaderConnection extends LeaderConnectionHarness {
         assertThat(main.getWrites()).containsExactly("5 fragmented");
         assertThat(other.getWrites()).containsExactly("2 other's");
         assertThat(followerStreams.getLastAppliedOffset(0)).isEqualTo(128);
+    }
+
+    @Test
+    void aResetRecordReachesTheSinkFlaggedSoItStartsItsCopyOver() {
+        streaming();
+        inSync(0, main);
+
+        read(record(EPOCH, 0, 0, 1, "one"), record(EPOCH, 64, 0, 2, "two"),
+                fragment(128, 0, 1, "again", RecordFlag.RESET.getBits()));
+
+        assertThat(main.getWrites()).containsExactly("1 one", "2 two", "1 reset again");
+        assertThat(main.getStored()).containsExactly("1 again");
+    }
+
+    @Test
+    void aResetRecordInFragmentsReachesTheSinkFlaggedOnceWhole() {
+        streaming();
+        inSync(0, main);
+
+        read(fragment(0, 0, 1, "aga", FIRST | RecordFlag.RESET.getBits()),
+                fragment(64, 0, 1, "in", LAST | RecordFlag.RESET.getBits()));
+
+        assertThat(main.getWrites()).containsExactly("1 reset again");
     }
 
     @Test

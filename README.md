@@ -128,6 +128,8 @@ connection lost without one.
 
 - **Store, then append.** A record is appended after the application stored it, in position order: a snapshot reads
   it back from there.
+- **Flag a reset.** A stream starting over, its positions restarting, is appended with `RecordFlag.RESET`; each
+  follower's sink is handed that record flagged, and discards its copy before applying it.
 - **One thread per writer.** A `StreamWriter` is used from one thread at a time; it allocates nothing.
 - **A sink failure reconnects.** A `ReplicaSink` throwing `WireFormatException` reports the leader's error; any other
   exception is the follower's own failure to apply, after which it reconnects and resumes past the last record

@@ -15,6 +15,7 @@
  */
 package org.lolaf.replicos.benchmarks.impl;
 
+import org.lolaf.replicos.spi.RecordFlag;
 import org.lolaf.replicos.spi.ReplicaSink;
 import org.lolaf.ringos.Deadline;
 
@@ -58,7 +59,11 @@ final class FileSink implements ReplicaSink {
     }
 
     @Override
-    public void apply(byte contentType, long position, ByteBuffer buffer, int payloadIndex, int payloadLength) {
+    public void apply(byte contentType, RecordFlag flag, long position, ByteBuffer buffer, int payloadIndex,
+                      int payloadLength) {
+        if (flag == RecordFlag.RESET) {
+            filePosition = 0;
+        }
         Payloads.copy(buffer, payloadIndex, payloadLength, copy);
         copy.limit(payloadLength).position(0);
         try {
@@ -82,7 +87,7 @@ final class FileSink implements ReplicaSink {
 
     @Override
     public void snapshotRecord(byte contentType, long position, ByteBuffer buffer, int payloadIndex, int payloadLength) {
-        apply(contentType, position, buffer, payloadIndex, payloadLength);
+        apply(contentType, RecordFlag.NONE, position, buffer, payloadIndex, payloadLength);
     }
 
     @Override

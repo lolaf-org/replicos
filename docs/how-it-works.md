@@ -255,7 +255,8 @@ Set one on the node builder, the same on every node: `.catchUp(CatchUp.byLastRec
 
 - **A record is readable from your storage before you append it.** A snapshot reads the stream from storage while it
   keeps being written; a record appended before it is readable could be skipped.
-- **Positions increase between two resets.** A snapshot copies by position range.
+- **Positions increase between two resets.** A snapshot copies by position range. A record you append flagged
+  `RecordFlag.RESET` reaches the sink with that flag: discard the copy, then apply it as the first of the new one.
 - **A sink may be handed a record it already holds.** Once a snapshot ends, the ring may bring records the snapshot
   already copied: skip them by position.
 - **Each node stores its own copy.** A follower refuses a stream the leader stores where the follower would write it.

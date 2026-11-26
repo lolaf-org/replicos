@@ -161,6 +161,18 @@ class TestReplicationNode {
     }
 
     @Test
+    void aResetStartsTheFollowersCopyOver() {
+        JournalStream main = aLeadsBInSync();
+        main.append("second");
+
+        main.reset();
+        main.append("again");
+
+        assertThat(main.awaitAck(ACK_TIMEOUT)).isEqualTo(StreamWriter.Ack.ACKED);
+        assertThat(copyB.getStored()).containsExactly("0 ", "1 again");
+    }
+
+    @Test
     void theLeaderSeesItsFollowerInSync() {
         aLeadsBInSync();
 

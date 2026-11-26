@@ -15,6 +15,7 @@
  */
 package org.lolaf.replicos.benchmarks.impl;
 
+import org.lolaf.replicos.spi.RecordFlag;
 import org.lolaf.replicos.spi.ReplicaSink;
 import org.lolaf.ringos.Deadline;
 
@@ -32,7 +33,8 @@ final class MemorySink implements ReplicaSink {
     }
 
     @Override
-    public void apply(byte contentType, long position, ByteBuffer buffer, int payloadIndex, int payloadLength) {
+    public void apply(byte contentType, RecordFlag flag, long position, ByteBuffer buffer, int payloadIndex,
+                      int payloadLength) {
         Payloads.copy(buffer, payloadIndex, payloadLength, copy);
     }
 

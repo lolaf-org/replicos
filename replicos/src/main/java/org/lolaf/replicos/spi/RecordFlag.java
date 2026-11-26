@@ -37,8 +37,8 @@ public enum RecordFlag {
      */
     PLAINTEXT((byte) 0x04),
     /**
-     * The stream starts over with this record: a snapshot of the stream in progress ends before it. Ignored on a
-     * record handed to a snapshot.
+     * The stream starts over with this record: a snapshot of the stream in progress ends before it, and each
+     * follower's sink is handed it flagged, to discard its copy first. Ignored on a record handed to a snapshot.
      */
     RESET((byte) 0x08);
 

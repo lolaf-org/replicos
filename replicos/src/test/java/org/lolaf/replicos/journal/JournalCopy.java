@@ -19,6 +19,7 @@ import lombok.Getter;
 import lombok.Setter;
 import org.jspecify.annotations.Nullable;
 import org.lolaf.ringos.Deadline;
+import org.lolaf.replicos.spi.RecordFlag;
 import org.lolaf.replicos.spi.ReplicaSink;
 import org.lolaf.replicos.spi.StreamReplicationMode;
 
@@ -103,19 +104,26 @@ public final class JournalCopy implements ReplicaSink {
      * An entry stored before this process started, as a copy left by an earlier run.
      */
     public void hold(long position, String text) {
-        stored.put(position, new Write(JournalStream.TEXT, position, text.getBytes(StandardCharsets.US_ASCII), ""));
+        stored.put(position, new Write(JournalStream.TEXT, false, position, text.getBytes(StandardCharsets.US_ASCII),
+                ""));
     }
 
-    private static Write entry(byte contentType, long position, ByteBuffer buffer, int index, int length) {
+    private static Write entry(byte contentType, boolean reset, long position, ByteBuffer buffer, int index,
+                               int length) {
         byte[] bytes = new byte[length];
         buffer.duplicate().position(index).get(bytes);
         String type = contentType == JournalStream.TEXT ? "" : " type=" + contentType;
-        return new Write(contentType, position, bytes, position + type + " " + new String(bytes, StandardCharsets.US_ASCII));
+        return new Write(contentType, reset, position, bytes, position + type + (reset ? " reset" : "") + " "
+                + new String(bytes, StandardCharsets.US_ASCII));
     }
 
+    /**
+     * Starts the copy over at a {@link RecordFlag#RESET} record, as it is written.
+     */
     @Override
-    public void apply(byte contentType, long position, ByteBuffer buffer, int payloadIndex, int payloadLength) {
-        Write entry = entry(contentType, position, buffer, payloadIndex, payloadLength);
+    public void apply(byte contentType, RecordFlag flag, long position, ByteBuffer buffer, int payloadIndex,
+                      int payloadLength) {
+        Write entry = entry(contentType, flag == RecordFlag.RESET, position, buffer, payloadIndex, payloadLength);
         if (batching) {
             synchronized (pending) {
                 pending.add(entry);
@@ -151,6 +159,9 @@ public final class JournalCopy implements ReplicaSink {
             Thread.currentThread().interrupt();
         }
         for (Write entry : entries) {
+            if (entry.reset) {
+                stored.clear();
+            }
             stored.put(entry.position, entry);
             writes.add(entry.line);
         }
@@ -164,8 +175,8 @@ public final class JournalCopy implements ReplicaSink {
 
     @Override
     public void snapshotRecord(byte contentType, long position, ByteBuffer buffer, int payloadIndex, int payloadLength) {
-        Write applied = entry(contentType, position, buffer, payloadIndex, payloadLength);
-        Write entry = new Write(contentType, position, applied.payload, "snapshot " + applied.line);
+        Write applied = entry(contentType, false, position, buffer, payloadIndex, payloadLength);
+        Write entry = new Write(contentType, false, position, applied.payload, "snapshot " + applied.line);
         if (batching) {
             synchronized (pending) {
                 pending.add(entry);
@@ -217,6 +228,7 @@ public final class JournalCopy implements ReplicaSink {
     private static final class Write {
 
         private final byte contentType;
+        private final boolean reset;
         private final long position;
         private final byte[] payload;
         /**
@@ -224,8 +236,9 @@ public final class JournalCopy implements ReplicaSink {
          */
         private final String line;
 
-        private Write(byte contentType, long position, byte[] payload, String line) {
+        private Write(byte contentType, boolean reset, long position, byte[] payload, String line) {
             this.contentType = contentType;
+            this.reset = reset;
             this.position = position;
             this.payload = payload;
             this.line = line;

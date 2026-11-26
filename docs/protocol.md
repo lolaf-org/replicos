@@ -157,7 +157,8 @@ The leader sends the lane's log in order as RECORD frames, each with its log off
   sequence is a protocol error. The follower applies the payload once whole.
 - **`PLAINTEXT`.** On an encrypted connection the payload goes unencrypted, still authenticated. Chosen by the
   application per record.
-- **`RESET`.** The stream starts over at this record. It ends a snapshot of the stream in progress.
+- **`RESET`.** The stream starts over at this record. It ends a snapshot of the stream in progress, and the follower
+  hands the record to the sink flagged, which discards its copy before applying it.
 
 With nothing to send, the leader sends a **HEARTBEAT** carrying its log tail offset.
 

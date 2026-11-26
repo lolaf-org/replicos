@@ -25,6 +25,8 @@ The first release, extracted from the high availability of [staffix](https://git
   follower in sync.
 - **Snapshots catch up a follower missing history** while the stream keeps being written. `resync` sends a stream
   again from scratch.
+- **A stream can start over.** A record appended with `RecordFlag.RESET` restarts the stream's positions, and each
+  follower's sink is handed it with that flag, so it discards its copy first.
 - **A follower can be copied only what it misses.** With `CatchUp.byLastRecords()` on every node, a follower that
   restarted, was dropped, or followed the previous leader keeps its copy and receives only the records after it,
   once its last 16 records match the leader's; one holding records the leader never had gets the whole stream. Its

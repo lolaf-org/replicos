@@ -22,6 +22,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.Nullable;
 import org.lolaf.ringos.Deadline;
 import org.lolaf.replicos.ReplicaStream;
+import org.lolaf.replicos.spi.RecordFlag;
 import org.lolaf.replicos.spi.ReplicaSink;
 import org.lolaf.replicos.spi.StreamAnswer;
 import org.lolaf.replicos.spi.StreamReplicationMode;
@@ -36,6 +37,10 @@ import java.nio.ByteBuffer;
  */
 @Slf4j
 final class BoundStream implements ReplicaStream {
+
+    private static final SinkMethod APPLY = ReplicaSink::apply;
+    private static final SinkMethod SNAPSHOT_RECORD = (sink, contentType, flag, position, buffer, index, length) ->
+            sink.snapshotRecord(contentType, position, buffer, index, length);
 
     @Getter
     private final String streamName;
@@ -67,6 +72,7 @@ final class BoundStream implements ReplicaStream {
     private boolean assembling;
     private long assembledPosition;
     private byte assembledContentType;
+    private RecordFlag assembledFlag;
     /**
      * The fragments received so far of a payload longer than a frame, grown as needed and kept for the next one.
      */
@@ -80,6 +86,7 @@ final class BoundStream implements ReplicaStream {
         this.notReplicatedAnswer = notReplicatedAnswer;
         this.leaderStorageIdentity = leaderStorageIdentity;
         this.claimedLastPosition = -1;
+        this.assembledFlag = RecordFlag.NONE;
     }
 
     static BoundStream replicated(String streamName, StreamReplicationMode leaderMode, ReplicaSink sink) {
@@ -136,15 +143,15 @@ final class BoundStream implements ReplicaStream {
      *
      * @return false for a fragment out of place
      */
-    boolean apply(byte contentType, long position, ByteBuffer receiveBuffer, int payloadIndex, int payloadLength,
-                  byte fragmentFlags) {
+    boolean apply(byte contentType, RecordFlag flag, long position, ByteBuffer receiveBuffer, int payloadIndex,
+                  int payloadLength, byte fragmentFlags) {
         @Nullable ReplicaSink target = inSync ? sink : null;
         if (fragmentFlags != 0 || assembling) {
-            return assemble(target, contentType, position, receiveBuffer, payloadIndex, payloadLength, fragmentFlags,
-                    ReplicaSink::apply);
+            return assemble(target, contentType, flag, position, receiveBuffer, payloadIndex, payloadLength,
+                    fragmentFlags, APPLY);
         }
         if (target != null) {
-            target.apply(contentType, position, receiveBuffer, payloadIndex, payloadLength);
+            target.apply(contentType, flag, position, receiveBuffer, payloadIndex, payloadLength);
         }
         return true;
     }
@@ -193,8 +200,8 @@ final class BoundStream implements ReplicaStream {
     boolean snapshotRecord(byte contentType, long position, ByteBuffer receiveBuffer, int payloadIndex,
                            int payloadLength, byte fragmentFlags) {
         if (fragmentFlags != 0 || assembling) {
-            if (!assemble(sink, contentType, position, receiveBuffer, payloadIndex, payloadLength, fragmentFlags,
-                    ReplicaSink::snapshotRecord)) {
+            if (!assemble(sink, contentType, RecordFlag.NONE, position, receiveBuffer, payloadIndex, payloadLength,
+                    fragmentFlags, SNAPSHOT_RECORD)) {
                 return false;
             }
         } else {
@@ -235,15 +242,17 @@ final class BoundStream implements ReplicaStream {
     }
 
     /**
-     * Adds a fragment of a payload longer than a frame, applying the record with its last fragment. With no
-     * {@code target} it keeps no bytes, only where the payload ends. A continued fragment with no payload begun is what
-     * a resume leaves of a record whose start it skipped: dropped, its stream catching up by snapshot.
+     * Adds a fragment of a payload longer than a frame, applying the record, with its first fragment's flag, once the
+     * last arrives. With no {@code target} it keeps no bytes, only where the payload ends. A continued fragment with no
+     * payload begun is what a resume leaves of a record whose start it skipped: dropped, its stream catching up by
+     * snapshot.
      *
      * @param assembled the sink method the whole payload goes to
      * @return false for a fragment out of place: another record's, or a new record before the last one ended
      */
-    private boolean assemble(@Nullable ReplicaSink target, byte contentType, long position, ByteBuffer receiveBuffer,
-                             int fragmentIndex, int fragmentLength, byte fragmentFlags, SinkMethod assembled) {
+    private boolean assemble(@Nullable ReplicaSink target, byte contentType, RecordFlag flag, long position,
+                             ByteBuffer receiveBuffer, int fragmentIndex, int fragmentLength, byte fragmentFlags,
+                             SinkMethod assembled) {
         boolean continued = (fragmentFlags & WireFormat.CONTINUED_FRAGMENT) != 0;
         boolean moreFragments = (fragmentFlags & WireFormat.MORE_FRAGMENTS) != 0;
         if (continued != assembling) {
@@ -253,6 +262,7 @@ final class BoundStream implements ReplicaStream {
             assembling = true;
             assembledPosition = position;
             assembledContentType = contentType;
+            assembledFlag = flag;
         } else if (position != assembledPosition) {
             return false;
         }
@@ -263,7 +273,7 @@ final class BoundStream implements ReplicaStream {
         }
         if (!moreFragments) {
             if (target != null) {
-                assembled.call(target, assembledContentType, position, assembledPayload, 0,
+                assembled.call(target, assembledContentType, assembledFlag, position, assembledPayload, 0,
                         assembledPayload.position());
             }
             discardAssembledPayload();
@@ -300,7 +310,7 @@ final class BoundStream implements ReplicaStream {
     @FunctionalInterface
     private interface SinkMethod {
 
-        void call(ReplicaSink sink, byte contentType, long position, ByteBuffer buffer, int payloadIndex,
-                  int payloadLength);
+        void call(ReplicaSink sink, byte contentType, RecordFlag flag, long position, ByteBuffer buffer,
+                  int payloadIndex, int payloadLength);
     }
 }

@@ -23,6 +23,7 @@ import org.lolaf.ringos.Deadline;
 import org.lolaf.replicos.CatchUp;
 import org.lolaf.replicos.ReplicaStream;
 import org.lolaf.replicos.spi.LatencyRecorder;
+import org.lolaf.replicos.spi.RecordFlag;
 import org.lolaf.replicos.spi.ReplicaSinks;
 import org.lolaf.replicos.spi.StreamAnswer;
 import org.lolaf.replicos.spi.StreamReplicationMode;
@@ -287,8 +288,8 @@ public final class FollowerStreams {
     boolean apply(int lane, long offset, int key, byte contentType, byte flags, long position,
                   ByteBuffer receiveBuffer, int payloadIndex, int payloadLength) {
         BoundStream stream = stream(lane, key);
-        if (stream == null || !stream.apply(contentType, position, receiveBuffer, payloadIndex, payloadLength,
-                fragmentFlags(flags))) {
+        if (stream == null || !stream.apply(contentType, recordFlag(flags), position, receiveBuffer, payloadIndex,
+                payloadLength, fragmentFlags(flags))) {
             return false;
         }
         positions.applied(lane, offset, stream.getLeaderMode() == StreamReplicationMode.SYNC_RECEIVED);
@@ -335,6 +336,13 @@ public final class FollowerStreams {
     boolean snapshotEnd(int lane, int key, int recordCount, ByteBuffer state, int stateIndex, int stateLength) {
         BoundStream stream = replicatedStream(lane, key);
         return stream != null && stream.snapshotEnd(recordCount, state, stateIndex, stateLength);
+    }
+
+    private static RecordFlag recordFlag(byte flags) {
+        if ((flags & RecordFlag.RESET.getBits()) != 0) {
+            return RecordFlag.RESET;
+        }
+        return (flags & RecordFlag.PLAINTEXT.getBits()) != 0 ? RecordFlag.PLAINTEXT : RecordFlag.NONE;
     }
 
     private static byte fragmentFlags(byte flags) {

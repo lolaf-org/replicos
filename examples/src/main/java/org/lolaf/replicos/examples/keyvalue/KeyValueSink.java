@@ -16,6 +16,7 @@
 package org.lolaf.replicos.examples.keyvalue;
 
 import lombok.extern.slf4j.Slf4j;
+import org.lolaf.replicos.spi.RecordFlag;
 import org.lolaf.replicos.spi.ReplicaSink;
 import org.lolaf.ringos.Deadline;
 
@@ -37,7 +38,11 @@ final class KeyValueSink implements ReplicaSink {
     }
 
     @Override
-    public void apply(byte contentType, long position, ByteBuffer buffer, int payloadIndex, int payloadLength) {
+    public void apply(byte contentType, RecordFlag flag, long position, ByteBuffer buffer, int payloadIndex,
+                      int payloadLength) {
+        if (flag == RecordFlag.RESET) {
+            store.truncate(0);
+        }
         Change change = Change.decode(contentType, buffer, payloadIndex, payloadLength);
         store.apply(position, change);
         log.info("Applied {} at {}", change, position);

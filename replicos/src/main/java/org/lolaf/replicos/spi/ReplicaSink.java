@@ -35,12 +35,15 @@ public interface ReplicaSink {
      * already copied: skip it by its position. May be kept pending until {@link #writePending()}.
      *
      * @param contentType   the application's, as the leader appended it
+     * @param flag          {@link RecordFlag#RESET} when the stream starts over at this record: discard the copy, then
+     *                      apply the record as the first of the new one; otherwise nothing for the sink to do
      * @param position      the record's place in the stream, increasing between two resets
      * @param buffer        the receive buffer, holding the payload at {@code payloadIndex}
      * @param payloadIndex  where the payload starts in {@code buffer}
      * @param payloadLength 0 for a record with no payload
      */
-    void apply(byte contentType, long position, ByteBuffer buffer, int payloadIndex, int payloadLength);
+    void apply(byte contentType, RecordFlag flag, long position, ByteBuffer buffer, int payloadIndex,
+               int payloadLength);
 
     /**
      * Hands {@code consumer} the copy's last {@code records} records, read from its storage, fewer if it holds fewer,
