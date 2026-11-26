@@ -36,6 +36,9 @@ public interface ReplicaSinks {
     /**
      * Opens the sink the stream is applied into, or refuses it. Never called for a stream the leader does not replicate.
      *
+     * @param streamName            the leader's name for the stream, which this node finds its copy by
+     * @param leaderMode            the mode the leader replicates it in, to refuse as
+     *                              {@link StreamAnswer#MODE_MISMATCH} when this node's configuration gives another
      * @param leaderStorageIdentity where the leader stores the stream, null when it does not know: a stream stored in
      *                              the same place here must be refused, as replicating into it would rewrite the
      *                              leader's data
@@ -45,6 +48,8 @@ public interface ReplicaSinks {
     /**
      * The mode this node's configuration gives the stream, null when it has none: a stream refused as unknown or for
      * a different mode is bound again once this changes.
+     *
+     * @param streamName the leader's name for the stream
      */
     @Nullable StreamReplicationMode modeHere(String streamName);
 
@@ -58,6 +63,9 @@ public interface ReplicaSinks {
         private final @Nullable ReplicaSink sink;
         private final StreamAnswer answer;
 
+        /**
+         * @param sink applies the stream from its first snapshot on
+         */
         public static Binding replicated(ReplicaSink sink) {
             return new Binding(sink, StreamAnswer.SNAPSHOT_NEEDED);
         }

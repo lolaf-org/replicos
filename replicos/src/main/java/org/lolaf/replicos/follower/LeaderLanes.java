@@ -25,11 +25,16 @@ public interface LeaderLanes {
     /**
      * Why the lane must not follow the leader that welcomed it, null when it may: every lane follows lane 0's leader,
      * which a list of leader addresses mixing two nodes would break.
+     *
+     * @param lane     the lane welcomed, from 0
+     * @param leaderId the node id its WELCOME gave
      */
     @Nullable String refuseLeader(int lane, String leaderId);
 
     /**
      * Told the leader's lane count from its WELCOME, before the stream starts.
+     *
+     * @param lanes the leader's lane count, at least 1
      */
     void lanesAnnounced(int lanes);
 }

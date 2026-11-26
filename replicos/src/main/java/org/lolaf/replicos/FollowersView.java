@@ -37,6 +37,9 @@ public interface FollowersView {
      */
     List<DroppedFollower> getDroppedFollowers();
 
+    /**
+     * The followers with every lane connected.
+     */
     int countConnected();
 
     /**
@@ -45,6 +48,9 @@ public interface FollowersView {
      */
     int countInSync();
 
+    /**
+     * As {@link #countInSync()} above 0, without counting them all.
+     */
     boolean isAnyInSync();
 
     /**
@@ -64,11 +70,15 @@ public interface FollowersView {
 
     /**
      * A follower holds the stream in sync, so a failover to it loses none of the stream's acknowledged records.
+     *
+     * @param streamKey the stream's {@link org.lolaf.replicos.spi.LeaderStream#getKey() key}
      */
     boolean isStreamInSync(int streamKey);
 
     /**
      * The followers refusing the stream, by node id, and why.
+     *
+     * @param streamKey the stream's {@link org.lolaf.replicos.spi.LeaderStream#getKey() key}
      */
     Map<String, StreamAnswer> getStreamRefusals(int streamKey);
 
@@ -111,11 +121,15 @@ public interface FollowersView {
 
     /**
      * Ack waits on the stream that timed out, over the node's life.
+     *
+     * @param streamKey the stream's {@link org.lolaf.replicos.spi.LeaderStream#getKey() key}
      */
     long getAckTimeouts(int streamKey);
 
     /**
      * Ack waits on the stream that found no follower in sync, over the node's life.
+     *
+     * @param streamKey the stream's {@link org.lolaf.replicos.spi.LeaderStream#getKey() key}
      */
     long getAcksWithNoFollowerInSync(int streamKey);
 }

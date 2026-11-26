@@ -28,6 +28,9 @@ import java.util.function.LongSupplier;
  */
 public interface ReplicationNode {
 
+    /**
+     * A node needs its id and the settings of each role it may take.
+     */
     static ReplicationNodeBuilder builder() {
         return new ReplicationNodeBuilder();
     }
@@ -49,12 +52,17 @@ public interface ReplicationNode {
      *                        over several networks. Every lane must reach the same leader; a lane reaching another is
      *                        refused, and tries again.
      * @param epoch           the leadership the node knows of, read on every connection
+     * @param deadline        for standing down
      * @throws IllegalArgumentException for no address
      */
     void follow(List<InetSocketAddress> leaderAddresses, LongSupplier epoch, Deadline deadline);
 
     /**
      * Follows a leader at one address.
+     *
+     * @param leaderAddress the leader's, every lane connecting through it
+     * @param epoch         as {@link #follow(List, LongSupplier, Deadline)}
+     * @param deadline      for standing down
      */
     default void follow(InetSocketAddress leaderAddress, LongSupplier epoch, Deadline deadline) {
         follow(List.of(leaderAddress), epoch, deadline);
@@ -67,6 +75,7 @@ public interface ReplicationNode {
      * told. Once one was told, new followers are refused. The node still leads: {@link #standDown} or {@link #close}
      * comes next.
      *
+     * @param deadline for every follower to be sent the rest of the log
      * @return whether at least one follower was told; false when not leading
      */
     boolean handOver(Deadline deadline);
@@ -76,20 +85,32 @@ public interface ReplicationNode {
      * {@link #handOver}. A follower waits, within the deadline, for its sinks to write what it received; the sinks
      * stay open and the node keeps where each stream stands, so following the same leader again resumes rather than
      * starting over by snapshot.
+     *
+     * @param deadline for a leader's connections to close, and a follower's sinks to write what it received
      */
     void standDown(Deadline deadline);
 
     /**
      * Stands down, then stops every sink, for a node shutting down.
+     *
+     * @param deadline for standing down, then for each sink to stop
      */
     void close(Deadline deadline);
 
+    /**
+     * From {@link #lead} until the node stands down or closes.
+     */
     boolean isLeading();
 
+    /**
+     * From {@link #follow} until the node stands down or closes, connected to the leader or not.
+     */
     boolean isFollowing();
 
     /**
      * Opens the stream's writer, for one thread at a time. Its records reach the followers while the node leads.
+     *
+     * @param streamKey the stream's {@link org.lolaf.replicos.spi.LeaderStream#getKey() key}, which sets its lane
      */
     StreamWriter writer(int streamKey);
 
@@ -97,6 +118,8 @@ public interface ReplicationNode {
      * Call after the stream's {@link org.lolaf.replicos.spi.LeaderStream LeaderStream} changed its replication mode or
      * storage identity: its data did not change. Each follower checks the stream again against its own settings and
      * keeps its copy when it still can, catches up by snapshot when it now needs one, or stops replicating it.
+     *
+     * @param streamKey the stream's {@link org.lolaf.replicos.spi.LeaderStream#getKey() key}
      */
     void reannounce(int streamKey);
 
@@ -104,11 +127,19 @@ public interface ReplicationNode {
      * Call after the stream's data changed without records appended, such as a restore or a reset of its storage:
      * every follower holding the stream in sync discards its copy and receives the whole stream again by snapshot.
      * Followers not holding it are left alone.
+     *
+     * @param streamKey the stream's {@link org.lolaf.replicos.spi.LeaderStream#getKey() key}
      */
     void resync(int streamKey);
 
+    /**
+     * The followers while the node leads, empty otherwise.
+     */
     FollowersView followers();
 
+    /**
+     * The leader while the node follows, and what the node holds of its streams, kept until it leads.
+     */
     LeaderView leader();
 
     /**

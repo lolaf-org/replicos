@@ -35,6 +35,7 @@ public interface SnapshotSource {
      * Writes the stream's current state into {@code state}, cleared, up to its position, at most
      * {@link org.lolaf.replicos.wire.WireFormat#MAX_STATE_BYTES}: the follower resumes the stream from it.
      *
+     * @param state handed cleared, its position left at the state's end
      * @return the last position the state covers, which the round copies up to
      */
     long captureState(ByteBuffer state);
@@ -42,6 +43,10 @@ public interface SnapshotSource {
     /**
      * Hands {@code consumer} the records from {@code fromPosition} to {@code toPosition}, both included, in position
      * order, until it returns false. A position the stream holds no record at is skipped.
+     *
+     * @param fromPosition the first position read
+     * @param toPosition   the last position read, which may be past the stream's end
+     * @param consumer     copies or digests each record, during the call only
      */
     void read(long fromPosition, long toPosition, RecordConsumer consumer);
 
@@ -49,7 +54,12 @@ public interface SnapshotSource {
     interface RecordConsumer {
 
         /**
-         * @param buffer holds the payload at {@code payloadIndex}, read during the call only and left untouched
+         * @param contentType   the application's, as it appended the record
+         * @param flag          the record's, as it appended it; {@link RecordFlag#RESET} is ignored here
+         * @param position      the record's place in the stream
+         * @param buffer        holds the payload at {@code payloadIndex}, read during the call only and left untouched
+         * @param payloadIndex  where the payload starts in {@code buffer}
+         * @param payloadLength 0 for a record with no payload
          * @return false to stop before the next record
          */
         boolean onRecord(byte contentType, RecordFlag flag, long position, ByteBuffer buffer, int payloadIndex,

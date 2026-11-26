@@ -26,16 +26,26 @@ import java.nio.ByteBuffer;
  */
 public interface AnswerSender {
 
+    /**
+     * @param bytes the most the frame takes once encoded
+     */
     ByteBuffer claim(int bytes);
 
     /**
      * Sends the frame, sealed once the KEY_CONFIRMATION went.
+     *
+     * @param frame  the buffer {@link #claim} gave, the frame encoded from index 0
+     * @param length the frame's, as encoded
      */
     void send(ByteBuffer frame, int length);
 
     /**
      * Sends the KEY_CONFIRMATION as it is, and seals every answer after it with {@code sealer}: the leader opens the
      * follower's frames only once it verified the confirmation.
+     *
+     * @param frame  the buffer {@link #claim} gave, the KEY_CONFIRMATION encoded from index 0
+     * @param length the frame's, as encoded
+     * @param sealer seals the frames after it, for the connection's life
      */
     void sendKeyConfirmation(ByteBuffer frame, int length, FrameCipher sealer);
 }

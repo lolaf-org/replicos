@@ -41,12 +41,24 @@ public interface StreamWriter extends AutoCloseable {
      * catching up by snapshot reads them from there. Waits, up to the log full timeout, for a follower a whole log
      * behind, then drops it.
      *
+     * @param contentType   the application's, telling a follower's sink what the payload holds
+     * @param flag          {@link RecordFlag#RESET} to start the stream over at this record,
+     *                      {@link RecordFlag#PLAINTEXT} to send its payload unencrypted, else {@link RecordFlag#NONE}
+     * @param position      the record's place in its stream, increasing between two resets: a snapshot reads the
+     *                      stream back by it
+     * @param buffer        holds the payload at {@code payloadIndex}, copied into the log and left untouched; null for
+     *                      no payload
+     * @param payloadIndex  where the payload starts in {@code buffer}
+     * @param payloadLength 0 for no payload; longer than a frame, it is sent in fragments
      * @return the offset in the log of the record, or of a long payload's last fragment, for {@link #awaitAck}
      * @throws IllegalArgumentException for a payload longer than {@link #getMaxPayloadLength()}, left out of the log
      */
     long append(byte contentType, RecordFlag flag, long position, @Nullable ByteBuffer buffer, int payloadIndex,
                 int payloadLength);
 
+    /**
+     * The longest payload {@link #append} takes, half the log's capacity; one longer than a frame goes in fragments.
+     */
     int getMaxPayloadLength();
 
     /**
@@ -54,6 +66,7 @@ public interface StreamWriter extends AutoCloseable {
      * {@code mode} asks. A follower a wait timed out on is not waited for again until it applies what it missed, so a
      * hung follower costs one timeout, not one per record.
      *
+     * @param offset       as {@link #append} returned it
      * @param mode         {@code SYNC_RECEIVED} or {@code SYNC_APPLIED}
      * @param timeoutNanos 0 to wait as long as a follower is in sync
      */

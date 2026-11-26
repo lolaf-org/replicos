@@ -31,5 +31,8 @@ public interface LeaderStreams {
      */
     int count();
 
+    /**
+     * @param key from 0 to {@link #count()}, excluded
+     */
     LeaderStream get(int key);
 }

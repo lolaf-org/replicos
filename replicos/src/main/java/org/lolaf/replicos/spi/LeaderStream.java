@@ -23,6 +23,9 @@ import org.jspecify.annotations.Nullable;
  */
 public interface LeaderStream {
 
+    /**
+     * Given from 0 in registration order and never reused: the stream's lane is its key modulo the lane count.
+     */
     int getKey();
 
     /**
@@ -30,8 +33,15 @@ public interface LeaderStream {
      */
     String getStreamName();
 
+    /**
+     * What the stream's appends wait for from the followers; {@link StreamReplicationMode#NONE} replicates it not at
+     * all.
+     */
     StreamReplicationMode getStreamReplicationMode();
 
+    /**
+     * Any mode but {@link StreamReplicationMode#NONE}.
+     */
     default boolean isReplicated() {
         return getStreamReplicationMode() != StreamReplicationMode.NONE;
     }

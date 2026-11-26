@@ -57,6 +57,8 @@ public interface LeaderView {
 
     /**
      * Null for a stream the leader never announced, or once the node led.
+     *
+     * @param streamName as the leader announces it, the same on every node
      */
     @Nullable ReplicaStream getStream(String streamName);
 

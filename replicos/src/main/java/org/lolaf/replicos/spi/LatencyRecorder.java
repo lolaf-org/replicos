@@ -25,5 +25,8 @@ public interface LatencyRecorder {
     LatencyRecorder NONE = durationInNanos -> {
     };
 
+    /**
+     * @param durationInNanos as {@link ReplicationClock#nanoTime()} measured it
+     */
     void record(long durationInNanos);
 }

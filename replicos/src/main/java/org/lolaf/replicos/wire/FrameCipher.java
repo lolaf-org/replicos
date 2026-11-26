@@ -56,12 +56,16 @@ public interface FrameCipher {
     int getTagBytes();
 
     /**
+     * @param frames      holds the frame at {@code frameIndex}
+     * @param frameIndex  where the frame starts in {@code frames}
      * @param frameLength the frame as encoded, {@link #getTagBytes()} of room after it
      * @return its length on the wire
      */
     int seal(ByteBuffer frames, int frameIndex, int frameLength);
 
     /**
+     * @param frames      holds the frame at {@code frameIndex}, as received
+     * @param frameIndex  where the frame starts in {@code frames}
      * @param frameLength as its length field says
      * @return its length without the tag, its content decrypted in place
      * @throws WireFormatException when the tag does not verify, the frame's bytes then garbage

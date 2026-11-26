@@ -25,8 +25,14 @@ import org.lolaf.replicos.spi.StreamReplicationMode;
  */
 public interface ReplicaStream {
 
+    /**
+     * The leader's name for the stream, the same on every node.
+     */
     String getStreamName();
 
+    /**
+     * The mode the leader replicates the stream in, as its last announcement gave it.
+     */
     StreamReplicationMode getLeaderMode();
 
     /**
