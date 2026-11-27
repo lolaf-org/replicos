@@ -28,12 +28,37 @@ import java.nio.ByteBuffer;
 public interface StreamWriter extends AutoCloseable {
 
     /**
-     * What a wait for the followers' acks ended with.
+     * The {@link #awaitAck(long, StreamReplicationMode, int, long) quorum} of every follower in sync, however many
+     * that is.
+     */
+    int ALL_FOLLOWERS = 0;
+
+    /**
+     * What a wait for the followers' acks ended with. Anything but {@link #ACKED} means the record may be lost on a
+     * failover: whether to carry on is the application's choice, the record being in the log either way.
      */
     enum Ack {
+        /**
+         * The quorum, or every follower in sync, received or applied the record as the mode asks: a failover to one
+         * of them keeps it.
+         */
         ACKED,
+        /**
+         * The timeout passed before enough followers acked, or too few are left that an earlier wait did not time out
+         * on. Those are not waited for again until they applied what they missed, so a hung follower costs one
+         * timeout, not one per record.
+         */
         TIMED_OUT,
-        NO_FOLLOWER_IN_SYNC
+        /**
+         * No follower holds the stream in sync, none connected or all catching up or refusing it, so the wait ended
+         * at once: only the leader holds the record.
+         */
+        NO_FOLLOWER_IN_SYNC,
+        /**
+         * Fewer followers in sync than the quorum asked for, so the wait ended at once; those in sync still get the
+         * record.
+         */
+        NOT_ENOUGH_FOLLOWERS
     }
 
     /**
@@ -62,15 +87,25 @@ public interface StreamWriter extends AutoCloseable {
     int getMaxPayloadLength();
 
     /**
-     * Waits until every follower holding the stream in sync received or applied the record at {@code offset}, as
-     * {@code mode} asks. A follower a wait timed out on is not waited for again until it applies what it missed, so a
-     * hung follower costs one timeout, not one per record.
+     * As {@link #awaitAck(long, StreamReplicationMode, int, long)} with a quorum of {@link #ALL_FOLLOWERS}.
+     */
+    default Ack awaitAck(long offset, StreamReplicationMode mode, long timeoutNanos) {
+        return awaitAck(offset, mode, ALL_FOLLOWERS, timeoutNanos);
+    }
+
+    /**
+     * Waits until {@code quorum} of the followers holding the stream in sync received or applied the record at
+     * {@code offset}, as {@code mode} asks; the others still get it, without being waited for. A follower a wait timed
+     * out on is not waited for again until it applies what it missed, so a hung follower costs one timeout, not one
+     * per record.
      *
      * @param offset       as {@link #append} returned it
      * @param mode         {@code SYNC_RECEIVED} or {@code SYNC_APPLIED}
-     * @param timeoutNanos 0 to wait as long as a follower is in sync
+     * @param quorum       how many followers must ack, or {@link #ALL_FOLLOWERS}
+     * @param timeoutNanos 0 to wait as long as enough followers are in sync
+     * @throws IllegalArgumentException for a negative quorum
      */
-    Ack awaitAck(long offset, StreamReplicationMode mode, long timeoutNanos);
+    Ack awaitAck(long offset, StreamReplicationMode mode, int quorum, long timeoutNanos);
 
     /**
      * Stops waking this writer's ack waits, which the acks wake from the first wait on; a later wait is woken again.

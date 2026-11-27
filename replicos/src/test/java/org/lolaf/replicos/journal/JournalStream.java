@@ -57,6 +57,7 @@ public final class JournalStream implements LeaderStream {
     private volatile @Nullable String storageIdentity;
     private final StreamWriter writer;
     private final NavigableMap<Long, Entry> entries;
+    @Getter
     private volatile long nextPosition;
     private long lastAppendedOffset;
     /**
@@ -168,11 +169,14 @@ public final class JournalStream implements LeaderStream {
      * As a sync mode asks, after the last append.
      */
     public StreamWriter.Ack awaitAck(Duration timeout) {
-        return writer.awaitAck(lastAppendedOffset, streamReplicationMode, timeout.toNanos());
+        return awaitAck(StreamWriter.ALL_FOLLOWERS, timeout);
     }
 
-    public long getNextPosition() {
-        return nextPosition;
+    /**
+     * As a sync mode asks, after the last append, from {@code quorum} followers.
+     */
+    public StreamWriter.Ack awaitAck(int quorum, Duration timeout) {
+        return writer.awaitAck(lastAppendedOffset, streamReplicationMode, quorum, timeout.toNanos());
     }
 
     @Override

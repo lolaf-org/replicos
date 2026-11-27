@@ -127,6 +127,11 @@ public final class ReplicationStats {
         return counts == null ? 0 : counts.noFollowerInSync.get();
     }
 
+    public long getAcksWithNotEnoughFollowers(int streamKey) {
+        AckCounts counts = acksByStream.get(streamKey);
+        return counts == null ? 0 : counts.notEnoughFollowers.get();
+    }
+
     public long getSnapshots() {
         return snapshots.get();
     }
@@ -139,10 +144,12 @@ public final class ReplicationStats {
 
         private final AtomicLong timedOut;
         private final AtomicLong noFollowerInSync;
+        private final AtomicLong notEnoughFollowers;
 
         AckCounts() {
             this.timedOut = new AtomicLong();
             this.noFollowerInSync = new AtomicLong();
+            this.notEnoughFollowers = new AtomicLong();
         }
 
         void count(StreamWriter.Ack ack) {
@@ -150,6 +157,8 @@ public final class ReplicationStats {
                 timedOut.incrementAndGet();
             } else if (ack == StreamWriter.Ack.NO_FOLLOWER_IN_SYNC) {
                 noFollowerInSync.incrementAndGet();
+            } else if (ack == StreamWriter.Ack.NOT_ENOUGH_FOLLOWERS) {
+                notEnoughFollowers.incrementAndGet();
             }
         }
     }

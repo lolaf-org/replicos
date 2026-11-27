@@ -17,6 +17,7 @@ package org.lolaf.replicos.leader;
 
 import org.jspecify.annotations.Nullable;
 import org.lolaf.ringos.idling.IdleStrategy;
+import org.lolaf.replicos.StreamWriter;
 import org.lolaf.replicos.StreamWriter.Ack;
 import org.lolaf.replicos.spi.ReplicationClock;
 import org.lolaf.replicos.spi.StreamReplicationMode;
@@ -190,19 +191,20 @@ public final class Followers {
 
     /**
      * As {@link org.lolaf.replicos.StreamWriter#awaitAck}: a follower falling out of sync stops being waited for, and
-     * with none left the wait ends at once. Allocates nothing.
+     * with too few left the wait ends at once. Allocates nothing.
      */
-    Ack awaitAck(int streamKey, long offset, StreamReplicationMode mode, long timeoutNanos, IdleStrategy idle) {
+    Ack awaitAck(int streamKey, long offset, StreamReplicationMode mode, int quorum, long timeoutNanos,
+                 IdleStrategy idle) {
         boolean received = mode == StreamReplicationMode.SYNC_RECEIVED;
         long startNanos = timeoutNanos == 0 ? 0 : clock.nanoTime();
-        Ack ack = ackOf(streamKey, offset, received, timeoutNanos, startNanos);
+        Ack ack = ackOf(streamKey, offset, received, quorum, timeoutNanos, startNanos);
         if (ack != null) {
             return ack;
         }
         idle.reset();
         waiting.incrementAndGet();
         try {
-            while ((ack = ackOf(streamKey, offset, received, timeoutNanos, startNanos)) == null) {
+            while ((ack = ackOf(streamKey, offset, received, quorum, timeoutNanos, startNanos)) == null) {
                 idle.idle();
             }
             return ack;
@@ -215,26 +217,33 @@ public final class Followers {
     /**
      * @return null while it waits on
      */
-    private @Nullable Ack ackOf(int streamKey, long offset, boolean received, long timeoutNanos, long startNanos) {
-        boolean anyInSync = false;
-        boolean anyWaitedFor = false;
-        boolean acked = true;
+    private @Nullable Ack ackOf(int streamKey, long offset, boolean received, int quorum, long timeoutNanos,
+                                long startNanos) {
+        int inSync = 0;
+        int waitedFor = 0;
+        int acked = 0;
         for (FollowerConnection connection : connections) {
             if (connection.isStreamInSync(streamKey)) {
-                anyInSync = true;
+                inSync++;
                 if (!connection.getAcks().isOverdue()) {
-                    anyWaitedFor = true;
-                    acked &= ackedOffset(connection, received) >= offset;
+                    waitedFor++;
+                    if (ackedOffset(connection, received) >= offset) {
+                        acked++;
+                    }
                 }
             }
         }
-        if (!anyInSync) {
+        if (inSync == 0) {
             return Ack.NO_FOLLOWER_IN_SYNC;
         }
-        if (!anyWaitedFor) {
+        if (inSync < quorum) {
+            return Ack.NOT_ENOUGH_FOLLOWERS;
+        }
+        int needed = quorum == StreamWriter.ALL_FOLLOWERS ? waitedFor : quorum;
+        if (waitedFor == 0 || waitedFor < needed) {
             return Ack.TIMED_OUT;
         }
-        if (acked) {
+        if (acked >= needed) {
             return Ack.ACKED;
         }
         if (timeoutNanos != 0 && clock.nanoTime() - startNanos >= timeoutNanos) {

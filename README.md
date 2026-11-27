@@ -97,7 +97,8 @@ node.lead(epoch, Deadline.of(Duration.ofSeconds(5)));
 // on the leader, once a record is stored
 StreamWriter writer = node.writer(streamKey);
 long offset = writer.append(contentType, RecordFlag.NONE, position, buffer, index, length);
-writer.awaitAck(offset, StreamReplicationMode.SYNC_APPLIED, timeoutNanos);
+writer.awaitAck(offset, StreamReplicationMode.SYNC_APPLIED, timeoutNanos);        // every follower in sync
+writer.awaitAck(offset, StreamReplicationMode.SYNC_APPLIED, 1, timeoutNanos);     // the first follower to apply it
 ```
 
 Both nodes give the same `ReplicaSinks.getApplicationId()`; a peer replicating another application is refused.

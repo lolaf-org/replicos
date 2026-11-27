@@ -346,9 +346,10 @@ With nothing to send, the leader sends a **HEARTBEAT** carrying its log tail off
 - **RECEIVED** carries the offset of the last record the follower holds in memory, sent before it writes them, for
   `SYNC_RECEIVED`.
 - **What waits.** An append of a `SYNC_APPLIED` stream waits for an ACK at or past its offset, of a `SYNC_RECEIVED`
-  stream for a RECEIVED or ACK at or past it, from a follower holding the stream in sync; `ASYNC` waits for nothing.
-  A wait has a timeout, after which the append goes on and later ones do not wait for that follower until it caught
-  up. The leader closes a follower that owes an ACK and stays silent for its stall timeout with `STALLED`.
+  stream for a RECEIVED or ACK at or past it, from every follower holding the stream in sync or from a quorum of them,
+  as the leader's application asks; `ASYNC` waits for nothing. A wait has a timeout, after which the append goes on and
+  later ones do not wait for the followers that had not acked until they caught up. The leader closes a follower that
+  owes an ACK and stays silent for its stall timeout with `STALLED`.
 
 ## Snapshots
 

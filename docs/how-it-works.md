@@ -76,9 +76,10 @@ sequenceDiagram
   - `ASYNC`: nothing; `append` returns once the record is in the ring.
   - `SYNC_RECEIVED`: `awaitAck` returns once a follower holds the record in memory (RECEIVED).
   - `SYNC_APPLIED`: `awaitAck` returns once a follower applied it and its sink wrote it (ACK after `writePending`).
-- `awaitAck` waits only for followers **in sync**, those holding every record of the stream. With none it returns
-  `NO_FOLLOWER_IN_SYNC` at once; past its timeout, `TIMED_OUT`, and that follower is not waited for again until it
-  caught up.
+- `awaitAck` waits only for followers **in sync**, those holding every record of the stream: all of them by default,
+  or a **quorum** of them, the first to ack, the others getting the record without being waited for. With none in
+  sync it returns `NO_FOLLOWER_IN_SYNC` at once, with fewer than the quorum `NOT_ENOUGH_FOLLOWERS`; past its timeout,
+  `TIMED_OUT`, and the followers that had not acked are not waited for again until they caught up.
 - A follower moves its **lane position**, the leadership and log offset of the last record it wrote, only after
   `writePending`, so it never claims more than its sinks hold. The lane position is kept in memory: see
   [section 5](#5-what-triggers-a-snapshot).

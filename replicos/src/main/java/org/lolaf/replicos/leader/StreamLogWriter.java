@@ -83,12 +83,15 @@ public final class StreamLogWriter implements StreamWriter {
     }
 
     @Override
-    public Ack awaitAck(long offset, StreamReplicationMode mode, long timeoutNanos) {
+    public Ack awaitAck(long offset, StreamReplicationMode mode, int quorum, long timeoutNanos) {
+        if (quorum < 0) {
+            throw new IllegalArgumentException("A quorum of " + quorum + " followers");
+        }
         if (!waiterAdded) {
             followers.addWaiter(ackIdle);
             waiterAdded = true;
         }
-        Ack ack = followers.awaitAck(streamKey, offset, mode, timeoutNanos, ackIdle);
+        Ack ack = followers.awaitAck(streamKey, offset, mode, quorum, timeoutNanos, ackIdle);
         ackCounts.count(ack);
         return ack;
     }

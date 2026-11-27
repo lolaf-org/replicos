@@ -161,4 +161,9 @@ final class FollowersViewImpl implements FollowersView {
     public long getAcksWithNoFollowerInSync(int streamKey) {
         return stats.getAcksWithNoFollowerInSync(streamKey);
     }
+
+    @Override
+    public long getAcksWithNotEnoughFollowers(int streamKey) {
+        return stats.getAcksWithNotEnoughFollowers(streamKey);
+    }
 }

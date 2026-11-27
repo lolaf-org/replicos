@@ -132,4 +132,11 @@ public interface FollowersView {
      * @param streamKey the stream's {@link org.lolaf.replicos.spi.LeaderStream#getKey() key}
      */
     long getAcksWithNoFollowerInSync(int streamKey);
+
+    /**
+     * Ack waits on the stream that found fewer followers in sync than their quorum, over the node's life.
+     *
+     * @param streamKey the stream's {@link org.lolaf.replicos.spi.LeaderStream#getKey() key}
+     */
+    long getAcksWithNotEnoughFollowers(int streamKey);
 }
