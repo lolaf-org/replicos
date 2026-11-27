@@ -18,7 +18,6 @@ package org.lolaf.replicos.journal;
 import org.jspecify.annotations.Nullable;
 import org.lolaf.replicos.spi.ReplicaSinks;
 import org.lolaf.replicos.spi.StreamAnswer;
-import org.lolaf.replicos.spi.StreamReplicationMode;
 
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
@@ -38,8 +37,8 @@ public final class JournalReplica implements ReplicaSinks {
     /**
      * Stored at {@code "follower-storage"}.
      */
-    public JournalCopy configure(String name, StreamReplicationMode mode) {
-        return configure(name, mode, "follower-storage");
+    public JournalCopy configure(String name) {
+        return configure(name, "follower-storage");
     }
 
     /**
@@ -47,10 +46,10 @@ public final class JournalReplica implements ReplicaSinks {
      *
      * @param storageIdentity null for storage that cannot be identified
      */
-    public JournalCopy configure(String name, StreamReplicationMode mode, @Nullable String storageIdentity) {
+    public JournalCopy configure(String name, @Nullable String storageIdentity) {
         return copies.compute(name, (key, copy) -> {
             JournalCopy configured = copy == null ? new JournalCopy() : copy;
-            configured.configure(mode, storageIdentity);
+            configured.configure(storageIdentity);
             return configured;
         });
     }
@@ -65,13 +64,10 @@ public final class JournalReplica implements ReplicaSinks {
     }
 
     @Override
-    public Binding open(String streamName, StreamReplicationMode leaderMode, @Nullable String leaderStorageIdentity) {
+    public Binding open(String streamName, @Nullable String leaderStorageIdentity) {
         JournalCopy copy = copies.get(streamName);
         if (copy == null) {
             return Binding.refused(StreamAnswer.UNKNOWN_STREAM);
-        }
-        if (copy.getMode() != leaderMode) {
-            return Binding.refused(StreamAnswer.MODE_MISMATCH);
         }
         String identity = copy.getStorageIdentity();
         if (identity == null || leaderStorageIdentity == null) {
@@ -84,8 +80,7 @@ public final class JournalReplica implements ReplicaSinks {
     }
 
     @Override
-    public @Nullable StreamReplicationMode modeHere(String streamName) {
-        JournalCopy copy = copies.get(streamName);
-        return copy == null ? null : copy.getMode();
+    public boolean isConfigured(String streamName) {
+        return copies.containsKey(streamName);
     }
 }

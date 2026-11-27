@@ -75,7 +75,7 @@ class TestReplicationEncryptionHandshake {
         this.leader = Journal.ofCapacity(1 << 16);
         this.leaderMain = leader.add(MAIN, StreamReplicationMode.ASYNC);
         this.replica = new JournalReplica();
-        this.main = replica.configure(MAIN, StreamReplicationMode.ASYNC);
+        this.main = replica.configure(MAIN);
         this.followerStreams = new FollowerStreams(replica, CatchUp.fullCopy(), LatencyRecorder.NONE);
     }
 

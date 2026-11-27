@@ -46,11 +46,7 @@ public enum StreamAnswer {
     /**
      * The leader announced the stream with replication mode {@code NONE}: its configuration stopped replicating it.
      */
-    NOT_REPLICATED(5),
-    /**
-     * The follower's configuration gives the stream another replication mode than the leader's: a configuration error.
-     */
-    MODE_MISMATCH(6);
+    NOT_REPLICATED(5);
 
     private final int code;
 
@@ -58,7 +54,7 @@ public enum StreamAnswer {
      * The follower would replicate the stream but cannot: a problem to fix, unlike an answer the leader expects.
      */
     public boolean isRefusal() {
-        return this == SHARED_STORAGE || this == UNKNOWN_STORAGE || this == UNKNOWN_STREAM || this == MODE_MISMATCH;
+        return this == SHARED_STORAGE || this == UNKNOWN_STORAGE || this == UNKNOWN_STREAM;
     }
 
     /**
@@ -78,8 +74,6 @@ public enum StreamAnswer {
                 return SNAPSHOT_NEEDED;
             case 5:
                 return NOT_REPLICATED;
-            case 6:
-                return MODE_MISMATCH;
             default:
                 throw new WireFormatException("Unknown stream answer " + code);
         }

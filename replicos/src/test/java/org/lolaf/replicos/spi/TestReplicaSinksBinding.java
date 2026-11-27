@@ -35,10 +35,10 @@ class TestReplicaSinksBinding {
 
     @Test
     void aRefusalHasNoSink() {
-        ReplicaSinks.Binding binding = ReplicaSinks.Binding.refused(StreamAnswer.MODE_MISMATCH);
+        ReplicaSinks.Binding binding = ReplicaSinks.Binding.refused(StreamAnswer.UNKNOWN_STREAM);
 
         assertThat(binding.getSink()).isNull();
-        assertThat(binding.getAnswer()).isEqualTo(StreamAnswer.MODE_MISMATCH);
+        assertThat(binding.getAnswer()).isEqualTo(StreamAnswer.UNKNOWN_STREAM);
     }
 
     @Test

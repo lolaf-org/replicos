@@ -247,7 +247,9 @@ Header flag `0x01`: in sync, the follower holds every stream of the lane the lea
   interpreted: any layout change bumps the version.
 - **Record flags.** `0x01` `MORE_FRAGMENTS`, `0x02` `CONTINUED_FRAGMENT`, `0x04` `PLAINTEXT`, `0x08` `RESET`; see
   [Records](#records).
-- **Replication mode.** 0 `NONE` (announced, not replicated), 1 `ASYNC`, 2 `SYNC_APPLIED`, 3 `SYNC_RECEIVED`.
+- **Replication mode.** 0 `NONE` (announced, not replicated), 1 `ASYNC`, 2 `SYNC_APPLIED`, 3 `SYNC_RECEIVED`. It is
+  the leader's alone: a follower holds a replicated stream whatever its mode, which tells it only whether to send
+  RECEIVED, and keeps its copy when the mode changes between the three replicated ones.
 - **Encryption mode.** 0 `DISABLED`, 1 `PREFERRED`, 2 `REQUIRED`.
 - **Resume offset** -1: the follower's position is not in the leader's log.
 - **Stream answers.**
@@ -260,7 +262,6 @@ Header flag `0x01`: in sync, the follower holds every stream of the lane the lea
   | 3 | `UNKNOWN_STREAM` | refused: the follower's configuration does not know the stream |
   | 4 | `SNAPSHOT_NEEDED` | replicated, but missing history: the leader sends a snapshot |
   | 5 | `NOT_REPLICATED` | the leader announced it with mode `NONE` |
-  | 6 | `MODE_MISMATCH` | refused: the follower's configuration gives it another mode |
 
 - **Close reasons.**
 
@@ -301,10 +302,10 @@ Per lane:
 5. The leader announces each stream of the lane with a **STREAM**, then **STREAMS_ANNOUNCED** with the count it sent,
    which the follower checks. A stream registered or reconfigured later is announced again with a STREAM at any time.
 6. The follower answers each STREAM with a **STREAM_ANSWER**. A stream it held in sync over a resumed connection is
-   `REPLICATING`; one it replicates but does not hold whole is `SNAPSHOT_NEEDED`; the refusals are configuration
-   errors the leader reports. A stream refused as unknown or for its mode is answered again once the follower's
-   configuration changes. The answer also carries the follower's catch-up check, the last position it holds of the
-   stream (-1 for none) and the check's proof of it, from which the leader picks where a snapshot starts:
+   `REPLICATING`; one it replicates but does not hold whole is `SNAPSHOT_NEEDED`; the refusals are configuration errors
+   the leader reports. A stream refused as unknown is answered again once the follower's configuration knows it. The
+   answer also carries the follower's catch-up check, the last position it holds of the stream (-1 for none) and the
+   check's proof of it, from which the leader picks where a snapshot starts:
    - **0, full copy**: no proof; the snapshot copies the whole stream.
    - **1, last records**: for a stream needing a snapshot, the follower's last records, at most the count it is
      configured with, proved by their count, the first position and a SHA-256 ([layout](#stream_answer)) over each

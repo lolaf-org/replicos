@@ -34,7 +34,6 @@ import org.lolaf.replicos.spi.ReplicationClock;
 import org.lolaf.replicos.spi.LatencyRecorder;
 import org.lolaf.replicos.spi.ReplicationMetrics;
 import org.lolaf.replicos.spi.StreamAnswer;
-import org.lolaf.replicos.spi.StreamReplicationMode;
 
 import java.net.InetSocketAddress;
 import java.security.SecureRandom;
@@ -73,13 +72,13 @@ final class ReplicationNodeImpl implements ReplicationNode {
         }
 
         @Override
-        public Binding open(String streamName, StreamReplicationMode leaderMode, @Nullable String leaderStorageIdentity) {
+        public Binding open(String streamName, @Nullable String leaderStorageIdentity) {
             return Binding.refused(StreamAnswer.UNKNOWN_STREAM);
         }
 
         @Override
-        public @Nullable StreamReplicationMode modeHere(String streamName) {
-            return null;
+        public boolean isConfigured(String streamName) {
+            return false;
         }
     };
 

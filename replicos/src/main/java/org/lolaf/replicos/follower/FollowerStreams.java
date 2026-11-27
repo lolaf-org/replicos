@@ -201,16 +201,15 @@ public final class FollowerStreams {
 
     /**
      * Binds the leader's key to the stream of that name, unless the leader does not replicate it. A stream refused is
-     * looked at again on the next connection, the sinks' answer having changed perhaps. One the leader no longer
-     * replicates, or with another mode here, has its sink stopped, and is caught up again by snapshot once both agree
-     * it is replicated.
+     * looked at again on the next connection, the sinks' answer having changed perhaps. A mode change keeps the copy,
+     * only its acknowledgement changing; one the leader no longer replicates has its sink stopped, and is caught up
+     * again by snapshot once replicated again.
      */
     synchronized StreamAnswer bind(int key, String streamName, StreamReplicationMode leaderMode,
                                    @Nullable String leaderStorageIdentity) {
         BoundStream current = key < streamsByKey.length ? streamsByKey[key] : null;
         if (current != null && current.getStreamName().equals(streamName) && current.isReplicated()
-                && leaderMode != StreamReplicationMode.NONE && leaderMode == replicaSinks.modeHere(streamName)) {
-            // switched between the SYNC modes: the same copy, only its acknowledgement changes
+                && leaderMode != StreamReplicationMode.NONE) {
             current.setLeaderMode(leaderMode);
             return current.answer();
         }
@@ -225,7 +224,7 @@ public final class FollowerStreams {
     }
 
     private BoundStream open(String streamName, StreamReplicationMode leaderMode, @Nullable String leaderStorageIdentity) {
-        ReplicaSinks.Binding binding = replicaSinks.open(streamName, leaderMode, leaderStorageIdentity);
+        ReplicaSinks.Binding binding = replicaSinks.open(streamName, leaderStorageIdentity);
         return binding.getSink() == null
                 ? BoundStream.notReplicated(streamName, leaderMode, binding.getAnswer(), leaderStorageIdentity)
                 : BoundStream.replicated(streamName, leaderMode, binding.getSink());
@@ -252,9 +251,9 @@ public final class FollowerStreams {
     }
 
     /**
-     * Binds again each stream refused as unknown that this node's configuration now has, or for a mode mismatch it
-     * now agrees with: a follower's application may configure its streams after the leader announced them, and a
-     * change may reach this node after the leader. Either would otherwise stay refused until the next connection.
+     * Binds again each stream refused as unknown that this node's configuration now has: a follower's application may
+     * configure its streams after the leader announced them, which would otherwise stay refused until the next
+     * connection.
      *
      * @param onBound told each key of the lane bound now, with its answer for the leader
      */
@@ -262,20 +261,15 @@ public final class FollowerStreams {
         int lanes = positions.count();
         for (int key = lane; key < streamsByKey.length; key += lanes) {
             BoundStream refused = streamsByKey[key];
-            if (refused == null || !refused.isRefusedUntilConfigurationChange() || !nowAgrees(refused)) {
+            if (refused == null || !refused.isRefusedUntilConfigurationChange()
+                    || !replicaSinks.isConfigured(refused.getStreamName())) {
                 continue;
             }
             StreamAnswer answer = put(key, open(refused.getStreamName(), refused.getLeaderMode(),
                     refused.getLeaderStorageIdentity()));
-            log.info("Stream {} is now configured here as on the leader: {}", refused.getStreamName(), answer);
+            log.info("Stream {} is now configured here: {}", refused.getStreamName(), answer);
             onBound.accept(answer, key);
         }
-    }
-
-    private boolean nowAgrees(BoundStream refused) {
-        StreamReplicationMode here = replicaSinks.modeHere(refused.getStreamName());
-        return here != null && (refused.getNotReplicatedAnswer() == StreamAnswer.UNKNOWN_STREAM
-                || here == refused.getLeaderMode());
     }
 
     boolean hasStreamsToBindAgain(int lane) {

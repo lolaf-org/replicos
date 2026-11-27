@@ -19,8 +19,6 @@ import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.Nullable;
 import org.lolaf.replicos.spi.ReplicaSink;
 import org.lolaf.replicos.spi.ReplicaSinks;
-import org.lolaf.replicos.spi.StreamAnswer;
-import org.lolaf.replicos.spi.StreamReplicationMode;
 import org.lolaf.ringos.Deadline;
 
 import java.io.IOException;
@@ -34,23 +32,21 @@ import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.stream.Stream;
 
 /**
- * The follower side of {@link BenchmarkStreams}: every stream the leader announces in the mode this node expects is
- * applied into a sink of the kind the benchmark asks for. File sinks write under {@code replicos.benchmarks.dir},
- * {@code target/sink-files} by default rather than the temporary directory, often a tmpfs where a force costs nothing.
+ * The follower side of {@link BenchmarkStreams}: every stream the leader announces is applied into a sink of the
+ * kind the benchmark asks for. File sinks write under {@code replicos.benchmarks.dir}, {@code target/sink-files} by
+ * default rather than the temporary directory, often a tmpfs where a force costs nothing.
  */
 @Slf4j
 public final class BenchmarkSinks implements ReplicaSinks, AutoCloseable {
 
     private final ReplicationParams.FollowerSink kind;
-    private final StreamReplicationMode mode;
     private final int payloadBytes;
     private final Path directory;
     private final List<ReplicaSink> opened;
 
-    public BenchmarkSinks(ReplicationParams.FollowerSink kind, StreamReplicationMode mode, int payloadBytes)
+    public BenchmarkSinks(ReplicationParams.FollowerSink kind, int payloadBytes)
             throws IOException {
         this.kind = kind;
-        this.mode = mode;
         this.payloadBytes = payloadBytes;
         Path parent = Paths.get(System.getProperty("replicos.benchmarks.dir", "target/sink-files"));
         Files.createDirectories(parent);
@@ -78,10 +74,7 @@ public final class BenchmarkSinks implements ReplicaSinks, AutoCloseable {
     }
 
     @Override
-    public Binding open(String streamName, StreamReplicationMode leaderMode, @Nullable String leaderStorageIdentity) {
-        if (leaderMode != mode) {
-            return Binding.refused(StreamAnswer.MODE_MISMATCH);
-        }
+    public Binding open(String streamName, @Nullable String leaderStorageIdentity) {
         ReplicaSink sink = kind == ReplicationParams.FollowerSink.SINK_MEMORY
                 ? new MemorySink(payloadBytes)
                 : FileSink.open(directory.resolve(streamName), payloadBytes,
@@ -91,8 +84,8 @@ public final class BenchmarkSinks implements ReplicaSinks, AutoCloseable {
     }
 
     @Override
-    public StreamReplicationMode modeHere(String streamName) {
-        return mode;
+    public boolean isConfigured(String streamName) {
+        return true;
     }
 
     @Override

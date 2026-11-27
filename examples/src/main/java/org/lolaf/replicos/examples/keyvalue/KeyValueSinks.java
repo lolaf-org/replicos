@@ -18,7 +18,6 @@ package org.lolaf.replicos.examples.keyvalue;
 import org.jspecify.annotations.Nullable;
 import org.lolaf.replicos.spi.ReplicaSinks;
 import org.lolaf.replicos.spi.StreamAnswer;
-import org.lolaf.replicos.spi.StreamReplicationMode;
 
 /**
  * On a follower, applies the leader's stream into this node's store, unless the leader's is the same store.
@@ -39,12 +38,9 @@ final class KeyValueSinks implements ReplicaSinks {
     }
 
     @Override
-    public Binding open(String streamName, StreamReplicationMode leaderMode, @Nullable String leaderStorageIdentity) {
+    public Binding open(String streamName, @Nullable String leaderStorageIdentity) {
         if (!KeyValueStream.NAME.equals(streamName)) {
             return Binding.refused(StreamAnswer.UNKNOWN_STREAM);
-        }
-        if (leaderMode != KeyValueStream.MODE) {
-            return Binding.refused(StreamAnswer.MODE_MISMATCH);
         }
         if (leaderStorageIdentity == null) {
             return Binding.refused(StreamAnswer.UNKNOWN_STORAGE);
@@ -56,7 +52,7 @@ final class KeyValueSinks implements ReplicaSinks {
     }
 
     @Override
-    public @Nullable StreamReplicationMode modeHere(String streamName) {
-        return KeyValueStream.NAME.equals(streamName) ? KeyValueStream.MODE : null;
+    public boolean isConfigured(String streamName) {
+        return KeyValueStream.NAME.equals(streamName);
     }
 }

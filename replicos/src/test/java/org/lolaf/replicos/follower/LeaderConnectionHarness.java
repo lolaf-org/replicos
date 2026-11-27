@@ -55,7 +55,7 @@ abstract class LeaderConnectionHarness extends AbstractLeaderConnectionHarness {
     private LeaderConnectionHarness(JournalReplica replica, CatchUp catchUp) {
         super(new FollowerStreams(replica, catchUp, LatencyRecorder.NONE), new RecordingHandler(Journal.APPLICATION_ID));
         this.replica = replica;
-        this.main = replica.configure(MAIN, StreamReplicationMode.ASYNC);
+        this.main = replica.configure(MAIN);
     }
 
     static ToIntBiFunction<ByteBuffer, Integer> welcome(long epoch, long resumeOffset) {
@@ -126,7 +126,6 @@ abstract class LeaderConnectionHarness extends AbstractLeaderConnectionHarness {
     }
 
     void streamingSyncReceived() {
-        replica.configure(MAIN, StreamReplicationMode.SYNC_RECEIVED);
         read(welcome(EPOCH, WireFormat.NO_RESUME), stream(0, MAIN, StreamReplicationMode.SYNC_RECEIVED, "leader-storage"),
                 announced(1));
         sent.frames.clear();

@@ -21,7 +21,6 @@ import org.jspecify.annotations.Nullable;
 import org.lolaf.ringos.Deadline;
 import org.lolaf.replicos.spi.RecordFlag;
 import org.lolaf.replicos.spi.ReplicaSink;
-import org.lolaf.replicos.spi.StreamReplicationMode;
 
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
@@ -40,8 +39,6 @@ import java.util.concurrent.CountDownLatch;
  */
 public final class JournalCopy implements ReplicaSink {
 
-    @Getter
-    private volatile StreamReplicationMode mode;
     @Getter
     private volatile @Nullable String storageIdentity;
     @Getter
@@ -77,15 +74,13 @@ public final class JournalCopy implements ReplicaSink {
     private volatile boolean failing;
 
     JournalCopy() {
-        this.mode = StreamReplicationMode.ASYNC;
         this.writes = new CopyOnWriteArrayList<>();
         this.pending = new ArrayList<>();
         this.stored = new ConcurrentSkipListMap<>();
         this.writesHeld = new CountDownLatch(0);
     }
 
-    void configure(StreamReplicationMode mode, @Nullable String storageIdentity) {
-        this.mode = mode;
+    void configure(@Nullable String storageIdentity) {
         this.storageIdentity = storageIdentity;
     }
 

@@ -22,7 +22,6 @@ import org.lolaf.replicos.journal.Journal;
 import org.lolaf.replicos.journal.JournalCopy;
 import org.lolaf.replicos.journal.JournalReplica;
 import org.lolaf.replicos.journal.JournalStream;
-import org.lolaf.replicos.spi.StreamAnswer;
 import org.lolaf.replicos.spi.StreamReplicationMode;
 
 import java.net.InetSocketAddress;
@@ -62,8 +61,8 @@ class TestSeveralFollowers {
         this.journalB = new Journal();
         this.replicaB = new JournalReplica();
         this.replicaC = new JournalReplica();
-        this.copyB = replicaB.configure(MAIN, StreamReplicationMode.SYNC_APPLIED);
-        this.copyC = replicaC.configure(MAIN, StreamReplicationMode.SYNC_APPLIED);
+        this.copyB = replicaB.configure(MAIN);
+        this.copyC = replicaC.configure(MAIN);
         this.cHeld = new CountDownLatch(1);
         this.epoch = new AtomicLong(1);
         this.addressA = new InetSocketAddress("localhost", TestingPorts.findFree());
@@ -143,18 +142,21 @@ class TestSeveralFollowers {
     }
 
     @Test
-    void aFollowerHoldingTheStreamInAnotherModeRefusesItAndIsNotWaitedFor() {
-        replicaC.configure(MAIN, StreamReplicationMode.ASYNC);
-        JournalStream main = aLeadsBothFollowers(StreamReplicationMode.SYNC_APPLIED);
-        await().until(() -> a.followers().getStreamRefusals(0).equals(Map.of("c", StreamAnswer.MODE_MISMATCH))
-                && a.followers().isStreamInSync(0));
+    void aModeSwitchedOnTheLeaderKeepsEveryFollowersCopy() {
+        JournalStream main = aLeadsBothFollowers(StreamReplicationMode.ASYNC);
+        await().until(() -> a.followers().countInSync() == 2);
 
+        main.setStreamReplicationMode(StreamReplicationMode.SYNC_APPLIED);
+        a.reannounce(0);
+        await().until(() -> b.leader().getStream(MAIN).getLeaderMode() == StreamReplicationMode.SYNC_APPLIED
+                && c.leader().getStream(MAIN).getLeaderMode() == StreamReplicationMode.SYNC_APPLIED
+                && a.followers().countInSync() == 2);
         main.append("second");
 
         assertThat(main.awaitAck(ACK_TIMEOUT)).isEqualTo(StreamWriter.Ack.ACKED);
         assertThat(copyB.getStored()).containsExactly("1 first", "2 second");
-        assertThat(copyC.getWrites()).as("not even asynchronously").isEmpty();
-        assertThat(a.followers().countInSync()).as("c could not take over: it does not hold main").isEqualTo(1);
+        assertThat(copyC.getStored()).containsExactly("1 first", "2 second");
+        assertThat(a.followers().getSnapshots()).as("one each, to join").isEqualTo(2);
     }
 
     @Test
@@ -176,8 +178,6 @@ class TestSeveralFollowers {
 
     @Test
     void aFollowerTooSlowIsDroppedWhileTheOtherKeepsUp() {
-        replicaB.configure(MAIN, StreamReplicationMode.ASYNC);
-        replicaC.configure(MAIN, StreamReplicationMode.ASYNC);
         JournalStream main = aLeadsBothFollowers(StreamReplicationMode.ASYNC);
         await().until(() -> a.followers().countInSync() == 2);
         copyC.setWritesHeld(cHeld);

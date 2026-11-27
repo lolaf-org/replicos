@@ -125,8 +125,7 @@ final class BoundStream implements ReplicaStream {
     }
 
     boolean isRefusedUntilConfigurationChange() {
-        return sink == null && (notReplicatedAnswer == StreamAnswer.UNKNOWN_STREAM
-                || notReplicatedAnswer == StreamAnswer.MODE_MISMATCH);
+        return sink == null && notReplicatedAnswer == StreamAnswer.UNKNOWN_STREAM;
     }
 
     void streamStarted(boolean resumed) {

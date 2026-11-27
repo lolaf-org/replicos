@@ -25,7 +25,6 @@ import org.lolaf.replicos.wire.CloseReason;
 import org.lolaf.replicos.wire.FrameDecoder;
 import org.lolaf.replicos.wire.FrameEncoder;
 import org.lolaf.replicos.spi.RecordFlag;
-import org.lolaf.replicos.spi.StreamReplicationMode;
 import org.lolaf.replicos.wire.WireFormat;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -294,7 +293,7 @@ class TestLeaderConnection extends LeaderConnectionHarness {
 
     @Test
     void theFragmentsOfARecordAreAppliedAsOneOnceTheLastArrives() {
-        JournalCopy other = replica.configure("other", StreamReplicationMode.ASYNC);
+        JournalCopy other = replica.configure("other");
         streaming();
         read(stream(3, "other"));
         inSync(0, main);

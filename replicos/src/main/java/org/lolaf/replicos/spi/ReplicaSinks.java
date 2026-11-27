@@ -20,7 +20,6 @@ import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 import org.jspecify.annotations.Nullable;
 import org.lolaf.replicos.spi.StreamAnswer;
-import org.lolaf.replicos.spi.StreamReplicationMode;
 
 /**
  * Where a follower applies the streams its leader announces, from its own configuration. Called on a lane's network
@@ -35,23 +34,22 @@ public interface ReplicaSinks {
 
     /**
      * Opens the sink the stream is applied into, or refuses it. Never called for a stream the leader does not replicate.
+     * How the stream is replicated is the leader's alone to decide, so the sink is the same whatever its mode.
      *
      * @param streamName            the leader's name for the stream, which this node finds its copy by
-     * @param leaderMode            the mode the leader replicates it in, to refuse as
-     *                              {@link StreamAnswer#MODE_MISMATCH} when this node's configuration gives another
      * @param leaderStorageIdentity where the leader stores the stream, null when it does not know: a stream stored in
      *                              the same place here must be refused, as replicating into it would rewrite the
      *                              leader's data
      */
-    Binding open(String streamName, StreamReplicationMode leaderMode, @Nullable String leaderStorageIdentity);
+    Binding open(String streamName, @Nullable String leaderStorageIdentity);
 
     /**
-     * The mode this node's configuration gives the stream, null when it has none: a stream refused as unknown or for
-     * a different mode is bound again once this changes.
+     * Whether this node's configuration knows the stream: one refused as {@link StreamAnswer#UNKNOWN_STREAM} is bound
+     * again once it does.
      *
      * @param streamName the leader's name for the stream
      */
-    @Nullable StreamReplicationMode modeHere(String streamName);
+    boolean isConfigured(String streamName);
 
     /**
      * A stream replicated into a sink, or refused.

@@ -92,7 +92,7 @@ class TestReplicationClient {
         this.address = new InetSocketAddress("localhost", TestingPorts.findFree());
         this.server = server(address, leader);
         this.replica = new JournalReplica();
-        this.main = replica.configure(MAIN, StreamReplicationMode.SYNC_APPLIED);
+        this.main = replica.configure(MAIN);
         this.followerStreams = new FollowerStreams(replica, CatchUp.fullCopy(), LatencyRecorder.NONE);
         this.twoLanesStats = new ReplicationStats(new SlowFollowers(Duration.ZERO, new TestingReplicationClock()), ReplicationMetrics.NONE);
         leaderMain.append("first");
@@ -114,7 +114,7 @@ class TestReplicationClient {
      * sync.
      */
     private JournalCopy followTwoLanes() {
-        JournalCopy other = replica.configure(OTHER, StreamReplicationMode.ASYNC);
+        JournalCopy other = replica.configure(OTHER);
         Journal twoLanes = new Journal(new ReplicationLogs(2, 1 << 16), Duration.ofMillis(50));
         twoLanesMain = twoLanes.add(MAIN, StreamReplicationMode.SYNC_APPLIED);
         twoLanesOther = twoLanes.add(OTHER, StreamReplicationMode.ASYNC);
@@ -153,7 +153,6 @@ class TestReplicationClient {
      * once a read is applied, after the RECEIVED, as a sink does.
      */
     private FollowerConnection followSyncReceived(int maxFrameBytes) {
-        replica.configure(MAIN, StreamReplicationMode.SYNC_RECEIVED);
         main.setBatching(true);
         syncReceivedLeader = Journal.ofCapacity(1 << 16);
         syncReceivedMain = syncReceivedLeader.add(MAIN, StreamReplicationMode.SYNC_RECEIVED);
@@ -339,7 +338,7 @@ class TestReplicationClient {
 
     @Test
     void aStreamWhoseStorageTheFollowerSharesIsRefusedAndNotWaitedFor() {
-        replica.configure(MAIN, StreamReplicationMode.SYNC_APPLIED, "leader-storage");
+        replica.configure(MAIN, "leader-storage");
         connect();
         await().until(() -> !leader.getFollowers().connections().isEmpty()
                 && leader.getFollowers().connections().get(0).getStreamAnswer(0) == StreamAnswer.SHARED_STORAGE);

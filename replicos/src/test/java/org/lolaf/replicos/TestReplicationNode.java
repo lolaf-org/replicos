@@ -69,7 +69,7 @@ class TestReplicationNode {
         this.journalA = new Journal();
         this.journalB = new Journal();
         this.replicaB = new JournalReplica();
-        this.copyB = replicaB.configure(MAIN, StreamReplicationMode.SYNC_APPLIED);
+        this.copyB = replicaB.configure(MAIN);
         this.addressA = new InetSocketAddress("localhost", TestingPorts.findFree());
         this.addressB = new InetSocketAddress("localhost", TestingPorts.findFree());
         this.recordersAskedFor = new CopyOnWriteArrayList<>();
@@ -310,7 +310,7 @@ class TestReplicationNode {
                                  List<String> followerHolds) {
         Journal leaderJournal = new Journal();
         JournalReplica followerReplica = new JournalReplica();
-        JournalCopy copy = followerReplica.configure(MAIN, StreamReplicationMode.SYNC_APPLIED);
+        JournalCopy copy = followerReplica.configure(MAIN);
         for (int i = 0; i < followerHolds.size(); i++) {
             copy.hold(i + 1, followerHolds.get(i));
         }
@@ -388,7 +388,7 @@ class TestReplicationNode {
 
     @Test
     void aStreamTheFollowerRefusesIsReportedToTheLeaderAndNotWaitedFor() {
-        replicaB.configure(MAIN, StreamReplicationMode.SYNC_APPLIED, "leader-storage");
+        replicaB.configure(MAIN, "leader-storage");
         JournalStream main = journalA.add(MAIN, StreamReplicationMode.SYNC_APPLIED);
         a.lead(1, stop());
         b.follow(addressA, () -> 1, stop());
@@ -414,7 +414,7 @@ class TestReplicationNode {
         b.follow(addressA, () -> 1, stop());
         await().until(() -> a.followers().getStreamRefusals(0).equals(Map.of("b", StreamAnswer.UNKNOWN_STREAM)));
 
-        JournalCopy lateCopy = replicaB.configure("late", StreamReplicationMode.SYNC_APPLIED);
+        JournalCopy lateCopy = replicaB.configure("late");
 
         await().until(() -> a.followers().isStreamInSync(0));
         late.append("second");
@@ -424,18 +424,24 @@ class TestReplicationNode {
     }
 
     @Test
-    void aStreamOfAnotherModeIsReplicatedOnceTheFollowerAgrees() {
+    void theFollowerHoldsAStreamWhateverItsModeAndKeepsItsCopyWhenTheModeChanges() {
         JournalStream main = journalA.add(MAIN, StreamReplicationMode.SYNC_RECEIVED);
+        main.append("first");
         a.lead(1, stop());
         b.follow(addressA, () -> 1, stop());
-        await().until(() -> a.followers().getStreamRefusals(0).equals(Map.of("b", StreamAnswer.MODE_MISMATCH)));
-
-        replicaB.configure(MAIN, StreamReplicationMode.SYNC_RECEIVED);
-
         await().until(() -> a.followers().isStreamInSync(0));
-        main.append("first");
+
+        for (StreamReplicationMode mode : List.of(StreamReplicationMode.ASYNC, StreamReplicationMode.SYNC_APPLIED)) {
+            main.setStreamReplicationMode(mode);
+            a.reannounce(0);
+            await().until(() -> b.leader().getStream(MAIN).getLeaderMode() == mode && a.followers().isStreamInSync(0));
+        }
+        main.append("second");
+
         assertThat(main.awaitAck(ACK_TIMEOUT)).isEqualTo(StreamWriter.Ack.ACKED);
-        assertThat(b.leader().getStream(MAIN)).isNotNull().satisfies(stream -> assertThat(stream.isReplicated()).isTrue());
+        assertThat(copyB.getWrites()).as("no snapshot but the first")
+                .containsExactly("begin from=0 state=2", "snapshot 1 first", "end state=2", "2 second");
+        assertThat(a.followers().getStreamRefusals(0)).isEmpty();
     }
 
     @Test
@@ -446,7 +452,7 @@ class TestReplicationNode {
                 .build();
         Journal journalC = new Journal();
         JournalReplica replicaD = new JournalReplica();
-        JournalCopy copyD = replicaD.configure(MAIN, StreamReplicationMode.SYNC_APPLIED);
+        JournalCopy copyD = replicaD.configure(MAIN);
         InetSocketAddress addressC = new InetSocketAddress("localhost", TestingPorts.findFree());
         ReplicationNode c = node("c", addressC, journalC, new JournalReplica(), encryption);
         ReplicationNode d = node("d", new InetSocketAddress("localhost", TestingPorts.findFree()), new Journal(),

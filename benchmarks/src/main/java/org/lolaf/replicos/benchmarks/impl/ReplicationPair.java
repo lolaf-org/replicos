@@ -75,7 +75,7 @@ public final class ReplicationPair implements AutoCloseable {
         BenchmarkStreams streams = new BenchmarkStreams(streamCount, mode, payloadBytes);
         BenchmarkSinks sinks;
         try {
-            sinks = new BenchmarkSinks(followerSink, mode, payloadBytes);
+            sinks = new BenchmarkSinks(followerSink, payloadBytes);
         } catch (IOException e) {
             throw new UncheckedIOException(e);
         }

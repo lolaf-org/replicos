@@ -52,7 +52,8 @@ application's election, such as [primos](https://github.com/lolaf-org/primos).
   stores its records itself; the library only carries them.
 - **A record** has a content type (one byte, the application's), a flag, its position and a payload.
 - **A replication mode**, per stream: `ASYNC` waits for nothing, `SYNC_RECEIVED` and `SYNC_APPLIED` let a write wait
-  until the followers received or applied it.
+  until the followers received or applied it. The leader sets it alone: a follower holds the stream whatever its own
+  configuration says.
 - **A snapshot** copies a stream's state and records to a follower that is missing history, while the stream keeps
   being written.
 

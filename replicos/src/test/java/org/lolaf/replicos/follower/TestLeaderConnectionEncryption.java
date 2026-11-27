@@ -273,7 +273,6 @@ class TestLeaderConnectionEncryption extends LeaderConnectionHarness {
 
     @Test
     void withASinkWriterThreadAnEncryptedConnectionAcknowledgesReceiptOnceTheTagVerified() {
-        replica.configure(MAIN, StreamReplicationMode.SYNC_RECEIVED);
         assertThat(newSinkWriterConnection(TestingKeyExchanges.CLEAR).isReceivedAckedOnRead())
                 .as("in clear, the network thread acknowledges what it reads").isTrue();
         LeaderConnection encrypting = newSinkWriterConnection(TestingKeyExchanges.of(EncryptionMode.REQUIRED));
