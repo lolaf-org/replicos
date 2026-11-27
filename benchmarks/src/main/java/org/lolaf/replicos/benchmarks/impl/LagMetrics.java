@@ -32,10 +32,17 @@ public final class LagMetrics implements ReplicationMetrics {
 
     private final Recorder lag;
     private final Recorder ackLatency;
+    /**
+     * Handed back to its recorder at each read, which otherwise allocates a histogram per read.
+     */
+    private Histogram lagInterval;
+    private Histogram ackLatencyInterval;
 
     public LagMetrics() {
         this.lag = new Recorder(HIGHEST_NANOS, 3);
         this.ackLatency = new Recorder(HIGHEST_NANOS, 3);
+        this.lagInterval = lag.getIntervalHistogram();
+        this.ackLatencyInterval = ackLatency.getIntervalHistogram();
     }
 
     @Override
@@ -49,16 +56,18 @@ public final class LagMetrics implements ReplicationMetrics {
     }
 
     /**
-     * Since the last call, which starts a new interval.
+     * Since the last call, which starts a new interval and reuses the histogram it returned.
      */
     public Histogram lagSinceLastRead() {
-        return lag.getIntervalHistogram();
+        lagInterval = lag.getIntervalHistogram(lagInterval);
+        return lagInterval;
     }
 
     /**
-     * Since the last call, which starts a new interval.
+     * Since the last call, which starts a new interval and reuses the histogram it returned.
      */
     public Histogram ackLatencySinceLastRead() {
-        return ackLatency.getIntervalHistogram();
+        ackLatencyInterval = ackLatency.getIntervalHistogram(ackLatencyInterval);
+        return ackLatencyInterval;
     }
 }

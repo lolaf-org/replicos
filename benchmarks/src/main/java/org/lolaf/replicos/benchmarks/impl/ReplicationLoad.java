@@ -72,6 +72,10 @@ public class ReplicationLoad {
 
     private final Histogram writeLatency;
     private final LagMetrics leaderMetrics;
+    /**
+     * Each iteration's line, built without the logger's formatting, which the gc profiler would count.
+     */
+    private final StringBuilder line;
     private ReplicationPair pair;
     private BenchmarkStream[] written;
     private ByteBuffer payload;
@@ -85,6 +89,7 @@ public class ReplicationLoad {
     public ReplicationLoad() {
         this.writeLatency = new Histogram(HIGHEST_LATENCY_NANOS, 3);
         this.leaderMetrics = new LagMetrics();
+        this.line = new StringBuilder(512);
     }
 
     @Setup(Level.Trial)
@@ -156,17 +161,24 @@ public class ReplicationLoad {
         Histogram lag = leaderMetrics.lagSinceLastRead();
         Histogram ackLatency = leaderMetrics.ackLatencySinceLastRead();
         FollowersView followers = pair.getLeader().followers();
-        log.info("Replication load {} {} streams, {} records/s asked, {} written, {} acks failed; write latency µs p50 {} "
-                        + "p90 {} p99 {} p99.9 {} max {}; follower lag µs p50 {} p99 {} max {}; follower round trip µs p50 {} "
-                        + "p99 {}; dropped too slow +{}, snapshots +{}, send waits +{}",
-                mode, streams.getCount(), rate.getPerSecond(), writes * 1_000_000_000L / iterationNanos, ackFailures,
-                micros(writeLatency.getValueAtPercentile(50)), micros(writeLatency.getValueAtPercentile(90)),
-                micros(writeLatency.getValueAtPercentile(99)), micros(writeLatency.getValueAtPercentile(99.9)),
-                micros(writeLatency.getMaxValue()),
-                micros(lag.getValueAtPercentile(50)), micros(lag.getValueAtPercentile(99)), micros(lag.getMaxValue()),
-                micros(ackLatency.getValueAtPercentile(50)), micros(ackLatency.getValueAtPercentile(99)),
-                followers.getDroppedTooSlow() - droppedTooSlowAtStart, followers.getSnapshots() - snapshotsAtStart,
-                followers.getSendWaits() - sendWaitsAtStart);
+        line.setLength(0);
+        line.append("Replication load ").append(mode).append(' ').append(streams.getCount()).append(" streams, ")
+                .append(rate.getPerSecond()).append(" records/s asked, ").append(writes * 1_000_000_000L / iterationNanos)
+                .append(" written, ").append(ackFailures).append(" acks failed; write latency µs p50 ")
+                .append(micros(writeLatency.getValueAtPercentile(50)))
+                .append(" p90 ").append(micros(writeLatency.getValueAtPercentile(90)))
+                .append(" p99 ").append(micros(writeLatency.getValueAtPercentile(99)))
+                .append(" p99.9 ").append(micros(writeLatency.getValueAtPercentile(99.9)))
+                .append(" max ").append(micros(writeLatency.getMaxValue()))
+                .append("; follower lag µs p50 ").append(micros(lag.getValueAtPercentile(50)))
+                .append(" p99 ").append(micros(lag.getValueAtPercentile(99)))
+                .append(" max ").append(micros(lag.getMaxValue()))
+                .append("; follower round trip µs p50 ").append(micros(ackLatency.getValueAtPercentile(50)))
+                .append(" p99 ").append(micros(ackLatency.getValueAtPercentile(99)))
+                .append("; dropped too slow +").append(followers.getDroppedTooSlow() - droppedTooSlowAtStart)
+                .append(", snapshots +").append(followers.getSnapshots() - snapshotsAtStart)
+                .append(", send waits +").append(followers.getSendWaits() - sendWaitsAtStart);
+        log.info(line.toString());
     }
 
     @TearDown(Level.Trial)
