@@ -21,35 +21,10 @@ import org.lolaf.replicos.spi.RecordFlag;
 import org.lolaf.replicos.spi.WireFormatException;
 
 /**
- * The frames of the replication stream, with the size of their fixed payload; a variable part (a string, a record's
- * payload, a stream's state) follows it.
- *
- * <pre>
- * frame              direction           fixed payload
- * HELLO              follower to leader  magic 4, version 2, node id length 2, last applied epoch 8,
- *                                        last applied leadership 8, last applied offset 8, lane 2, encryption mode 1,
- *                                        reserved 1, application 4, nonce 16; then the node id
- * WELCOME            leader to follower  magic 4, version 2, leader id length 2, leadership 8, resume offset 8,
- *                                        lane count 2, encryption mode 1, reserved 1, application 4, nonce 16; then
- *                                        the leader id
- * KEY_CONFIRMATION   follower to leader  HMAC-SHA256 32 of the HELLO and WELCOME, when both peers encrypt
- * STREAM             leader to follower  stream key 4, replication mode 1, reserved 1, stream name length 2,
- *                                        storage identity length 2; then the name, then the identity
- * STREAM_ANSWER      follower to leader  stream key 4, answer 1, catch-up check 1, proof length 2, last position 8;
- *                                        then the proof
- * RECORD             leader to follower  log offset 8, then a record body: stream key 4, content type 1, flags 1,
- *                                        reserved 2, position 8, payload length 4, reserved 4; then the payload
- * SNAPSHOT_BEGIN     leader to follower  stream key 4, reserved 2, state length 2, snapshot offset 8,
- *                                        from position 8; then the state
- * SNAPSHOT_RECORD    leader to follower  a record body, as RECORD's; then the payload
- * SNAPSHOT_END       leader to follower  stream key 4, record count 4, boundary count 2, state length 2; then the
- *                                        state, then the boundaries, none in this version
- * ACK                follower to leader  applied offset 8, pending writes 8
- * RECEIVED           follower to leader  received offset 8
- * HEARTBEAT          leader to follower  log tail offset 8
- * CLOSE              either way          reason 2, text length 2; then the text
- * STREAMS_ANNOUNCED  leader to follower  announced count 4, reserved 4
- * </pre>
+ * The frames of the replication stream, each with the size of its fixed payload. A frame is the header, its fixed
+ * payload, then a variable part (its strings, UTF-8 each as long as a length field of the fixed payload says, a
+ * record's payload, a stream's state). Every field's offset and type is in {@code docs/protocol.md}, the reference: a
+ * change to a frame changes it in the same commit.
  *
  * <p>A record's content type is the application's, never read by the replication; its flags are
  * {@link WireFormat#MORE_FRAGMENTS}, {@link WireFormat#CONTINUED_FRAGMENT}, {@link RecordFlag#PLAINTEXT} and
