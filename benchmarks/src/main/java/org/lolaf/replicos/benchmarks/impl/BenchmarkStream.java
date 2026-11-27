@@ -16,6 +16,8 @@
 package org.lolaf.replicos.benchmarks.impl;
 
 import lombok.Getter;
+import org.jspecify.annotations.Nullable;
+import org.lolaf.replicos.AckWait;
 import org.lolaf.replicos.StreamWriter;
 import org.lolaf.replicos.spi.LeaderStream;
 import org.lolaf.replicos.spi.RecordFlag;
@@ -23,6 +25,8 @@ import org.lolaf.replicos.spi.SnapshotSource;
 import org.lolaf.replicos.spi.StreamReplicationMode;
 
 import java.nio.ByteBuffer;
+import java.time.Duration;
+import java.util.Objects;
 
 /**
  * One stream of fixed-size records, of which it keeps the last {@link #HISTORY}: a follower catching up by snapshot
@@ -33,6 +37,7 @@ public final class BenchmarkStream implements LeaderStream {
     public static final byte CONTENT_TYPE = 1;
     private static final int HISTORY = 1024;
     private static final int HISTORY_MASK = HISTORY - 1;
+    private static final Duration ACK_TIMEOUT = Duration.ofSeconds(5);
 
     @Getter
     private final int key;
@@ -42,6 +47,7 @@ public final class BenchmarkStream implements LeaderStream {
     private final StreamReplicationMode streamReplicationMode;
     private final int payloadBytes;
     private final ByteBuffer[] history;
+    private final @Nullable AckWait ackWait;
     private volatile long lastPosition;
     private StreamWriter writer;
 
@@ -54,6 +60,7 @@ public final class BenchmarkStream implements LeaderStream {
         for (int i = 0; i < HISTORY; i++) {
             history[i] = ByteBuffer.allocateDirect(payloadBytes);
         }
+        this.ackWait = streamReplicationMode.isSync() ? AckWait.of(streamReplicationMode, ACK_TIMEOUT) : null;
         this.lastPosition = 0;
     }
 
@@ -77,8 +84,11 @@ public final class BenchmarkStream implements LeaderStream {
         return writer.append(CONTENT_TYPE, RecordFlag.NONE, position, payload, 0, payloadBytes);
     }
 
-    public StreamWriter.Ack awaitAck(long offset, long timeoutNanos) {
-        return writer.awaitAck(offset, streamReplicationMode, timeoutNanos);
+    /**
+     * Only for a {@code SYNC} stream.
+     */
+    public StreamWriter.Ack awaitAck(long offset) {
+        return writer.awaitAck(offset, Objects.requireNonNull(ackWait));
     }
 
     @Override

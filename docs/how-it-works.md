@@ -79,7 +79,8 @@ sequenceDiagram
 - `awaitAck` waits only for followers **in sync**, those holding every record of the stream: all of them by default,
   or a **quorum** of them, the first to ack, the others getting the record without being waited for. With none in
   sync it returns `NO_FOLLOWER_IN_SYNC` at once, with fewer than the quorum `NOT_ENOUGH_FOLLOWERS`; past its timeout,
-  `TIMED_OUT`, and the followers that had not acked are not waited for again until they caught up.
+  `TIMED_OUT`, and the followers that had not acked are not waited for again until they caught up. The mode, quorum
+  and timeout come as an `AckWait`, checked once when built, so the wait itself checks nothing.
 - **Sync followers.** `LeaderSettings.syncFollowers` names the followers a `SYNC` append may wait for, by node id: a
   local standby, say, and not a disaster-recovery copy far away, which then replicates as if `ASYNC`. Only they count
   as in sync, since only a failover to one of them is sure to keep every acknowledged write. Empty, the default,

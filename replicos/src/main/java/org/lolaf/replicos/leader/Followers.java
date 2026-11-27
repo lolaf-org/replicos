@@ -17,7 +17,7 @@ package org.lolaf.replicos.leader;
 
 import org.jspecify.annotations.Nullable;
 import org.lolaf.ringos.idling.IdleStrategy;
-import org.lolaf.replicos.StreamWriter;
+import org.lolaf.replicos.AckWait;
 import org.lolaf.replicos.StreamWriter.Ack;
 import org.lolaf.replicos.spi.ReplicationClock;
 import org.lolaf.replicos.spi.StreamReplicationMode;
@@ -207,9 +207,10 @@ public final class Followers {
      * As {@link org.lolaf.replicos.StreamWriter#awaitAck}: a follower falling out of sync stops being waited for, and
      * with too few left the wait ends at once. Allocates nothing.
      */
-    Ack awaitAck(int streamKey, long offset, StreamReplicationMode mode, int quorum, long timeoutNanos,
-                 IdleStrategy idle) {
-        boolean received = mode == StreamReplicationMode.SYNC_RECEIVED;
+    Ack awaitAck(int streamKey, long offset, AckWait wait, IdleStrategy idle) {
+        boolean received = wait.getMode() == StreamReplicationMode.SYNC_RECEIVED;
+        int quorum = wait.getQuorum();
+        long timeoutNanos = wait.getTimeoutNanos();
         long startNanos = timeoutNanos == 0 ? 0 : clock.nanoTime();
         Ack ack = ackOf(streamKey, offset, received, quorum, timeoutNanos, startNanos);
         if (ack != null) {
@@ -253,7 +254,7 @@ public final class Followers {
         if (inSync < quorum) {
             return Ack.NOT_ENOUGH_FOLLOWERS;
         }
-        int needed = quorum == StreamWriter.ALL_FOLLOWERS ? waitedFor : quorum;
+        int needed = quorum == AckWait.ALL_FOLLOWERS ? waitedFor : quorum;
         if (waitedFor == 0 || waitedFor < needed) {
             return Ack.TIMED_OUT;
         }

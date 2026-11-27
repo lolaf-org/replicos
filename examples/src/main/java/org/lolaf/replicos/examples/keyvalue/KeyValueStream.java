@@ -16,6 +16,7 @@
 package org.lolaf.replicos.examples.keyvalue;
 
 import lombok.Getter;
+import org.lolaf.replicos.AckWait;
 import org.lolaf.replicos.StreamWriter;
 import org.lolaf.replicos.spi.LeaderStream;
 import org.lolaf.replicos.spi.RecordFlag;
@@ -23,8 +24,8 @@ import org.lolaf.replicos.spi.SnapshotSource;
 import org.lolaf.replicos.spi.StreamReplicationMode;
 
 import java.nio.ByteBuffer;
+import java.time.Duration;
 import java.util.Map;
-import java.util.concurrent.TimeUnit;
 
 /**
  * The store's changes as the one stream the leader replicates, each acknowledged once a follower applied it.
@@ -34,7 +35,7 @@ final class KeyValueStream implements LeaderStream {
     static final int KEY = 0;
     static final String NAME = "key-values";
     static final StreamReplicationMode MODE = StreamReplicationMode.SYNC_APPLIED;
-    private static final long ACK_TIMEOUT_NANOS = TimeUnit.SECONDS.toNanos(1);
+    private static final AckWait ACK_WAIT = AckWait.of(MODE, Duration.ofSeconds(1));
 
     private final KeyValueStore store;
     @Getter
@@ -58,7 +59,7 @@ final class KeyValueStream implements LeaderStream {
         store.apply(position, change);
         ByteBuffer payload = change.encode();
         long offset = writer.append(change.getKind(), RecordFlag.NONE, position, payload, 0, payload.limit());
-        return writer.awaitAck(offset, MODE, ACK_TIMEOUT_NANOS);
+        return writer.awaitAck(offset, ACK_WAIT);
     }
 
     @Override

@@ -40,7 +40,6 @@ import java.util.concurrent.TimeUnit;
 public class ReplicationLoad {
 
     private static final long HIGHEST_LATENCY_NANOS = TimeUnit.SECONDS.toNanos(60);
-    private static final long ACK_TIMEOUT_NANOS = TimeUnit.SECONDS.toNanos(5);
 
     @Param({"STREAMS_1", "STREAMS_4", "STREAMS_16"})
     ReplicationParams.Streams streams;
@@ -141,7 +140,7 @@ public class ReplicationLoad {
             }
             BenchmarkStream stream = written[(int) (count % written.length)];
             long offset = stream.write(payload);
-            if (sync && stream.awaitAck(offset, ACK_TIMEOUT_NANOS) != StreamWriter.Ack.ACKED) {
+            if (sync && stream.awaitAck(offset) != StreamWriter.Ack.ACKED) {
                 ackFailures++;
             }
             writeLatency.recordValue(Math.min(System.nanoTime() - due, HIGHEST_LATENCY_NANOS));

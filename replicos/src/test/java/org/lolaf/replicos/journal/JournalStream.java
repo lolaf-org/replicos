@@ -18,6 +18,7 @@ package org.lolaf.replicos.journal;
 import lombok.Getter;
 import lombok.Setter;
 import org.jspecify.annotations.Nullable;
+import org.lolaf.replicos.AckWait;
 import org.lolaf.replicos.StreamWriter;
 import org.lolaf.replicos.spi.LeaderStream;
 import org.lolaf.replicos.spi.RecordFlag;
@@ -169,14 +170,14 @@ public final class JournalStream implements LeaderStream {
      * As a sync mode asks, after the last append.
      */
     public StreamWriter.Ack awaitAck(Duration timeout) {
-        return awaitAck(StreamWriter.ALL_FOLLOWERS, timeout);
+        return awaitAck(AckWait.ALL_FOLLOWERS, timeout);
     }
 
     /**
      * As a sync mode asks, after the last append, from {@code quorum} followers.
      */
     public StreamWriter.Ack awaitAck(int quorum, Duration timeout) {
-        return writer.awaitAck(lastAppendedOffset, streamReplicationMode, quorum, timeout.toNanos());
+        return writer.awaitAck(lastAppendedOffset, AckWait.of(streamReplicationMode, quorum, timeout));
     }
 
     @Override

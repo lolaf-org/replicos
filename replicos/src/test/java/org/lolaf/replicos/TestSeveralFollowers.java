@@ -33,7 +33,6 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.atomic.AtomicLong;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.api.Assertions.tuple;
 import static org.awaitility.Awaitility.await;
 
@@ -210,14 +209,6 @@ class TestSeveralFollowers {
         assertThat(main.awaitAck(2, ACK_TIMEOUT)).isEqualTo(StreamWriter.Ack.NOT_ENOUGH_FOLLOWERS);
         assertThat(main.awaitAck(1, ACK_TIMEOUT)).isEqualTo(StreamWriter.Ack.ACKED);
         assertThat(a.followers().getAcksWithNotEnoughFollowers(0)).isEqualTo(1);
-    }
-
-    @Test
-    void aNegativeQuorumIsRefused() {
-        try (StreamWriter writer = a.writer(0)) {
-            assertThatThrownBy(() -> writer.awaitAck(0, StreamReplicationMode.SYNC_APPLIED, -1, 0))
-                    .isInstanceOf(IllegalArgumentException.class);
-        }
     }
 
     @Test

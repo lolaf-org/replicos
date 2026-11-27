@@ -17,7 +17,6 @@ package org.lolaf.replicos;
 
 import org.jspecify.annotations.Nullable;
 import org.lolaf.replicos.spi.RecordFlag;
-import org.lolaf.replicos.spi.StreamReplicationMode;
 
 import java.nio.ByteBuffer;
 
@@ -26,12 +25,6 @@ import java.nio.ByteBuffer;
  * Allocates nothing.
  */
 public interface StreamWriter extends AutoCloseable {
-
-    /**
-     * The {@link #awaitAck(long, StreamReplicationMode, int, long) quorum} of every follower in sync, however many
-     * that is.
-     */
-    int ALL_FOLLOWERS = 0;
 
     /**
      * What a wait for the followers' acks ended with. Anything but {@link #ACKED} means the record may be lost on a
@@ -87,25 +80,14 @@ public interface StreamWriter extends AutoCloseable {
     int getMaxPayloadLength();
 
     /**
-     * As {@link #awaitAck(long, StreamReplicationMode, int, long)} with a quorum of {@link #ALL_FOLLOWERS}.
-     */
-    default Ack awaitAck(long offset, StreamReplicationMode mode, long timeoutNanos) {
-        return awaitAck(offset, mode, ALL_FOLLOWERS, timeoutNanos);
-    }
-
-    /**
-     * Waits until {@code quorum} of the {@link LeaderSettings#getSyncFollowers() sync followers} holding the stream
-     * in sync received or applied the record at {@code offset}, as {@code mode} asks; the others still get it, without
+     * Waits until the quorum of the {@link LeaderSettings#getSyncFollowers() sync followers} holding the stream in sync
+     * received or applied the record at {@code offset}, as the wait's mode asks; the others still get it, without
      * being waited for. A follower a wait timed out on is not waited for again until it applies what it missed, so a
      * hung follower costs one timeout, not one per record.
      *
-     * @param offset       as {@link #append} returned it
-     * @param mode         {@code SYNC_RECEIVED} or {@code SYNC_APPLIED}
-     * @param quorum       how many followers must ack, or {@link #ALL_FOLLOWERS}
-     * @param timeoutNanos 0 to wait as long as enough followers are in sync
-     * @throws IllegalArgumentException for a negative quorum
+     * @param offset as {@link #append} returned it
      */
-    Ack awaitAck(long offset, StreamReplicationMode mode, int quorum, long timeoutNanos);
+    Ack awaitAck(long offset, AckWait wait);
 
     /**
      * Stops waking this writer's ack waits, which the acks wake from the first wait on; a later wait is woken again.

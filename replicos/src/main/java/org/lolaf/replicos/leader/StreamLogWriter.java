@@ -17,6 +17,7 @@ package org.lolaf.replicos.leader;
 
 import org.jspecify.annotations.Nullable;
 import org.lolaf.ringos.idling.IdleStrategy;
+import org.lolaf.replicos.AckWait;
 import org.lolaf.replicos.StreamWriter;
 import org.lolaf.replicos.log.LogFullWait;
 import org.lolaf.replicos.log.LogRecord;
@@ -24,7 +25,6 @@ import org.lolaf.replicos.log.ReplicationLog;
 import org.lolaf.replicos.spi.LatencyRecorder;
 import org.lolaf.replicos.spi.RecordFlag;
 import org.lolaf.replicos.spi.ReplicationClock;
-import org.lolaf.replicos.spi.StreamReplicationMode;
 
 import java.nio.ByteBuffer;
 import java.time.Duration;
@@ -83,15 +83,12 @@ public final class StreamLogWriter implements StreamWriter {
     }
 
     @Override
-    public Ack awaitAck(long offset, StreamReplicationMode mode, int quorum, long timeoutNanos) {
-        if (quorum < 0) {
-            throw new IllegalArgumentException("A quorum of " + quorum + " followers");
-        }
+    public Ack awaitAck(long offset, AckWait wait) {
         if (!waiterAdded) {
             followers.addWaiter(ackIdle);
             waiterAdded = true;
         }
-        Ack ack = followers.awaitAck(streamKey, offset, mode, quorum, timeoutNanos, ackIdle);
+        Ack ack = followers.awaitAck(streamKey, offset, wait, ackIdle);
         ackCounts.count(ack);
         return ack;
     }

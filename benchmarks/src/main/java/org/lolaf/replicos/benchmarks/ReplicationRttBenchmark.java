@@ -60,7 +60,6 @@ import java.util.concurrent.TimeUnit;
 @State(Scope.Thread)
 public class ReplicationRttBenchmark {
 
-    private static final long ACK_TIMEOUT_NANOS = TimeUnit.SECONDS.toNanos(5);
 
     @Param({"SYNC_RECEIVED", "SYNC_APPLIED"})
     StreamReplicationMode mode;
@@ -105,7 +104,7 @@ public class ReplicationRttBenchmark {
     @Benchmark
     public long write() {
         long offset = stream.write(payload);
-        StreamWriter.Ack ack = stream.awaitAck(offset, ACK_TIMEOUT_NANOS);
+        StreamWriter.Ack ack = stream.awaitAck(offset);
         if (ack != StreamWriter.Ack.ACKED) {
             throw new IllegalStateException("The follower did not acknowledge the write: " + ack);
         }
