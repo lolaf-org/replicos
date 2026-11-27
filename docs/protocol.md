@@ -1,6 +1,6 @@
 # Replication protocol, version 1
 
-How a leader replicates an application's streams to one follower over TCP: the frames, the handshake, the
+How a leader replicates an application's streams to each of its followers over TCP: the frames, the handshake, the
 acknowledgements, snapshots and encryption. The library never reads what it replicates: records, their content types
 and a stream's state are the application's bytes. For the behaviour behind the frames, when a follower resumes and
 when it is caught up by snapshot, read [how-it-works.md](how-it-works.md) first.
@@ -26,51 +26,225 @@ when it is caught up by snapshot, read [how-it-works.md](how-it-works.md) first.
 
 ## Frames
 
-Big-endian throughout. A string is UTF-8, its length an unsigned short given in the fixed payload. Unused flag bits
-and reserved fields are sent as zero and ignored on receipt.
+A frame is a header, a fixed payload whose size depends on the frame type, a variable part, then a 16-byte tag on an
+encrypted connection. The variable part holds the frame's strings and byte arrays, one after the other in the order
+its table lists them, each as long as a length field of the fixed payload says.
+
+- **Byte order.** Big-endian throughout.
+- **Offsets** count from the frame's first byte, header included.
+- **Types.** `uint8`, `uint16`: unsigned. `int32`, `int64`: signed, two's complement, so an offset or position of -1
+  means none. `bytes`: raw bytes. `UTF-8`: a string, not terminated, at most 65535 bytes, whose length in bytes is a
+  `uint16` field of the fixed payload.
+- **Flags and reserved fields.** Unused flag bits and reserved fields are sent as zero and ignored on receipt.
 
 ### Header, 16 bytes
 
-| offset | size | field |
-|---|---|---|
-| 0 | 4 | frame length, header and tag included |
-| 4 | 1 | frame type |
-| 5 | 1 | flags, per frame type |
-| 6 | 2 | reserved |
-| 8 | 8 | epoch of the sender |
-
-The fixed payload follows, then the variable part, then a 16-byte tag on an encrypted connection.
+| offset | size | type | field |
+|---|---|---|---|
+| 0 | 4 | int32 | frame length in bytes, header and tag included |
+| 4 | 1 | uint8 | frame type |
+| 5 | 1 | uint8 | flags, per frame type |
+| 6 | 2 | | reserved |
+| 8 | 8 | int64 | epoch of the sender |
 
 ### Frame types
 
-| code | frame | direction | fixed payload, then variable part |
+| code | frame | direction | fixed payload |
 |---|---|---|---|
-| 1 | HELLO | follower to leader | magic 4, version 2, node id length 2, last applied epoch 8, last applied leadership 8, last applied offset 8, lane 2, encryption mode 1, reserved 1, application id 4, nonce 16; node id |
-| 2 | WELCOME | leader to follower | magic 4, version 2, leader id length 2, leadership 8, resume offset 8, lane count 2, encryption mode 1, reserved 1, application id 4, nonce 16; leader id |
-| 3 | STREAM | leader to follower | stream key 4, replication mode 1, reserved 1, name length 2, storage identity length 2; name, storage identity |
-| 4 | STREAM_ANSWER | follower to leader | stream key 4, answer 1, catch-up check 1, proof length 2, last position 8; proof |
-| 5 | RECORD | leader to follower | log offset 8, record body 24; payload |
-| 6 | SNAPSHOT_BEGIN | leader to follower | stream key 4, reserved 2, state length 2, snapshot offset 8, from position 8; state |
-| 7 | SNAPSHOT_RECORD | leader to follower | record body 24; payload |
-| 8 | SNAPSHOT_END | leader to follower | stream key 4, record count 4, boundary count 2, state length 2; state, boundaries |
-| 9 | ACK | follower to leader | applied offset 8, pending writes 8 |
-| 10 | HEARTBEAT | leader to follower | log tail offset 8 |
-| 11 | CLOSE | either | reason 2, text length 2; text |
-| 12 | RECEIVED | follower to leader | received offset 8 |
-| 13 | STREAMS_ANNOUNCED | leader to follower | announced count 4, reserved 4 |
-| 14 | KEY_CONFIRMATION | follower to leader | HMAC-SHA256 32 |
+| 1 | [HELLO](#hello) | follower to leader | 56 |
+| 2 | [WELCOME](#welcome) | leader to follower | 48 |
+| 3 | [STREAM](#stream) | leader to follower | 10 |
+| 4 | [STREAM_ANSWER](#stream_answer) | follower to leader | 16 |
+| 5 | [RECORD](#record) | leader to follower | 32 |
+| 6 | [SNAPSHOT_BEGIN](#snapshot_begin) | leader to follower | 24 |
+| 7 | [SNAPSHOT_RECORD](#snapshot_record) | leader to follower | 24 |
+| 8 | [SNAPSHOT_END](#snapshot_end) | leader to follower | 12 |
+| 9 | [ACK](#ack) | follower to leader | 16 |
+| 10 | [HEARTBEAT](#heartbeat) | leader to follower | 8 |
+| 11 | [CLOSE](#close) | either | 4 |
+| 12 | [RECEIVED](#received) | follower to leader | 8 |
+| 13 | [STREAMS_ANNOUNCED](#streams_announced) | leader to follower | 8 |
+| 14 | [KEY_CONFIRMATION](#key_confirmation) | follower to leader | 32 |
 
 A frame of an unknown type closes the connection.
 
-**Record body**, shared by RECORD and SNAPSHOT_RECORD: stream key 4, content type 1, flags 1, reserved 2, position 8,
-payload length 4, reserved 4.
+### HELLO
+
+| offset | size | type | field |
+|---|---|---|---|
+| 0 | 16 | | header, type 1 |
+| 16 | 4 | int32 | magic |
+| 20 | 2 | uint16 | protocol version |
+| 22 | 2 | uint16 | length of the node id |
+| 24 | 8 | int64 | epoch of the last record applied on this lane |
+| 32 | 8 | int64 | leadership of the last record applied on this lane |
+| 40 | 8 | int64 | log offset of the last record applied on this lane, -1 when none |
+| 48 | 2 | uint16 | lane |
+| 50 | 1 | uint8 | encryption mode |
+| 51 | 1 | | reserved |
+| 52 | 4 | int32 | application id |
+| 56 | 16 | bytes | nonce, zeros when the follower does not encrypt |
+| 72 | | UTF-8 | node id: the follower's name, as the leader reports and counts it |
+
+### WELCOME
+
+| offset | size | type | field |
+|---|---|---|---|
+| 0 | 16 | | header, type 2 |
+| 16 | 4 | int32 | magic |
+| 20 | 2 | uint16 | protocol version |
+| 22 | 2 | uint16 | length of the leader id |
+| 24 | 8 | int64 | leadership |
+| 32 | 8 | int64 | resume offset, -1 when every stream of the lane needs a snapshot |
+| 40 | 2 | uint16 | lane count |
+| 42 | 1 | uint8 | encryption mode |
+| 43 | 1 | | reserved |
+| 44 | 4 | int32 | application id |
+| 48 | 16 | bytes | nonce, zeros when the leader does not encrypt |
+| 64 | | UTF-8 | leader id: the leader's node id |
+
+### STREAM
+
+Header flag `0x01`: the stream has a storage identity.
+
+| offset | size | type | field |
+|---|---|---|---|
+| 0 | 16 | | header, type 3 |
+| 16 | 4 | int32 | stream key |
+| 20 | 1 | uint8 | replication mode |
+| 21 | 1 | | reserved |
+| 22 | 2 | uint16 | length of the name |
+| 24 | 2 | uint16 | length of the storage identity, 0 without flag `0x01` |
+| 26 | | UTF-8 | name |
+| after the name | | UTF-8 | storage identity |
+
+### STREAM_ANSWER
+
+| offset | size | type | field |
+|---|---|---|---|
+| 0 | 16 | | header, type 4 |
+| 16 | 4 | int32 | stream key |
+| 20 | 1 | uint8 | answer |
+| 21 | 1 | uint8 | catch-up check |
+| 22 | 2 | uint16 | length of the proof |
+| 24 | 8 | int64 | last position the follower holds of the stream, -1 when none |
+| 32 | | bytes | proof, by the catch-up check |
+
+The proof of check 1, last records, is 44 bytes:
+
+| offset | size | type | field |
+|---|---|---|---|
+| 32 | 4 | int32 | records proved |
+| 36 | 8 | int64 | first position proved |
+| 44 | 32 | bytes | SHA-256 of those records, see [Connecting](#connecting) |
+
+### RECORD
+
+| offset | size | type | field |
+|---|---|---|---|
+| 0 | 16 | | header, type 5 |
+| 16 | 8 | int64 | log offset |
+| 24 | 24 | | [record body](#record-body) |
+| 48 | | bytes | payload, as long as the body says |
+
+### SNAPSHOT_BEGIN
+
+| offset | size | type | field |
+|---|---|---|---|
+| 0 | 16 | | header, type 6 |
+| 16 | 4 | int32 | stream key |
+| 20 | 2 | | reserved |
+| 22 | 2 | uint16 | length of the state |
+| 24 | 8 | int64 | log offset the snapshot starts at |
+| 32 | 8 | int64 | first position copied |
+| 40 | | bytes | state |
+
+### SNAPSHOT_RECORD
+
+| offset | size | type | field |
+|---|---|---|---|
+| 0 | 16 | | header, type 7 |
+| 16 | 24 | | [record body](#record-body) |
+| 40 | | bytes | payload, as long as the body says |
+
+### Record body
+
+Shared by RECORD and SNAPSHOT_RECORD, 24 bytes:
+
+| in the body | in RECORD | in SNAPSHOT_RECORD | size | type | field |
+|---|---|---|---|---|---|
+| 0 | 24 | 16 | 4 | int32 | stream key |
+| 4 | 28 | 20 | 1 | uint8 | content type, the application's |
+| 5 | 29 | 21 | 1 | uint8 | record flags, see [Constants and codes](#constants-and-codes) |
+| 6 | 30 | 22 | 2 | | reserved |
+| 8 | 32 | 24 | 8 | int64 | position |
+| 16 | 40 | 32 | 4 | int32 | length of the payload |
+| 20 | 44 | 36 | 4 | | reserved |
+
+### SNAPSHOT_END
+
+| offset | size | type | field |
+|---|---|---|---|
+| 0 | 16 | | header, type 8 |
+| 16 | 4 | int32 | stream key |
+| 20 | 4 | int32 | record count |
+| 24 | 2 | uint16 | boundary count, 0 in this version, [reserved](#reserved-for-an-exact-catch-up) |
+| 26 | 2 | uint16 | length of the state |
+| 28 | | bytes | state |
+| after the state | 16 each | bytes | boundaries, none in this version: leadership 8, first position 8 |
+
+### ACK
+
+Header flag `0x01`: in sync, the follower holds every stream of the lane the leader replicates.
+
+| offset | size | type | field |
+|---|---|---|---|
+| 0 | 16 | | header, type 9 |
+| 16 | 8 | int64 | applied offset |
+| 24 | 8 | int64 | pending writes |
+
+### HEARTBEAT
+
+| offset | size | type | field |
+|---|---|---|---|
+| 0 | 16 | | header, type 10 |
+| 16 | 8 | int64 | log tail offset |
+
+### CLOSE
+
+| offset | size | type | field |
+|---|---|---|---|
+| 0 | 16 | | header, type 11 |
+| 16 | 2 | uint16 | close reason |
+| 18 | 2 | uint16 | length of the text |
+| 20 | | UTF-8 | text, for the logs |
+
+### RECEIVED
+
+| offset | size | type | field |
+|---|---|---|---|
+| 0 | 16 | | header, type 12 |
+| 16 | 8 | int64 | received offset |
+
+### STREAMS_ANNOUNCED
+
+| offset | size | type | field |
+|---|---|---|---|
+| 0 | 16 | | header, type 13 |
+| 16 | 4 | int32 | count of STREAM frames sent since the WELCOME |
+| 20 | 4 | | reserved |
+
+### KEY_CONFIRMATION
+
+| offset | size | type | field |
+|---|---|---|---|
+| 0 | 16 | | header, type 14 |
+| 16 | 32 | bytes | HMAC-SHA256, see [Keys](#keys) |
 
 ### Constants and codes
 
 - **Magic** `0x5245504C` ('REPL'), **version** 1. A peer of another version is closed with `VERSION_MISMATCH`, never
   interpreted: any layout change bumps the version.
-- **Header flags.** STREAM: `0x01` the stream has a storage identity. ACK: `0x01` in sync, the follower holds every
-  stream of the lane the leader replicates.
 - **Record flags.** `0x01` `MORE_FRAGMENTS`, `0x02` `CONTINUED_FRAGMENT`, `0x04` `PLAINTEXT`, `0x08` `RESET`; see
   [Records](#records).
 - **Replication mode.** 0 `NONE` (announced, not replicated), 1 `ASYNC`, 2 `SYNC_APPLIED`, 3 `SYNC_RECEIVED`.
@@ -133,10 +307,10 @@ Per lane:
    stream (-1 for none) and the check's proof of it, from which the leader picks where a snapshot starts:
    - **0, full copy**: no proof; the snapshot copies the whole stream.
    - **1, last records**: for a stream needing a snapshot, the follower's last records, at most the count it is
-     configured with, proved by records 4 (that count), first position 8 and SHA-256 32: over each record from the
-     first position to the last, its position 8, content type 1, payload length 4 and payload. The leader digests its
-     own records over those positions: the same digest starts the snapshot after the follower's last position,
-     anything else at 0. No proof, as from a follower holding nothing, gets the whole stream.
+     configured with, proved by their count, the first position and a SHA-256 ([layout](#stream_answer)) over each
+     record from the first position to the last: its position 8, content type 1, payload length 4 and payload. The
+     leader digests its own records over those positions: the same digest starts the snapshot after the follower's last
+     position, anything else at 0. No proof, as from a follower holding nothing, gets the whole stream.
    - **2, reserved** for a check by the history of the leaderships that wrote each stream, see
      [Reserved for an exact catch-up](#reserved-for-an-exact-catch-up). A leader reads a check it does not know as a
      mismatch.
