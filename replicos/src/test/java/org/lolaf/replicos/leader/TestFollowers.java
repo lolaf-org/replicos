@@ -257,6 +257,63 @@ class TestFollowers {
     }
 
     @Test
+    void aConnectionReportsHowLongItTookToHoldItsLaneInSync() {
+        clock.toAdvanceableTime(Instant.parse("2026-11-27T10:00:00Z"), 1_000);
+        FollowerConnection connection = hello(journal.settings().build(), "follower");
+        connection.getSender().fillBatch(ByteBuffer.allocate(1 << 16));
+        assertThat(connection.getStatus(1).getCatchUpMillis()).isEqualTo(-1);
+
+        clock.advance(Duration.ofMillis(1_500));
+        FollowerConnectionHarness.answer(connection, KEY, StreamAnswer.REPLICATING);
+
+        assertThat(connection.getStatus(1).getCatchUpMillis()).isEqualTo(1_500);
+    }
+
+    @Test
+    void aReSyncIsTimedFromItsRequestToTheLaneBackInSync() {
+        clock.toAdvanceableTime(Instant.parse("2026-11-27T10:00:00Z"), 1_000);
+        FollowerConnection connection = hello(journal.settings().build(), "follower");
+        connection.getSender().fillBatch(ByteBuffer.allocate(1 << 16));
+        clock.advance(Duration.ofMillis(1_500));
+        FollowerConnectionHarness.answer(connection, KEY, StreamAnswer.REPLICATING);
+
+        clock.advance(Duration.ofSeconds(10));
+        connection.resync(KEY);
+        clock.advance(Duration.ofMillis(700));
+        assertThat(connection.getStatus(1).getCatchUpMillis()).as("the last one, until this one ends").isEqualTo(1_500);
+        FollowerConnectionHarness.answer(connection, KEY, StreamAnswer.REPLICATING);
+
+        assertThat(connection.getStatus(1).getCatchUpMillis()).isEqualTo(700);
+    }
+
+    @Test
+    void aReannouncedStreamIsTimedFromItsAnnouncementToTheLaneBackInSync() {
+        clock.toAdvanceableTime(Instant.parse("2026-11-27T10:00:00Z"), 1_000);
+        FollowerConnection connection = hello(journal.settings().build(), "follower");
+        connection.getSender().fillBatch(ByteBuffer.allocate(1 << 16));
+        FollowerConnectionHarness.answer(connection, KEY, StreamAnswer.REPLICATING);
+
+        clock.advance(Duration.ofSeconds(10));
+        connection.reannounce(KEY);
+        connection.getSender().fillBatch(ByteBuffer.allocate(1 << 16));
+        clock.advance(Duration.ofMillis(300));
+        FollowerConnectionHarness.answer(connection, KEY, StreamAnswer.REPLICATING);
+
+        assertThat(connection.getStatus(1).getCatchUpMillis()).isEqualTo(300);
+    }
+
+    @Test
+    void eachFollowerLaneReportsItsOwnPendingWrites() {
+        FollowerConnection b = inSyncFollower("b", offset);
+        FollowerConnection c = inSyncFollower("c", offset);
+        b.onAck(EPOCH, offset, true, 600);
+        c.onAck(EPOCH, offset, true, 500);
+
+        assertThat(b.getStatus(1).getPendingWrites()).isEqualTo(600);
+        assertThat(c.getStatus(1).getPendingWrites()).isEqualTo(500);
+    }
+
+    @Test
     void aSyncWaitIsOnlyForTheLaneCarryingItsStream() {
         Journal twoLanes = twoLanes();
         twoLanes.get(0).append("");

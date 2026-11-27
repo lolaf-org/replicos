@@ -68,10 +68,6 @@ public final class ReplicationStats {
         return metrics.followerLag(followerId, lane);
     }
 
-    LatencyRecorder catchUp(String followerId, int lane) {
-        return metrics.followerCatchUp(followerId, lane);
-    }
-
     void logFullWaited() {
         logFullWaits.incrementAndGet();
     }

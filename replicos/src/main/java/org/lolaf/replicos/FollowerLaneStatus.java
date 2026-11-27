@@ -55,6 +55,10 @@ public class FollowerLaneStatus {
      */
     long appliedOffset;
     /**
+     * What the follower's sinks have yet to write, as its last ack said: a large count delays its taking over.
+     */
+    long pendingWrites;
+    /**
      * The bytes of the log not sent to this follower yet, -1 before it started sending.
      */
     long unsentBytes;
@@ -62,6 +66,12 @@ public class FollowerLaneStatus {
      * How long the follower has been behind a record it has not applied yet, 0 when caught up.
      */
     long lagMillis;
+    /**
+     * How long the lane's last return to sync took, from connecting, a stream announced or a re-sync to holding every
+     * stream of the lane in sync, snapshots included: how long a failover to it would have lost writes; -1 before the
+     * first.
+     */
+    long catchUpMillis;
     /**
      * What encrypts and authenticates the lane; null while it is not connected or replicates in clear.
      */

@@ -32,7 +32,6 @@ import org.lolaf.replicos.encryption.KeyExchange;
 import org.lolaf.replicos.encryption.Negotiation;
 import org.lolaf.replicos.log.ReplicationLog;
 import org.lolaf.replicos.log.ReplicationLogs;
-import org.lolaf.replicos.spi.LatencyRecorder;
 import org.lolaf.replicos.spi.LeaderStreams;
 import org.lolaf.replicos.spi.ReplicationClock;
 import org.lolaf.replicos.spi.StreamAnswer;
@@ -45,6 +44,7 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReferenceFieldUpdater;
 import java.util.function.Consumer;
 import java.util.function.LongSupplier;
@@ -130,10 +130,14 @@ public final class FollowerConnection implements FrameHandler {
     private final AtomicBoolean closeSent;
     private final ReplicationClock clock;
     /**
-     * Null once recorded, or before the HELLO; IO thread only.
+     * When the lane left sync, at the HELLO, a stream announced or a re-sync, -1 while it is in sync: the start of the
+     * catch-up being timed.
      */
-    private @Nullable LatencyRecorder catchUp;
-    private long helloNanos;
+    private final AtomicLong outOfSyncSinceNanos;
+    /**
+     * How long the lane's last return to sync took, -1 before the first; written on the IO thread, read by the status.
+     */
+    private volatile long catchUpNanos;
 
     /**
      * @param senderLauncher starts the loop streaming the log, on a thread of its own
@@ -146,6 +150,8 @@ public final class FollowerConnection implements FrameHandler {
         this.answerOpener = FrameCipher.CLEAR;
         this.closeSent = new AtomicBoolean();
         this.clock = clock;
+        this.catchUpNanos = -1;
+        this.outOfSyncSinceNanos = new AtomicLong(-1);
         this.state = State.AWAITING_HELLO;
         this.ioSession = ioSession;
         this.address = String.valueOf(ioSession.getSocketAddress());
@@ -207,8 +213,7 @@ public final class FollowerConnection implements FrameHandler {
             }
             return;
         }
-        catchUp = stats.catchUp(nodeId, lane);
-        helloNanos = clock.nanoTime();
+        outOfSyncSinceNanos.set(clock.nanoTime());
         log.info("Follower {} connected lane {} of {} at epoch {}, {}", nodeId, lane, logs.count(), currentEpoch,
                 resumed ? "resuming after offset " + lastAppliedOffset : "needing a snapshot");
         if (negotiation == Negotiation.CLEAR_AGAINST_PREFERENCE) {
@@ -367,14 +372,26 @@ public final class FollowerConnection implements FrameHandler {
                 log.warn("Follower {} does not replicate stream {}: {}", followerId,
                         streams.get(streamKey).getStreamName(), answer);
         }
-        recordCatchUpOnce();
+        timeCatchUp();
     }
 
-    private void recordCatchUpOnce() {
-        LatencyRecorder recorder = catchUp;
-        if (recorder != null && isLaneInSync(streams.count())) {
-            catchUp = null;
-            recorder.record(clock.nanoTime() - helloNanos);
+    /**
+     * A stream of the lane leaves sync: times the lane's way back, unless a catch-up is timed already. Any thread.
+     */
+    void leftSync(int streamKey) {
+        if (streams.get(streamKey).isReplicated()) {
+            outOfSyncSinceNanos.compareAndSet(-1, clock.nanoTime());
+        }
+    }
+
+    private void timeCatchUp() {
+        long since = outOfSyncSinceNanos.get();
+        if (since >= 0 && isLaneInSync(streams.count()) && outOfSyncSinceNanos.compareAndSet(since, -1)) {
+            catchUpNanos = clock.nanoTime() - since;
+            if (!isLaneInSync(streams.count())) {
+                // a stream left sync again between the check and the reset, its leftSync finding a catch-up timed
+                outOfSyncSinceNanos.compareAndSet(-1, clock.nanoTime());
+            }
         }
     }
 
@@ -385,6 +402,7 @@ public final class FollowerConnection implements FrameHandler {
     void resync(int streamKey) {
         if (carries(streamKey) && syncs.getAnswer(streamKey) == StreamAnswer.REPLICATING
                 && syncs.compareAndSet(streamKey, StreamSyncState.IN_SYNC, StreamSyncState.SNAPSHOT_PENDING)) {
+            leftSync(streamKey);
             sender.requestSnapshot();
         }
     }
@@ -406,8 +424,10 @@ public final class FollowerConnection implements FrameHandler {
                 .syncFollower(syncFollower)
                 .snapshotInProgress(syncs.isSnapshotInProgress(streamCount))
                 .appliedOffset(acks.getAppliedOffset())
+                .pendingWrites(acks.getPendingWrites())
                 .unsentBytes(getUnsentBytes())
                 .lagMillis(TimeUnit.NANOSECONDS.toMillis(getLagNanos()))
+                .catchUpMillis(catchUpNanos < 0 ? -1 : TimeUnit.NANOSECONDS.toMillis(catchUpNanos))
                 .cipher(isEncrypted() ? keyExchange.describeCipher() : null)
                 .build();
     }

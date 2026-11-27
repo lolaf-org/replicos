@@ -42,8 +42,8 @@ application's election, such as [primos](https://github.com/lolaf-org/primos).
   every write; a follower can be given every address its leader listens on.
 - **Optional encryption** with a secret the nodes share: AES-CTR with HMAC-SHA256 by default, AES-GCM, ChaCha20 with
   HMAC or ChaCha20-Poly1305, through any JCE provider, with keys derived per connection.
-- **Monitoring**: the state of each follower lane, counters over the node's life, and latency recorders for lag, ack
-  round trip, catch up and writes held by a full log.
+- **Monitoring**: the state of each follower lane, its last catch-up time included, counters over the node's life,
+  and latency recorders for lag, ack round trip and writes held by a full log.
 - **Testing**: `replicos-testkit` feeds a follower the frames a leader would send, to test your own streams and sinks.
 
 ## Model
@@ -121,7 +121,6 @@ duration, which the replication's threads then record into:
 |---|---|
 | `followerAckLatency` | a follower's round trip, from a batch sent to its ack |
 | `followerLag` | how far behind a follower is, from a record written to its ack |
-| `followerCatchUp` | from a follower lane connecting to it holding every stream in sync: how long a failover to it would lose writes |
 | `logFullWait` | how long a write waited for a follower a whole log behind, before the log full timeout drops it |
 | `receivedWriteLatency` | on a follower, how long the sinks took to write what was acknowledged as received |
 

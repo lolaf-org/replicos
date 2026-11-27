@@ -45,17 +45,6 @@ public interface ReplicationMetrics {
     }
 
     /**
-     * On the leader: from a follower lane connecting to it holding every stream of the lane in sync, a snapshot
-     * included; how long a failover to it would lose writes. Recorded once per connection.
-     *
-     * @param followerId the follower's node id, from its HELLO
-     * @param lane       the follower lane's, from 0
-     */
-    default LatencyRecorder followerCatchUp(String followerId, int lane) {
-        return LatencyRecorder.NONE;
-    }
-
-    /**
      * On the leader: how long an append waited for a follower a whole log behind, up to the log full timeout that
      * drops it. Called by the application's appending threads, several at once when they write streams of one lane.
      *

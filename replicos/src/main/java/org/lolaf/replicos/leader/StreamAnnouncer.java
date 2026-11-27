@@ -114,6 +114,7 @@ final class StreamAnnouncer {
             return 0;
         }
         syncs.announced(stream.getKey());
+        connection.leftSync(stream.getKey());
         return sealer.seal(dst, index, FrameEncoder.stream(dst, index, currentEpoch, stream.getKey(),
                 stream.getStreamReplicationMode(), name, storageIdentity));
     }

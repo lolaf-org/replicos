@@ -61,7 +61,6 @@ class TestReplicationNode {
     private final InetSocketAddress addressA;
     private final InetSocketAddress addressB;
     private final List<String> recordersAskedFor;
-    private final List<String> catchUps;
     private final ReplicationNode a;
     private final ReplicationNode b;
 
@@ -73,7 +72,6 @@ class TestReplicationNode {
         this.addressA = new InetSocketAddress("localhost", TestingPorts.findFree());
         this.addressB = new InetSocketAddress("localhost", TestingPorts.findFree());
         this.recordersAskedFor = new CopyOnWriteArrayList<>();
-        this.catchUps = new CopyOnWriteArrayList<>();
         this.a = node("a", addressA, journalA, new JournalReplica(), ReplicationEncryptionSettings.builder().build());
         this.b = node("b", addressB, journalB, replicaB, ReplicationEncryptionSettings.builder().build());
     }
@@ -105,12 +103,6 @@ class TestReplicationNode {
                     public LatencyRecorder followerAckLatency(String followerId, int lane) {
                         recordersAskedFor.add(nodeId + " times " + followerId + " lane " + lane);
                         return LatencyRecorder.NONE;
-                    }
-
-                    @Override
-                    public LatencyRecorder followerCatchUp(String followerId, int lane) {
-                        return durationInNanos -> catchUps.add(nodeId + " caught up " + followerId + " lane " + lane
-                                + (durationInNanos > 0 ? " after a while" : " at once"));
                     }
 
                     @Override
@@ -157,7 +149,7 @@ class TestReplicationNode {
         assertThat(a.getLogBytesWritten()).isPositive();
         assertThat(recordersAskedFor).containsExactlyInAnyOrder("a times log full waits on lane 0",
                 "b times log full waits on lane 0", "a times b lane 0");
-        assertThat(catchUps).containsExactly("a caught up b lane 0 after a while");
+        assertThat(a.followers().getLaneStatuses().get(0).getCatchUpMillis()).as("caught up, by snapshot").isNotNegative();
     }
 
     @Test
