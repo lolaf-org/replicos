@@ -56,7 +56,7 @@ class TestSnapshotSender extends FollowerConnectionHarness {
     private FollowerConnection connectionChunking(int snapshotChunkBytes) {
         return new FollowerConnection(ioSession, journal.settings().heartbeatInterval(Duration.ofMillis(100))
                 .snapshotChunkBytes(snapshotChunkBytes).build(), journal.getLogs(), () -> EPOCH, LEADERSHIP, "leader-a", CatchUp.fullCopy(), stats, loop -> {
-        }, new TestingReplicationClock(), TestingKeyExchanges.CLEAR);
+        }, new TestingReplicationClock(), TestingKeyExchanges.CLEAR, new Followers(new TestingReplicationClock()));
     }
 
     /**

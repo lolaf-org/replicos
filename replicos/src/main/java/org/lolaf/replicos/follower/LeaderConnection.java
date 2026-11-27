@@ -337,7 +337,7 @@ public final class LeaderConnection implements FrameHandler {
             followerStreams.handedOver(lane);
         } else if (reason == CloseReason.RETRY_LATER) {
             log.info("Leader {} holds this follower off: {}", leaderName(), text);
-        } else if (reason.isEncryptionRefusal()) {
+        } else if (reason.isConfigurationError()) {
             log.error("Leader {} refused the replication stream: {} {}", leaderName(), reason, text);
         } else {
             log.warn("Leader {} closed the replication stream: {} {}", leaderName(), reason, text);
@@ -556,7 +556,7 @@ public final class LeaderConnection implements FrameHandler {
         }
         followerStreams.getStats().getCloses().closed(reason);
         String shortText = FrameEncoder.closeText(text);
-        if (reason.isEncryptionRefusal()) {
+        if (reason.isConfigurationError()) {
             log.error("Closing the replication stream from leader {}: {} {}", leaderName(), reason, shortText);
         } else {
             log.warn("Closing the replication stream from leader {}: {} {}", leaderName(), reason, shortText);

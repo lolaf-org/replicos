@@ -157,7 +157,7 @@ public final class ReplicationServer {
                 return;
             }
             FollowerConnection connection = new FollowerConnection(session, settings, logs, nodeEpoch, leadership,
-                    leaderId, catchUp, stats, ReplicationServer::launchSender, clock, keyExchange);
+                    leaderId, catchUp, stats, ReplicationServer::launchSender, clock, keyExchange, followers);
             session.setAttachment(connection);
             followers.add(connection);
         }

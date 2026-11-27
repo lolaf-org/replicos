@@ -55,6 +55,20 @@ public final class Followers {
         setConnections(added);
     }
 
+    /**
+     * Claims the node id on the lane for {@code claimant}, refused while another connection holds it: a second node
+     * given the same id would otherwise ack in the first one's place.
+     */
+    synchronized boolean claim(FollowerConnection claimant, String nodeId, int lane) {
+        for (FollowerConnection connection : connections) {
+            if (connection != claimant && connection.holdsClaim(nodeId, lane)) {
+                return false;
+            }
+        }
+        claimant.claimed();
+        return true;
+    }
+
     synchronized void remove(FollowerConnection connection) {
         setConnections(Arrays.stream(connections).filter(other -> other != connection).toArray(FollowerConnection[]::new));
         wakeWaiters();
@@ -103,13 +117,13 @@ public final class Followers {
     }
 
     /**
-     * Whether a follower holds every replicated stream: each of its lanes streaming and in sync, one lane in sync
-     * not being enough. Any thread.
+     * Whether a sync follower holds every replicated stream: each of its lanes streaming and in sync, one lane in
+     * sync not being enough. Any thread.
      *
      * @param streamCount the streams the leader replicates
      */
     public boolean isAnyFollowerInSync(int streamCount, int lanes) {
-        return countFollowers(lanes, connection -> connection.isLaneInSync(streamCount)) > 0;
+        return countFollowers(lanes, connection -> connection.isSyncFollowerLaneInSync(streamCount)) > 0;
     }
 
     /**
@@ -223,7 +237,7 @@ public final class Followers {
         int waitedFor = 0;
         int acked = 0;
         for (FollowerConnection connection : connections) {
-            if (connection.isStreamInSync(streamKey)) {
+            if (connection.isSyncFollowerInSync(streamKey)) {
                 inSync++;
                 if (!connection.getAcks().isOverdue()) {
                     waitedFor++;
@@ -248,7 +262,7 @@ public final class Followers {
         }
         if (timeoutNanos != 0 && clock.nanoTime() - startNanos >= timeoutNanos) {
             for (FollowerConnection connection : connections) {
-                if (connection.isStreamInSync(streamKey) && ackedOffset(connection, received) < offset) {
+                if (connection.isSyncFollowerInSync(streamKey) && ackedOffset(connection, received) < offset) {
                     connection.getAcks().overdue(offset);
                 }
             }

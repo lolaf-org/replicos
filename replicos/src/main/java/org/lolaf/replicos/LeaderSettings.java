@@ -17,6 +17,7 @@ package org.lolaf.replicos;
 
 import lombok.Builder;
 import lombok.NonNull;
+import lombok.Singular;
 import lombok.Value;
 import org.lolaf.replicos.spi.LeaderStreams;
 import org.lolaf.ringos.idling.BackoffIdleStrategy;
@@ -24,6 +25,7 @@ import org.lolaf.ringos.idling.IdleStrategy;
 
 import java.net.InetSocketAddress;
 import java.time.Duration;
+import java.util.Set;
 import java.util.function.Supplier;
 
 /**
@@ -96,4 +98,11 @@ public class LeaderSettings {
      */
     @Builder.Default
     @NonNull Supplier<IdleStrategy> ackIdleStrategy = BackoffIdleStrategy::new;
+    /**
+     * The node ids of the followers a {@code SYNC} append waits for, the others replicating as if {@code ASYNC}: a
+     * failover to one of these loses nothing acknowledged. Empty, the default, makes every follower one. This node's
+     * own id may be in it, so every node can be given the same ids.
+     */
+    @Singular
+    Set<String> syncFollowers;
 }

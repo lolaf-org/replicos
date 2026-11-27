@@ -60,7 +60,7 @@ final class FollowersViewImpl implements FollowersView {
     @Override
     public int countInSync() {
         int streamCount = streams.count();
-        return followers.countFollowers(logs.count(), connection -> connection.isLaneInSync(streamCount));
+        return followers.countFollowers(logs.count(), connection -> connection.isSyncFollowerLaneInSync(streamCount));
     }
 
     @Override
@@ -94,7 +94,7 @@ final class FollowersViewImpl implements FollowersView {
     @Override
     public boolean isStreamInSync(int streamKey) {
         for (FollowerConnection connection : followers.connections()) {
-            if (connection.isStreamInSync(streamKey)) {
+            if (connection.isSyncFollowerInSync(streamKey)) {
                 return true;
             }
         }

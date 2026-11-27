@@ -16,6 +16,7 @@
 package org.lolaf.replicos.leader;
 
 import org.lolaf.replicos.CatchUp;
+import org.lolaf.replicos.LeaderSettings;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.parallel.Isolated;
 import org.lolaf.betty.api.io.IOSession;
@@ -81,16 +82,25 @@ class TestFollowers {
     }
 
     private FollowerConnection inSyncFollower(String followerId, long appliedOffset) {
-        IOSession ioSession = mock(IOSession.class);
-        when(ioSession.borrow(anyInt())).then(invocation -> ByteBuffer.allocate(invocation.getArgument(0)));
-        FollowerConnection connection = new FollowerConnection(ioSession, journal.settings().build(), journal.getLogs(),
-                () -> EPOCH, LEADERSHIP, "leader-a", CatchUp.fullCopy(), new ReplicationStats(new SlowFollowers(Duration.ZERO, new TestingReplicationClock()), ReplicationMetrics.NONE), loop -> {
-        }, new TestingReplicationClock(), TestingKeyExchanges.CLEAR);
-        connection.onHello(EPOCH, WireFormat.VERSION, Journal.APPLICATION_ID, followerId, EPOCH, LEADERSHIP, 0, 0, EncryptionMode.DISABLED, TestingKeyExchanges.NO_NONCE);
+        return inSyncFollower(journal.settings().build(), followerId, appliedOffset);
+    }
+
+    private FollowerConnection inSyncFollower(LeaderSettings settings, String followerId, long appliedOffset) {
+        FollowerConnection connection = hello(settings, followerId);
         connection.getSender().fillBatch(ByteBuffer.allocate(1 << 16));
         FollowerConnectionHarness.answer(connection, KEY, StreamAnswer.REPLICATING);
         connection.onAck(EPOCH, appliedOffset, true, 0);
+        return connection;
+    }
+
+    private FollowerConnection hello(LeaderSettings settings, String followerId) {
+        IOSession ioSession = mock(IOSession.class);
+        when(ioSession.borrow(anyInt())).then(invocation -> ByteBuffer.allocate(invocation.getArgument(0)));
+        FollowerConnection connection = new FollowerConnection(ioSession, settings, journal.getLogs(),
+                () -> EPOCH, LEADERSHIP, "leader-a", CatchUp.fullCopy(), new ReplicationStats(new SlowFollowers(Duration.ZERO, new TestingReplicationClock()), ReplicationMetrics.NONE), loop -> {
+        }, new TestingReplicationClock(), TestingKeyExchanges.CLEAR, followers);
         followers.add(connection);
+        connection.onHello(EPOCH, WireFormat.VERSION, Journal.APPLICATION_ID, followerId, EPOCH, LEADERSHIP, 0, 0, EncryptionMode.DISABLED, TestingKeyExchanges.NO_NONCE);
         return connection;
     }
 
@@ -205,10 +215,10 @@ class TestFollowers {
     void theWritesPendingOnAFollowerAreCountedOnlyOnItsConnectionStreaming() {
         FollowerConnection closed = inSyncFollower(offset);
         closed.onAck(EPOCH, offset, true, 600);
+        closed.disconnected();
+
         FollowerConnection reconnected = inSyncFollower(offset);
         reconnected.onAck(EPOCH, offset, true, 500);
-
-        closed.disconnected();
 
         assertThat(followers.connections()).contains(closed);
         assertThat(followers.getPendingWrites()).isEqualTo(500);
@@ -224,7 +234,7 @@ class TestFollowers {
         FollowerConnection connectionOfMain = new FollowerConnection(ioSession, twoLanes.settings().build(),
                 twoLanes.getLogs(), () -> EPOCH, LEADERSHIP, "leader-a", CatchUp.fullCopy(),
                 new ReplicationStats(new SlowFollowers(Duration.ZERO, new TestingReplicationClock()), ReplicationMetrics.NONE), loop -> {
-        }, new TestingReplicationClock(), TestingKeyExchanges.CLEAR);
+        }, new TestingReplicationClock(), TestingKeyExchanges.CLEAR, followers);
         connectionOfMain.onHello(EPOCH, WireFormat.VERSION, Journal.APPLICATION_ID, "follower", EPOCH, LEADERSHIP, -1, 0, EncryptionMode.DISABLED, TestingKeyExchanges.NO_NONCE);
         connectionOfMain.getSender().fillBatch(ByteBuffer.allocate(1 << 16));
         FollowerConnectionHarness.answer(connectionOfMain, 0, StreamAnswer.REPLICATING);
@@ -257,7 +267,7 @@ class TestFollowers {
         FollowerConnection connection = new FollowerConnection(ioSession, twoLanes.settings().build(),
                 twoLanes.getLogs(), () -> EPOCH, LEADERSHIP, "leader-a", CatchUp.fullCopy(),
                 new ReplicationStats(new SlowFollowers(Duration.ZERO, new TestingReplicationClock()), ReplicationMetrics.NONE), loop -> {
-        }, new TestingReplicationClock(), TestingKeyExchanges.CLEAR);
+        }, new TestingReplicationClock(), TestingKeyExchanges.CLEAR, followers);
         connection.onHello(EPOCH, WireFormat.VERSION, Journal.APPLICATION_ID, "follower", EPOCH, LEADERSHIP, -1, lane, EncryptionMode.DISABLED, TestingKeyExchanges.NO_NONCE);
         connection.getSender().fillBatch(ByteBuffer.allocate(1 << 16));
         followers.add(connection);
@@ -399,6 +409,44 @@ class TestFollowers {
     }
 
     @Test
+    void withoutSyncFollowersEveryFollowerIsOne() {
+        assertThat(inSyncFollower("b", offset).isSyncFollower()).isTrue();
+    }
+
+    @Test
+    void aFollowerNotASyncFollowerIsNeitherWaitedForNorMarkedOverdue() {
+        LeaderSettings standbyOnly = journal.settings().syncFollower("standby").build();
+        inSyncFollower(standbyOnly, "standby", 0);
+        FollowerConnection dr = inSyncFollower(standbyOnly, "dr", offset);
+
+        assertThat(followers.awaitAck(KEY, offset, StreamReplicationMode.SYNC_APPLIED, 1, TimeUnit.MILLISECONDS.toNanos(20), idle))
+                .as("dr applied it, but does not count").isEqualTo(StreamWriter.Ack.TIMED_OUT);
+        assertThat(dr.isSyncFollower()).isFalse();
+        assertThat(dr.getAcks().isOverdue()).isFalse();
+    }
+
+    @Test
+    void withOnlyFollowersNotSyncFollowersNoFollowerIsInSync() {
+        LeaderSettings standbyOnly = journal.settings().syncFollower("standby").build();
+        inSyncFollower(standbyOnly, "dr", offset);
+
+        assertThat(followers.awaitAck(KEY, offset, StreamReplicationMode.SYNC_APPLIED, ALL, NO_TIMEOUT, idle)).isEqualTo(StreamWriter.Ack.NO_FOLLOWER_IN_SYNC);
+        assertThat(followers.isAnyFollowerInSync(1, 1)).isFalse();
+    }
+
+    @Test
+    void aSecondConnectionOfANodeIdConnectedOnTheLaneIsRefusedUntilTheFirstIsGone() {
+        FollowerConnection first = inSyncFollower("b", offset);
+
+        FollowerConnection second = hello(journal.settings().build(), "b");
+
+        assertThat(second.getState()).isEqualTo(FollowerConnection.State.CLOSED);
+        assertThat(first.isConnected()).isTrue();
+        first.disconnected();
+        assertThat(hello(journal.settings().build(), "b").getState()).isEqualTo(FollowerConnection.State.STREAMING);
+    }
+
+    @Test
     void waitingAllocatesNothing() {
         inSyncFollower("b", offset);
         inSyncFollower("c", 0);
@@ -414,10 +462,10 @@ class TestFollowers {
 
     @Test
     void theListOfFollowersIsBuiltOnlyWhenOneJoinsOrLeaves() {
-        FollowerConnection first = inSyncFollower(offset);
+        FollowerConnection first = inSyncFollower("b", offset);
         assertThat(followers.connections()).containsExactly(first).isSameAs(followers.connections());
 
-        FollowerConnection second = inSyncFollower(offset);
+        FollowerConnection second = inSyncFollower("c", offset);
         assertThat(followers.connections()).containsExactly(first, second);
 
         followers.remove(first);

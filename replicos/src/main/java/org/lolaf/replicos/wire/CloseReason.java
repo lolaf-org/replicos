@@ -75,11 +75,15 @@ public enum CloseReason {
      */
     LEADER_MISMATCH(13),
     /**
+     * A follower connected a lane another connection of the same node id holds: two nodes were given one id.
+     */
+    DUPLICATE_NODE_ID(14),
+    /**
      * Any other code, from a newer peer; kept rather than refused so the close is still reported.
      */
     UNKNOWN(0xFFFF);
 
-    private static final CloseReason[] BY_CODE = new CloseReason[LEADER_MISMATCH.code + 1];
+    private static final CloseReason[] BY_CODE = new CloseReason[DUPLICATE_NODE_ID.code + 1];
 
     static {
         for (CloseReason reason : values()) {
@@ -92,10 +96,11 @@ public enum CloseReason {
     private final int code;
 
     /**
-     * The peers disagree on encryption: logged as an error at both ends, since only an operator can fix it.
+     * The peers disagree on encryption, or two share a node id: logged as an error at both ends, since only an
+     * operator can fix it.
      */
-    public boolean isEncryptionRefusal() {
-        return this == KEY_MISMATCH || this == ENCRYPTION_REQUIRED;
+    public boolean isConfigurationError() {
+        return this == KEY_MISMATCH || this == ENCRYPTION_REQUIRED || this == DUPLICATE_NODE_ID;
     }
 
     /**

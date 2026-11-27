@@ -28,11 +28,13 @@ import java.net.InetSocketAddress;
 import java.time.Duration;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.atomic.AtomicLong;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.Assertions.tuple;
 import static org.awaitility.Awaitility.await;
 
 /**
@@ -80,6 +82,12 @@ class TestSeveralFollowers {
 
     private static ReplicationNode node(String nodeId, InetSocketAddress bindAddress, Journal journal,
                                         JournalReplica replica, Duration followerStallTimeout) {
+        return node(nodeId, bindAddress, journal, replica, followerStallTimeout, Set.of());
+    }
+
+    private static ReplicationNode node(String nodeId, InetSocketAddress bindAddress, Journal journal,
+                                        JournalReplica replica, Duration followerStallTimeout,
+                                        Set<String> syncFollowers) {
         ReplicationNode node = ReplicationNode.builder()
                 .nodeId(nodeId)
                 .leader(LeaderSettings.builder()
@@ -88,6 +96,7 @@ class TestSeveralFollowers {
                         .heartbeatInterval(Duration.ofMillis(100))
                         .logFullTimeout(Duration.ofMillis(200))
                         .followerStallTimeout(followerStallTimeout)
+                        .syncFollowers(syncFollowers)
                         .build())
                 .follower(FollowerSettings.builder()
                         .sinks(replica)
@@ -256,6 +265,59 @@ class TestSeveralFollowers {
         } finally {
             cHeld.countDown();
             d.close(stop());
+        }
+    }
+
+    @Test
+    void aFollowerNotASyncFollowerGetsEveryRecordButNeverAcksASyncAppend() {
+        Journal journalD = new Journal();
+        InetSocketAddress addressD = new InetSocketAddress("localhost", TestingPorts.findFree());
+        ReplicationNode d = node("d", addressD, journalD, new JournalReplica(), Duration.ZERO, Set.of("b", "d"));
+        CountDownLatch bHeld = new CountDownLatch(1);
+        try {
+            JournalStream main = journalD.add(MAIN, StreamReplicationMode.SYNC_APPLIED);
+            d.lead(1, stop());
+            b.follow(addressD, epoch::get, stop());
+            c.follow(addressD, epoch::get, stop());
+            await().until(() -> d.followers().getLaneStatuses().stream().filter(FollowerLaneStatus::isInSync).count() == 2);
+            assertThat(d.followers().getLaneStatuses())
+                    .extracting(FollowerLaneStatus::getNodeId, FollowerLaneStatus::isSyncFollower)
+                    .containsExactlyInAnyOrder(tuple("b", true), tuple("c", false));
+            assertThat(d.followers().countInSync()).isEqualTo(1);
+            copyB.setWritesHeld(bHeld);
+
+            main.append("first");
+
+            assertThat(main.awaitAck(1, Duration.ofMillis(200))).as("c's ack does not count").isEqualTo(StreamWriter.Ack.TIMED_OUT);
+            await().until(() -> copyC.getStored().equals(List.of("1 first")));
+            bHeld.countDown();
+            b.close(stop());
+            await().until(() -> d.followers().countConnected() == 1);
+            main.append("second");
+            assertThat(main.awaitAck(ACK_TIMEOUT)).isEqualTo(StreamWriter.Ack.NO_FOLLOWER_IN_SYNC);
+            assertThat(d.followers().isStreamInSync(0)).isFalse();
+            await().until(() -> copyC.getStored().equals(List.of("1 first", "2 second")));
+        } finally {
+            bHeld.countDown();
+            d.close(stop());
+        }
+    }
+
+    @Test
+    void aSecondNodeGivenAConnectedFollowersIdIsRefusedUntilTheFirstLeaves() {
+        aLeadsBothInSync();
+        ReplicationNode impostor = node("c", new InetSocketAddress("localhost", TestingPorts.findFree()), new Journal(),
+                new JournalReplica());
+        try {
+            impostor.follow(addressA, epoch::get, stop());
+
+            await().until(() -> a.followers().getCloses().containsKey("DUPLICATE_NODE_ID")
+                    && impostor.leader().getCloses().containsKey("DUPLICATE_NODE_ID"));
+            assertThat(a.followers().countConnected()).isEqualTo(2);
+            c.close(stop());
+            await().until(() -> impostor.leader().isConnected() && a.followers().countConnected() == 2);
+        } finally {
+            impostor.close(stop());
         }
     }
 

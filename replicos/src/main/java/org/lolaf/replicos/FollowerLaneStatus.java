@@ -37,9 +37,14 @@ public class FollowerLaneStatus {
      */
     boolean connected;
     /**
-     * Holds every stream of the lane in sync, so a failover to it loses nothing acknowledged.
+     * Holds every stream of the lane in sync: a failover to it loses nothing acknowledged if it is also a
+     * {@link #isSyncFollower() sync follower}.
      */
     boolean inSync;
+    /**
+     * One of the {@link LeaderSettings#getSyncFollowers() followers a SYNC append waits for}.
+     */
+    boolean syncFollower;
     /**
      * A stream's snapshot is waiting or on its way.
      */

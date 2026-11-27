@@ -281,6 +281,7 @@ Header flag `0x01`: in sync, the follower holds every stream of the lane the lea
   | 11 | `ENCRYPTION_REQUIRED` | either: one requires encryption, the other has it disabled |
   | 12 | `APPLICATION_MISMATCH` | either: another application id |
   | 13 | `LEADER_MISMATCH` | follower: a lane's WELCOME names another leader than lane 0 follows, as when its leader addresses mix two nodes |
+  | 14 | `DUPLICATE_NODE_ID` | leader: HELLO for a lane another connection of the same node id holds, two nodes given one id |
 
   A code the peer does not know reads as `UNKNOWN` (0xFFFF, never sent) rather than refusing the frame. The text is at
   most 1024 characters, for the logs.
@@ -292,8 +293,8 @@ Per lane:
 1. The follower sends **HELLO**: its epoch, the last epoch, leadership and log offset it applied on this lane (offset
    -1 when none), the lane, its encryption mode and a nonce (16 random bytes when it encrypts, zeros otherwise).
 2. The leader checks the version, the application, that the follower's epoch is not newer than its own (the leader
-   would be deposed) and the lane, then [negotiates encryption](#negotiation). A follower dropped as too slow and
-   still held off gets `RETRY_LATER`.
+   would be deposed), the lane and that no other connection holds the follower's node id on it, then
+   [negotiates encryption](#negotiation). A follower dropped as too slow and still held off gets `RETRY_LATER`.
 3. The leader sends **WELCOME**: its epoch, its leadership, the lane count, its mode, its nonce and the **resume
    offset**. It resumes when the follower's last applied epoch and leadership are the leader's current ones and the
    record at its last applied offset is still in the log; the resume offset is then where the log reads next.

@@ -43,8 +43,8 @@ public interface FollowersView {
     int countConnected();
 
     /**
-     * The followers holding every replicated stream in sync, each a node a failover may go to without losing what
-     * was acknowledged.
+     * The {@link LeaderSettings#getSyncFollowers() sync followers} holding every replicated stream in sync, each a
+     * node a failover may go to without losing what was acknowledged.
      */
     int countInSync();
 
@@ -69,7 +69,8 @@ public interface FollowersView {
     long getMaxLagNanos();
 
     /**
-     * A follower holds the stream in sync, so a failover to it loses none of the stream's acknowledged records.
+     * A {@link LeaderSettings#getSyncFollowers() sync follower} holds the stream in sync, so a failover to it loses
+     * none of the stream's acknowledged records.
      *
      * @param streamKey the stream's {@link org.lolaf.replicos.spi.LeaderStream#getKey() key}
      */

@@ -42,6 +42,7 @@ import java.nio.ByteBuffer;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Optional;
+import java.util.Set;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReferenceFieldUpdater;
@@ -105,6 +106,17 @@ public final class FollowerConnection implements FrameHandler {
     private volatile boolean followerHungUp;
     @Getter
     private volatile @Nullable String followerId;
+    private final Set<String> syncFollowers;
+    /**
+     * Set by the HELLO, before the state turns streaming: plain, since the other threads read it after the state.
+     */
+    @Getter
+    private boolean syncFollower;
+    /**
+     * This connection holds its follower's node id on its lane, see {@link Followers#claim}.
+     */
+    private volatile boolean claimed;
+    private final Followers followers;
     /**
      * Recorded by the first close; the IO thread sends it once the sender stopped, sealed after the sender's last frame.
      */
@@ -122,7 +134,8 @@ public final class FollowerConnection implements FrameHandler {
      */
     FollowerConnection(IOSession ioSession, LeaderSettings settings, ReplicationLogs logs, LongSupplier nodeEpoch,
                        long leadership, String leaderId, CatchUp catchUp, ReplicationStats stats,
-                       Consumer<Runnable> senderLauncher, ReplicationClock clock, KeyExchange keyExchange) {
+                       Consumer<Runnable> senderLauncher, ReplicationClock clock, KeyExchange keyExchange,
+                       Followers followers) {
         this.syncs = new StreamSyncs();
         this.answerOpener = FrameCipher.CLEAR;
         this.closeSent = new AtomicBoolean();
@@ -132,6 +145,8 @@ public final class FollowerConnection implements FrameHandler {
         this.address = String.valueOf(ioSession.getSocketAddress());
         this.logs = logs;
         this.streams = settings.getStreams();
+        this.syncFollowers = settings.getSyncFollowers();
+        this.followers = followers;
         this.nodeEpoch = nodeEpoch;
         this.leadership = leadership;
         this.leaderId = leaderId;
@@ -153,6 +168,11 @@ public final class FollowerConnection implements FrameHandler {
             return;
         }
         this.lane = lane;
+        if (!followers.claim(this, nodeId, lane)) {
+            close(CloseReason.DUPLICATE_NODE_ID, "follower " + nodeId + " is connected on lane " + lane + " already");
+            return;
+        }
+        syncFollower = syncFollowers.isEmpty() || syncFollowers.contains(nodeId);
         Negotiation negotiation = keyExchange.negotiate(followerMode);
         if (negotiation == Negotiation.REFUSED) {
             close(CloseReason.ENCRYPTION_REQUIRED, "this leader's encryption is " + keyExchange.getMode()
@@ -295,6 +315,22 @@ public final class FollowerConnection implements FrameHandler {
         return state == State.STREAMING && syncs.get(streamKey) == StreamSyncState.IN_SYNC;
     }
 
+    /**
+     * One a {@code SYNC} append waits for: a sync follower holding the stream in sync.
+     */
+    public boolean isSyncFollowerInSync(int streamKey) {
+        return isStreamInSync(streamKey) && syncFollower;
+    }
+
+    /**
+     * A sync follower holding every stream of the lane in sync: a failover to it loses nothing acknowledged.
+     *
+     * @param streamCount as {@link #isLaneInSync}
+     */
+    public boolean isSyncFollowerLaneInSync(int streamCount) {
+        return isLaneInSync(streamCount) && syncFollower;
+    }
+
     @Nullable StreamSyncState getSyncState(int streamKey) {
         return syncs.get(streamKey);
     }
@@ -360,6 +396,7 @@ public final class FollowerConnection implements FrameHandler {
                 .address(address)
                 .connected(isConnected())
                 .inSync(isLaneInSync(streamCount))
+                .syncFollower(syncFollower)
                 .snapshotInProgress(syncs.isSnapshotInProgress(streamCount))
                 .unsentBytes(getUnsentBytes())
                 .lagMillis(TimeUnit.NANOSECONDS.toMillis(getLagNanos()))
@@ -369,6 +406,19 @@ public final class FollowerConnection implements FrameHandler {
 
     public boolean isConnected() {
         return state == State.STREAMING;
+    }
+
+    void claimed() {
+        claimed = true;
+    }
+
+    /**
+     * Whether this connection holds the node id on the lane: claimed, and neither closed nor closing.
+     */
+    boolean holdsClaim(String nodeId, int onLane) {
+        State current = state;
+        return claimed && onLane == lane && nodeId.equals(followerId) && current != State.CLOSED
+                && current != State.DROPPED_AS_TOO_SLOW;
     }
 
     /**
@@ -531,7 +581,7 @@ public final class FollowerConnection implements FrameHandler {
     private void logClose(CloseReason reason, String shortText) {
         if (reason == CloseReason.SHUTDOWN || reason == CloseReason.RETRY_LATER) {
             log.info("Closing the replication stream to follower {} lane {}: {} {}", followerId, lane, reason, shortText);
-        } else if (reason.isEncryptionRefusal()) {
+        } else if (reason.isConfigurationError()) {
             log.error("Closing the replication stream to follower {} lane {}: {} {}", followerId, lane, reason, shortText);
         } else {
             log.warn("Closing the replication stream to follower {} lane {}: {} {}", followerId, lane, reason, shortText);

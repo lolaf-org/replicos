@@ -50,8 +50,8 @@ public interface StreamWriter extends AutoCloseable {
          */
         TIMED_OUT,
         /**
-         * No follower holds the stream in sync, none connected or all catching up or refusing it, so the wait ended
-         * at once: only the leader holds the record.
+         * No {@link LeaderSettings#getSyncFollowers() sync follower} holds the stream in sync, none connected or all
+         * catching up or refusing it, so the wait ended at once: no node a failover may go to holds the record.
          */
         NO_FOLLOWER_IN_SYNC,
         /**
@@ -94,10 +94,10 @@ public interface StreamWriter extends AutoCloseable {
     }
 
     /**
-     * Waits until {@code quorum} of the followers holding the stream in sync received or applied the record at
-     * {@code offset}, as {@code mode} asks; the others still get it, without being waited for. A follower a wait timed
-     * out on is not waited for again until it applies what it missed, so a hung follower costs one timeout, not one
-     * per record.
+     * Waits until {@code quorum} of the {@link LeaderSettings#getSyncFollowers() sync followers} holding the stream
+     * in sync received or applied the record at {@code offset}, as {@code mode} asks; the others still get it, without
+     * being waited for. A follower a wait timed out on is not waited for again until it applies what it missed, so a
+     * hung follower costs one timeout, not one per record.
      *
      * @param offset       as {@link #append} returned it
      * @param mode         {@code SYNC_RECEIVED} or {@code SYNC_APPLIED}

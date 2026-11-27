@@ -176,7 +176,7 @@ abstract class FollowerConnectionHarness {
     FollowerConnection connection(CatchUp catchUp) {
         return new FollowerConnection(ioSession, journal.settings().heartbeatInterval(Duration.ofMillis(100)).build(),
                 journal.getLogs(), () -> EPOCH, LEADERSHIP, "leader-a", catchUp, stats, loop -> {
-                }, new TestingReplicationClock(), keyExchange);
+                }, new TestingReplicationClock(), keyExchange, new Followers(new TestingReplicationClock()));
     }
 
     JournalStream stream(String name) {
@@ -288,7 +288,7 @@ abstract class FollowerConnectionHarness {
                 () -> EPOCH, LEADERSHIP, "leader-a", CatchUp.fullCopy(), stats, loop -> {
             sender[0] = new Thread(loop);
             sender[0].start();
-        }, senderClock, keyExchange);
+        }, senderClock, keyExchange, new Followers(new TestingReplicationClock()));
     }
 
     private BackoffIdleStrategy countingIdles() {
@@ -318,7 +318,7 @@ abstract class FollowerConnectionHarness {
         return new FollowerConnection(ioSession, journal.settings().heartbeatInterval(Duration.ofHours(1))
                 .snapshotChunkBytes(snapshotChunkBytes).senderIdleStrategy(() -> idles).build(), journal.getLogs(),
                 () -> EPOCH, LEADERSHIP, "leader-a", CatchUp.fullCopy(), stats, loop -> new Thread(loop).start(), new TestingReplicationClock(),
-                keyExchange);
+                keyExchange, new Followers(new TestingReplicationClock()));
     }
 
     /**

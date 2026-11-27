@@ -80,6 +80,10 @@ sequenceDiagram
   or a **quorum** of them, the first to ack, the others getting the record without being waited for. With none in
   sync it returns `NO_FOLLOWER_IN_SYNC` at once, with fewer than the quorum `NOT_ENOUGH_FOLLOWERS`; past its timeout,
   `TIMED_OUT`, and the followers that had not acked are not waited for again until they caught up.
+- **Sync followers.** `LeaderSettings.syncFollowers` names the followers a `SYNC` append may wait for, by node id: a
+  local standby, say, and not a disaster-recovery copy far away, which then replicates as if `ASYNC`. Only they count
+  as in sync, since only a failover to one of them is sure to keep every acknowledged write. Empty, the default,
+  every follower is one. A second connection claiming a node id already connected is refused, `DUPLICATE_NODE_ID`.
 - A follower moves its **lane position**, the leadership and log offset of the last record it wrote, only after
   `writePending`, so it never claims more than its sinks hold. The lane position is kept in memory: see
   [section 5](#5-what-triggers-a-snapshot).

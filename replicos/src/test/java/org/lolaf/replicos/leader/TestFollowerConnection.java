@@ -71,7 +71,7 @@ class TestFollowerConnection extends FollowerConnectionHarness {
                 journal.getLogs(), () -> EPOCH, LEADERSHIP, "leader-a", CatchUp.fullCopy(), stats, loop -> {
             sender[0] = new Thread(loop);
             sender[0].start();
-        }, new TestingReplicationClock(), TestingKeyExchanges.CLEAR);
+        }, new TestingReplicationClock(), TestingKeyExchanges.CLEAR, new Followers(new TestingReplicationClock()));
         connection.onHello(EPOCH, WireFormat.VERSION, Journal.APPLICATION_ID, "follower-b", 0, LEADERSHIP, -1, 0, EncryptionMode.DISABLED, TestingKeyExchanges.NO_NONCE);
         await().alias("the stream's announcement").until(() -> batchesSent.get() == 1);
         main.append("");
@@ -161,7 +161,7 @@ class TestFollowerConnection extends FollowerConnectionHarness {
         Runnable[] sender = new Runnable[1];
         connection = new FollowerConnection(ioSession, journal.settings().heartbeatInterval(Duration.ofNanos(1)).build(),
                 journal.getLogs(), () -> EPOCH, LEADERSHIP, "leader-a", CatchUp.fullCopy(), stats, loop -> sender[0] = loop, new TestingReplicationClock(),
-                TestingKeyExchanges.CLEAR);
+                TestingKeyExchanges.CLEAR, new Followers(new TestingReplicationClock()));
         JournalStream stream = stream("main");
         stream.append("");
         connection.onHello(EPOCH, WireFormat.VERSION, Journal.APPLICATION_ID, "follower-b", EPOCH, LEADERSHIP, 0, 0, EncryptionMode.DISABLED, TestingKeyExchanges.NO_NONCE);
@@ -460,7 +460,7 @@ class TestFollowerConnection extends FollowerConnectionHarness {
         Runnable[] sender = new Runnable[1];
         connection = new FollowerConnection(ioSession, journal.settings().heartbeatInterval(Duration.ofHours(1)).build(),
                 journal.getLogs(), () -> EPOCH, LEADERSHIP, "leader-a", CatchUp.fullCopy(), stats, loop -> sender[0] = loop, new TestingReplicationClock(),
-                TestingKeyExchanges.CLEAR);
+                TestingKeyExchanges.CLEAR, new Followers(new TestingReplicationClock()));
         JournalStream stream = stream("main");
         stream.append("");
         connection.onHello(EPOCH, WireFormat.VERSION, Journal.APPLICATION_ID, "follower-b", EPOCH, LEADERSHIP, 0, 0, EncryptionMode.DISABLED, TestingKeyExchanges.NO_NONCE);
