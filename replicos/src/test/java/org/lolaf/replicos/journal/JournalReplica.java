@@ -76,6 +76,7 @@ public final class JournalReplica implements ReplicaSinks {
         if (identity.equals(leaderStorageIdentity)) {
             return Binding.refused(StreamAnswer.SHARED_STORAGE);
         }
+        copy.start();
         return Binding.replicated(copy);
     }
 

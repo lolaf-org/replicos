@@ -34,7 +34,9 @@ import org.lolaf.replicos.wire.WireFormat;
 
 import java.nio.ByteBuffer;
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.function.Consumer;
 import java.util.function.ObjIntConsumer;
 import java.util.function.Predicate;
@@ -57,9 +59,7 @@ public final class FollowerStreams {
     private final CatchUp catchUp;
     private final LanePositions positions;
     private volatile BoundStream[] streamsByKey;
-    /**
-     * Times a read's writes after its records were acknowledged as received.
-     */
+    private final Map<String, BoundStream> displaced;
     @Getter(AccessLevel.PACKAGE)
     private final LatencyRecorder receivedWriteLatency;
     @Getter
@@ -68,6 +68,7 @@ public final class FollowerStreams {
     public FollowerStreams(ReplicaSinks replicaSinks, CatchUp catchUp, LatencyRecorder receivedWriteLatency) {
         this.positions = new LanePositions();
         this.streamsByKey = new BoundStream[16];
+        this.displaced = new HashMap<>();
         this.receivedWriteLatency = receivedWriteLatency;
         this.stats = new FollowerStats();
         this.replicaSinks = replicaSinks;
@@ -132,8 +133,12 @@ public final class FollowerStreams {
     /**
      * The lane's connection has announced every stream the leader replicated when it started.
      */
-    void streamsAnnounced(int lane) {
+    synchronized void streamsAnnounced(int lane) {
         positions.streamsAnnounced(lane);
+        if (!positions.isAnyAnnouncing()) {
+            displaced.values().forEach(stream -> stream.stop(Deadline.unlimited()));
+            displaced.clear();
+        }
     }
 
     /**
@@ -209,7 +214,9 @@ public final class FollowerStreams {
      * Binds the leader's key to the stream of that name, unless the leader does not replicate it. A stream refused is
      * looked at again on the next connection, the sinks' answer having changed perhaps. A mode change keeps the copy,
      * only its acknowledgement changing; one the leader no longer replicates has its sink stopped, and is caught up
-     * again by snapshot once replicated again.
+     * again by snapshot once replicated again. Each leader numbers its streams its own way, so a stream held under
+     * another key moves to this one with its sink: opening the name again would hand out the sink the other key still
+     * holds, which stopping that key would then stop under this one.
      */
     synchronized StreamAnswer bind(int key, String streamName, StreamReplicationMode leaderMode,
                                    @Nullable String leaderStorageIdentity) {
@@ -219,14 +226,44 @@ public final class FollowerStreams {
             current.setLeaderMode(leaderMode);
             return current.answer();
         }
-        if (current != null) {
+        if (current != null && current.getStreamName().equals(streamName)) {
             current.stop(Deadline.unlimited());
+        } else if (current != null) {
+            displaced.put(current.getStreamName(), current);
+            streamsByKey[key] = null;
+        }
+        BoundStream held = takeHeldElsewhere(streamName);
+        if (held != null && held.isReplicated() && leaderMode != StreamReplicationMode.NONE) {
+            held.setLeaderMode(leaderMode);
+            // renumbered by a new leader, so the copy catches up rather than resumes
+            held.streamStarted(false);
+            return put(key, held);
+        }
+        if (held != null) {
+            held.stop(Deadline.unlimited());
         }
         if (leaderMode == StreamReplicationMode.NONE) {
             log.info("Stream {} is not replicated: the leader does not replicate it", streamName);
             return put(key, BoundStream.notReplicated(streamName, leaderMode, StreamAnswer.NOT_REPLICATED, null));
         }
         return put(key, open(streamName, leaderMode, leaderStorageIdentity));
+    }
+
+    private @Nullable BoundStream takeHeldElsewhere(String streamName) {
+        BoundStream held = displaced.remove(streamName);
+        if (held != null) {
+            return held;
+        }
+        BoundStream[] streams = streamsByKey;
+        for (int key = 0; key < streams.length; key++) {
+            if (streams[key] != null && streams[key].getStreamName().equals(streamName)) {
+                held = streams[key];
+                streams[key] = null;
+                streamsByKey = streams;
+                return held;
+            }
+        }
+        return null;
     }
 
     private BoundStream open(String streamName, StreamReplicationMode leaderMode, @Nullable String leaderStorageIdentity) {
@@ -398,6 +435,8 @@ public final class FollowerStreams {
                 stream.stop(deadline);
             }
         }
+        displaced.values().forEach(stream -> stream.stop(deadline));
+        displaced.clear();
         Arrays.fill(streamsByKey, null);
     }
 }

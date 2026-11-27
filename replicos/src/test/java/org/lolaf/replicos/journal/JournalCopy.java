@@ -147,6 +147,7 @@ public final class JournalCopy implements ReplicaSink {
         if (failing) {
             throw new IllegalStateException("storage down");
         }
+        requireStarted();
         try {
             writesHeld.await();
         } catch (InterruptedException e) {
@@ -164,6 +165,7 @@ public final class JournalCopy implements ReplicaSink {
 
     @Override
     public void snapshotBegin(long fromPosition, ByteBuffer buffer, int stateIndex, int stateLength) {
+        requireStarted();
         stored.tailMap(fromPosition, true).clear();
         writes.add("begin from=" + fromPosition + " " + state(buffer, stateIndex, stateLength));
     }
@@ -218,6 +220,19 @@ public final class JournalCopy implements ReplicaSink {
     @Override
     public void stop(Deadline deadline) {
         stopped = true;
+    }
+
+    /**
+     * As {@link JournalReplica#open} does, a storage opened again.
+     */
+    void start() {
+        stopped = false;
+    }
+
+    private void requireStarted() {
+        if (stopped) {
+            throw new IllegalStateException("written after its stop");
+        }
     }
 
     private static final class Write {

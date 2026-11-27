@@ -105,7 +105,8 @@ A frame of an unknown type closes the connection.
 
 ### STREAM
 
-Header flag `0x01`: the stream has a storage identity.
+Header flag `0x01`: the stream has a storage identity. The key is the leader's own: another leader may give the same
+stream another key, so a follower keeps its copy by name across a change of leader.
 
 | offset | size | type | field |
 |---|---|---|---|

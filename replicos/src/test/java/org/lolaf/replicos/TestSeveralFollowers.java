@@ -47,6 +47,7 @@ import static org.awaitility.Awaitility.await;
 class TestSeveralFollowers {
 
     private static final String MAIN = "main";
+    private static final String OTHER = "other";
     private static final Duration ACK_TIMEOUT = Duration.ofSeconds(5);
 
     private final Journal journalA;
@@ -126,6 +127,75 @@ class TestSeveralFollowers {
         } finally {
             bHeld.countDown();
             cHeld.countDown();
+            d.close(stop());
+        }
+    }
+
+    /**
+     * Each leader numbers its streams in the order it added them, so the key that named one stream under the old
+     * leader names another under the new one. The follower's copies, one per stream name, must all stay open.
+     */
+    @Test
+    void aNewLeaderNumberingTheStreamsInAnotherOrderKeepsEveryCopyOpen() {
+        JournalCopy otherC = replicaC.configure(OTHER);
+        JournalStream main = journalA.add(MAIN, StreamReplicationMode.SYNC_APPLIED);
+        JournalStream other = journalA.add(OTHER, StreamReplicationMode.SYNC_APPLIED);
+        main.append("first");
+        other.append("first");
+        a.lead(1, stop());
+        c.follow(addressA, epoch::get, stop());
+        await().until(() -> a.followers().countInSync() == 1);
+        Journal journalD = new Journal();
+        InetSocketAddress addressD = new InetSocketAddress("localhost", TestingPorts.findFree());
+        ReplicationNode d = node("d", addressD, journalD, new JournalReplica());
+        try {
+            JournalStream otherD = journalD.add(OTHER, StreamReplicationMode.SYNC_APPLIED);
+            JournalStream mainD = journalD.add(MAIN, StreamReplicationMode.SYNC_APPLIED);
+            a.standDown(stop());
+            epoch.set(2);
+            d.lead(2, stop());
+            c.follow(addressD, epoch::get, stop());
+            await().until(() -> d.followers().countInSync() == 1);
+
+            mainD.append("main from d");
+            otherD.append("other from d");
+
+            assertThat(mainD.awaitAck(ACK_TIMEOUT)).isEqualTo(StreamWriter.Ack.ACKED);
+            assertThat(otherD.awaitAck(ACK_TIMEOUT)).isEqualTo(StreamWriter.Ack.ACKED);
+            assertThat(copyC.getWrites()).last().asString().endsWith("main from d");
+            assertThat(otherC.getWrites()).last().asString().endsWith("other from d");
+            assertThat(copyC.isStopped()).isFalse();
+            assertThat(otherC.isStopped()).isFalse();
+        } finally {
+            d.close(stop());
+        }
+    }
+
+    @Test
+    void aStreamTheNewLeaderNoLongerNamesHasItsCopyStoppedOnceItsStreamsAreAnnounced() {
+        JournalCopy otherC = replicaC.configure(OTHER);
+        journalA.add(MAIN, StreamReplicationMode.SYNC_APPLIED).append("first");
+        journalA.add(OTHER, StreamReplicationMode.SYNC_APPLIED).append("first");
+        a.lead(1, stop());
+        c.follow(addressA, epoch::get, stop());
+        await().until(() -> a.followers().countInSync() == 1);
+        Journal journalD = new Journal();
+        InetSocketAddress addressD = new InetSocketAddress("localhost", TestingPorts.findFree());
+        ReplicationNode d = node("d", addressD, journalD, new JournalReplica());
+        try {
+            JournalStream otherD = journalD.add(OTHER, StreamReplicationMode.SYNC_APPLIED);
+            a.standDown(stop());
+            epoch.set(2);
+            d.lead(2, stop());
+            c.follow(addressD, epoch::get, stop());
+            await().until(() -> d.followers().countInSync() == 1);
+
+            otherD.append("other from d");
+
+            assertThat(otherD.awaitAck(ACK_TIMEOUT)).isEqualTo(StreamWriter.Ack.ACKED);
+            assertThat(otherC.isStopped()).isFalse();
+            assertThat(copyC.isStopped()).as("main, under the key d gave other").isTrue();
+        } finally {
             d.close(stop());
         }
     }
