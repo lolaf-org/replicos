@@ -33,6 +33,7 @@ import java.time.Duration;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.atomic.AtomicLong;
 
@@ -217,6 +218,23 @@ class TestSeveralFollowers {
         assertThat(copyB.getStored()).containsExactly("1 first", "2 second");
         assertThat(copyC.getStored()).containsExactly("1 first", "2 second");
         assertThat(a.followers().getSnapshots()).as("one each, to join").isEqualTo(2);
+    }
+
+    /**
+     * The follower's sink write holds its IO thread: closing it used to take 30 seconds whatever the deadline, so the
+     * leader's wait timed out on it.
+     */
+    @Test
+    void aFollowerLeavingDuringAWaitLeavesItToTheOther() {
+        JournalStream main = aLeadsBothInSync();
+        copyC.setWritesHeld(cHeld);
+        main.append("second");
+
+        CompletableFuture<Void> leaving = CompletableFuture.runAsync(() -> c.close(stop()));
+
+        assertThat(main.awaitAck(ACK_TIMEOUT)).isEqualTo(StreamWriter.Ack.ACKED);
+        assertThat(leaving).succeedsWithin(ACK_TIMEOUT);
+        await().until(() -> a.followers().countConnected() == 1);
     }
 
     @Test

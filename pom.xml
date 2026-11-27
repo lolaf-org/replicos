@@ -47,7 +47,7 @@
         <maven.compiler.release>11</maven.compiler.release>
 
         <ringos.version>0.9.2</ringos.version>
-        <betty.version>0.9.5</betty.version>
+        <betty.version>0.9.6</betty.version>
         <jspecify.version>1.0.1</jspecify.version>
 
         <slf4j.version>2.0.17</slf4j.version>
