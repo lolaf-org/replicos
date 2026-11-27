@@ -76,12 +76,16 @@ class TestFollowers {
     }
 
     private FollowerConnection inSyncFollower(long appliedOffset) {
+        return inSyncFollower("follower", appliedOffset);
+    }
+
+    private FollowerConnection inSyncFollower(String followerId, long appliedOffset) {
         IOSession ioSession = mock(IOSession.class);
         when(ioSession.borrow(anyInt())).then(invocation -> ByteBuffer.allocate(invocation.getArgument(0)));
         FollowerConnection connection = new FollowerConnection(ioSession, journal.settings().build(), journal.getLogs(),
                 () -> EPOCH, LEADERSHIP, "leader-a", CatchUp.fullCopy(), new ReplicationStats(new SlowFollowers(Duration.ZERO, new TestingReplicationClock()), ReplicationMetrics.NONE), loop -> {
         }, new TestingReplicationClock(), TestingKeyExchanges.CLEAR);
-        connection.onHello(EPOCH, WireFormat.VERSION, Journal.APPLICATION_ID, "follower", EPOCH, LEADERSHIP, 0, 0, EncryptionMode.DISABLED, TestingKeyExchanges.NO_NONCE);
+        connection.onHello(EPOCH, WireFormat.VERSION, Journal.APPLICATION_ID, followerId, EPOCH, LEADERSHIP, 0, 0, EncryptionMode.DISABLED, TestingKeyExchanges.NO_NONCE);
         connection.getSender().fillBatch(ByteBuffer.allocate(1 << 16));
         FollowerConnectionHarness.answer(connection, KEY, StreamAnswer.REPLICATING);
         connection.onAck(EPOCH, appliedOffset, true, 0);
@@ -261,10 +265,78 @@ class TestFollowers {
 
     @Test
     void everyFollowerInSyncMustApplyTheRecord() {
-        inSyncFollower(offset);
-        inSyncFollower(0);
+        inSyncFollower("b", offset);
+        inSyncFollower("c", 0);
 
         assertThat(followers.awaitAck(KEY, offset, StreamReplicationMode.SYNC_APPLIED, TimeUnit.MILLISECONDS.toNanos(1), idle)).isEqualTo(StreamWriter.Ack.TIMED_OUT);
+    }
+
+    @Test
+    void theWaitLastsUntilTheLastFollowerInSyncApplies() {
+        FollowerConnection b = inSyncFollower("b", 0);
+        FollowerConnection c = inSyncFollower("c", 0);
+        CompletableFuture<StreamWriter.Ack> ack = CompletableFuture.supplyAsync(() -> followers.awaitAck(KEY, offset, StreamReplicationMode.SYNC_APPLIED, NO_TIMEOUT, new BackoffIdleStrategy()));
+
+        b.onAck(EPOCH, offset, true, 0);
+
+        await().during(Duration.ofMillis(100)).atMost(Duration.ofSeconds(1)).until(() -> !ack.isDone());
+        c.onAck(EPOCH, offset, true, 0);
+        assertThat(ack).succeedsWithin(Duration.ofSeconds(5)).isEqualTo(StreamWriter.Ack.ACKED);
+    }
+
+    @Test
+    void aFollowerCatchingUpIsNotWaitedFor() {
+        inSyncFollower("b", offset);
+        FollowerConnectionHarness.answer(inSyncFollower("c", 0), KEY, StreamAnswer.SNAPSHOT_NEEDED);
+
+        assertThat(followers.awaitAck(KEY, offset, StreamReplicationMode.SYNC_APPLIED, NO_TIMEOUT, idle)).isEqualTo(StreamWriter.Ack.ACKED);
+    }
+
+    @Test
+    void aFollowerATimeoutMadeOverdueIsSkippedWhileTheOtherApplies() {
+        long last = journal.getLogs().get(0).getTailOffset();
+        FollowerConnection b = inSyncFollower("b", offset);
+        FollowerConnection c = inSyncFollower("c", 0);
+        assertThat(followers.awaitAck(KEY, offset, StreamReplicationMode.SYNC_APPLIED, TimeUnit.MILLISECONDS.toNanos(20), idle)).isEqualTo(StreamWriter.Ack.TIMED_OUT);
+        assertThat(b.getAcks().isOverdue()).as("only the laggard").isFalse();
+        assertThat(c.getAcks().isOverdue()).isTrue();
+
+        b.onAck(EPOCH, last, true, 0);
+
+        assertThat(followers.awaitAck(KEY, last, StreamReplicationMode.SYNC_APPLIED, NO_TIMEOUT, idle)).isEqualTo(StreamWriter.Ack.ACKED);
+        c.onAck(EPOCH, offset, true, 0);
+        assertThat(followers.awaitAck(KEY, last, StreamReplicationMode.SYNC_APPLIED, TimeUnit.MILLISECONDS.toNanos(20), idle))
+                .as("waited for again once it applied what it missed").isEqualTo(StreamWriter.Ack.TIMED_OUT);
+    }
+
+    @Test
+    void theLastFollowerToApplyDisconnectingEndsTheWait() {
+        inSyncFollower("b", offset);
+        FollowerConnection c = inSyncFollower("c", 0);
+        CompletableFuture<StreamWriter.Ack> ack = CompletableFuture.supplyAsync(() -> followers.awaitAck(KEY, offset, StreamReplicationMode.SYNC_APPLIED, NO_TIMEOUT, new BackoffIdleStrategy()));
+
+        c.disconnected();
+
+        assertThat(ack).succeedsWithin(Duration.ofSeconds(5)).isEqualTo(StreamWriter.Ack.ACKED);
+    }
+
+    @Test
+    void aSyncReceivedWaitTakesOneFollowerReceivingAndAnotherApplying() {
+        inSyncFollower("b", 0).onReceived(EPOCH, offset);
+        inSyncFollower("c", offset);
+
+        assertThat(followers.awaitAck(KEY, offset, StreamReplicationMode.SYNC_RECEIVED, NO_TIMEOUT, idle)).isEqualTo(StreamWriter.Ack.ACKED);
+    }
+
+    @Test
+    void followersAreCountedEachOnce() {
+        inSyncFollower("b", offset);
+        inSyncFollower("c", 0);
+        FollowerConnectionHarness.answer(inSyncFollower("d", 0), KEY, StreamAnswer.SNAPSHOT_NEEDED);
+
+        assertThat(followers.countFollowers(1, FollowerConnection::isConnected)).isEqualTo(3);
+        assertThat(followers.isAnyFollowerInSync(1, 1)).isTrue();
+        assertThat(followers.countFollowers(1, connection -> connection.isLaneInSync(1))).as("d catching up").isEqualTo(2);
     }
 
     @Test
