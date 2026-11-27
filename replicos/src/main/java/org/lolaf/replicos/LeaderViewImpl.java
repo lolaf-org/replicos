@@ -20,6 +20,7 @@ import org.lolaf.replicos.follower.FollowerStats;
 import org.lolaf.replicos.follower.FollowerStreams;
 import org.lolaf.replicos.follower.ReplicationClient;
 
+import java.util.List;
 import java.util.Map;
 import java.util.function.Supplier;
 
@@ -67,6 +68,11 @@ final class LeaderViewImpl implements LeaderView {
     @Override
     public int getLanes() {
         return followerStreams.getLanes();
+    }
+
+    @Override
+    public List<LanePosition> getLanePositions() {
+        return followerStreams.getLanePositions();
     }
 
     @Override

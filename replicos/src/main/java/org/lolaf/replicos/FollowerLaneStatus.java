@@ -50,6 +50,11 @@ public class FollowerLaneStatus {
      */
     boolean snapshotInProgress;
     /**
+     * The offset in the lane's log of the last record the follower wrote, as its last ack said; -1 before it wrote
+     * one of this leadership's.
+     */
+    long appliedOffset;
+    /**
      * The bytes of the log not sent to this follower yet, -1 before it started sending.
      */
     long unsentBytes;

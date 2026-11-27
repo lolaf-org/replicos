@@ -220,6 +220,12 @@ sequenceDiagram
 `handOver()` on a clean stop lets the promoted node know it lost no write. Without it, after a crash, the promoted
 node holds what it had received, and anything the old leader wrote after that is lost to the new leadership.
 
+Promote a sync follower in sync: it holds every write a `SYNC` append was acknowledged for. Any other node, a
+disaster-recovery copy say, may lack some, so promoting one is a decision to accept losing them. To weigh it,
+`node.leader().getLanePositions()` gives each lane's last record a node wrote, and `node.followers().getLaneStatuses()`
+the offset each follower last acknowledged as applied. Offsets compare only within one leadership, so two followers
+of the same leader can be compared lane by lane.
+
 ### Divergence
 
 After a crash, the deposed leader may hold records that never reached the new leader, which then writes its own at

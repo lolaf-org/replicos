@@ -413,6 +413,17 @@ class TestFollowerConnection extends FollowerConnectionHarness {
                 EncryptionMode.DISABLED, TestingKeyExchanges.NO_NONCE);
 
         assertThat(sent.frames).first().asString().contains("resume=-1 ");
+        assertThat(connection.getStatus(1).getAppliedOffset()).as("an offset in another log").isEqualTo(-1);
+    }
+
+    @Test
+    void aFollowerResumingShowsTheOffsetItLastApplied() {
+        stream("main").append("");
+
+        connection.onHello(EPOCH, WireFormat.VERSION, Journal.APPLICATION_ID, "follower-b", EPOCH, LEADERSHIP, 0, 0,
+                EncryptionMode.DISABLED, TestingKeyExchanges.NO_NONCE);
+
+        assertThat(connection.getStatus(1).getAppliedOffset()).isZero();
     }
 
     @Test

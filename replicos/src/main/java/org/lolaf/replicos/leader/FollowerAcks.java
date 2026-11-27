@@ -80,6 +80,8 @@ public final class FollowerAcks {
 
     /**
      * The follower's HELLO, saying the last record it applied.
+     *
+     * @param lastAppliedOffset in this leader's log, -1 for a follower not resuming: its offset is another log's
      */
     void hello(String followerId, int lane, long lastAppliedOffset) {
         this.followerId = followerId;

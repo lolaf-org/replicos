@@ -111,8 +111,8 @@ given one role's settings only refuses to take the other.
 
 ## Monitoring
 
-`node.followers()` is the leader's side, `node.leader()` the follower's: their states and their counters over the
-node's life, polled from any thread. A `ReplicationMetrics` given to the builder is asked for a `LatencyRecorder` per
+`node.followers()` is the leader's side, `node.leader()` the follower's: their states, the last record each follower
+wrote on each lane, and their counters over the node's life, polled from any thread. A `ReplicationMetrics` given to the builder is asked for a `LatencyRecorder` per
 duration, which the replication's threads then record into:
 
 | recorder | what it times |

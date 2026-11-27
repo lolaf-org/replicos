@@ -15,7 +15,11 @@
  */
 package org.lolaf.replicos.follower;
 
+import org.lolaf.replicos.LanePosition;
+
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.List;
 
 /**
  * Where each of the leader's lanes stands on this follower, kept across connections so a reconnection resumes: the
@@ -64,6 +68,18 @@ final class LanePositions {
 
     long getLastAppliedOffset(int lane) {
         return position(lane).lastAppliedOffset;
+    }
+
+    /**
+     * Every lane's last record written, its epoch, leadership and offset read together. Any thread.
+     */
+    List<LanePosition> toList() {
+        Position[] current = positions;
+        List<LanePosition> lanes = new ArrayList<>(current.length);
+        for (int lane = 0; lane < current.length; lane++) {
+            lanes.add(current[lane].read(lane));
+        }
+        return lanes;
     }
 
     /**
@@ -132,9 +148,16 @@ final class LanePositions {
      */
     void written(int lane) {
         Position position = positions[lane];
+        if (position.pendingLeadership == position.lastAppliedLeadership
+                && position.pendingEpoch == position.lastAppliedEpoch) {
+            position.lastAppliedOffset = position.pendingOffset;
+            return;
+        }
+        position.changes++;
         position.lastAppliedEpoch = position.pendingEpoch;
         position.lastAppliedLeadership = position.pendingLeadership;
         position.lastAppliedOffset = position.pendingOffset;
+        position.changes++;
     }
 
     private Position position(int lane) {
@@ -143,6 +166,11 @@ final class LanePositions {
     }
 
     private static final class Position {
+        /**
+         * Odd while the leadership of the last record written changes, so a reader on another thread sees no epoch
+         * and leadership with another's offset.
+         */
+        private volatile int changes;
         private volatile long lastAppliedEpoch;
         private volatile long lastAppliedLeadership;
         private volatile long lastAppliedOffset;
@@ -157,6 +185,19 @@ final class LanePositions {
         private Position() {
             this.lastAppliedOffset = -1;
             this.pendingOffset = -1;
+        }
+
+        private LanePosition read(int lane) {
+            while (true) {
+                int before = changes;
+                long epoch = lastAppliedEpoch;
+                long leadership = lastAppliedLeadership;
+                long offset = lastAppliedOffset;
+                if ((before & 1) == 0 && changes == before) {
+                    return LanePosition.builder().lane(lane).epoch(epoch).leadership(leadership).offset(offset).build();
+                }
+                Thread.onSpinWait();
+            }
         }
     }
 }

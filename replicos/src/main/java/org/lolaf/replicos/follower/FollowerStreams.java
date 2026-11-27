@@ -21,6 +21,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.Nullable;
 import org.lolaf.ringos.Deadline;
 import org.lolaf.replicos.CatchUp;
+import org.lolaf.replicos.LanePosition;
 import org.lolaf.replicos.ReplicaStream;
 import org.lolaf.replicos.spi.LatencyRecorder;
 import org.lolaf.replicos.spi.RecordFlag;
@@ -33,6 +34,7 @@ import org.lolaf.replicos.wire.WireFormat;
 
 import java.nio.ByteBuffer;
 import java.util.Arrays;
+import java.util.List;
 import java.util.function.Consumer;
 import java.util.function.ObjIntConsumer;
 import java.util.function.Predicate;
@@ -104,6 +106,10 @@ public final class FollowerStreams {
      */
     public long getLastAppliedOffset(int lane) {
         return positions.getLastAppliedOffset(lane);
+    }
+
+    public List<LanePosition> getLanePositions() {
+        return positions.toList();
     }
 
     /**

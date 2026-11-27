@@ -152,6 +152,23 @@ class TestSeveralFollowers {
     }
 
     @Test
+    void eachFollowerShowsTheLastRecordItWroteAndTheLeaderTheOffsetEachApplied() {
+        JournalStream main = aLeadsBothInSync();
+
+        long offset = main.append("second");
+
+        assertThat(main.awaitAck(ACK_TIMEOUT)).isEqualTo(StreamWriter.Ack.ACKED);
+        assertThat(b.leader().getLanePositions()).singleElement().satisfies(position -> {
+            assertThat(position.getEpoch()).isEqualTo(1);
+            assertThat(position.getLeadership()).isNotZero();
+            assertThat(position.getOffset()).isEqualTo(offset);
+        });
+        assertThat(c.leader().getLanePositions()).as("the same leadership's").isEqualTo(b.leader().getLanePositions());
+        assertThat(a.followers().getLaneStatuses()).extracting(FollowerLaneStatus::getAppliedOffset)
+                .containsExactly(offset, offset);
+    }
+
+        @Test
     void aModeSwitchedOnTheLeaderKeepsEveryFollowersCopy() {
         JournalStream main = aLeadsBothFollowers(StreamReplicationMode.ASYNC);
         await().until(() -> a.followers().countInSync() == 2);

@@ -17,6 +17,7 @@ package org.lolaf.replicos;
 
 import org.jspecify.annotations.Nullable;
 
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -54,6 +55,12 @@ public interface LeaderView {
      * The leader's lane count, from its last WELCOME, 1 before any.
      */
     int getLanes();
+
+    /**
+     * The last record this node wrote on each lane as a follower, kept across connections: what a failover to it
+     * keeps, to compare with another follower's before promoting one that is not a sync follower.
+     */
+    List<LanePosition> getLanePositions();
 
     /**
      * Null for a stream the leader never announced, or once the node led.

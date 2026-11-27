@@ -191,7 +191,7 @@ public final class FollowerConnection implements FrameHandler {
         if (!resumed) {
             reader.seekToTail();
         }
-        acks.hello(nodeId, lane, lastAppliedOffset);
+        acks.hello(nodeId, lane, resumed ? lastAppliedOffset : -1);
         boolean encrypted = negotiation == Negotiation.ENCRYPTED;
         // a writer may have dropped the reader already
         if (!STATE.compareAndSet(this, State.AWAITING_HELLO, encrypted ? State.AWAITING_KEY_CONFIRMATION : State.STREAMING)) {
@@ -398,6 +398,7 @@ public final class FollowerConnection implements FrameHandler {
                 .inSync(isLaneInSync(streamCount))
                 .syncFollower(syncFollower)
                 .snapshotInProgress(syncs.isSnapshotInProgress(streamCount))
+                .appliedOffset(acks.getAppliedOffset())
                 .unsentBytes(getUnsentBytes())
                 .lagMillis(TimeUnit.NANOSECONDS.toMillis(getLagNanos()))
                 .cipher(isEncrypted() ? keyExchange.describeCipher() : null)
