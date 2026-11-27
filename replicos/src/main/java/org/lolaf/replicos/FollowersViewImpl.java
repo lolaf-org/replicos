@@ -65,7 +65,7 @@ final class FollowersViewImpl implements FollowersView {
 
     @Override
     public boolean isAnyInSync() {
-        return followers.isAnyFollowerInSync(streams.count(), logs.count());
+        return followers.isAnySyncFollowerInSync(streams.count(), logs.count());
     }
 
     @Override

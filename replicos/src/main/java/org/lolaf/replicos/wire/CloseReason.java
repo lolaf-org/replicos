@@ -18,6 +18,8 @@ package org.lolaf.replicos.wire;
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 
+import java.util.Arrays;
+
 /**
  * Why a peer closes the replication stream, sent in a {@link FrameType#CLOSE} before the connection drops.
  */
@@ -83,17 +85,18 @@ public enum CloseReason {
      */
     UNKNOWN(0xFFFF);
 
-    private static final CloseReason[] BY_CODE = new CloseReason[DUPLICATE_NODE_ID.code + 1];
-
-    static {
-        for (CloseReason reason : values()) {
-            if (reason != UNKNOWN) {
-                BY_CODE[reason.code] = reason;
-            }
-        }
-    }
+    private static final CloseReason[] BY_CODE = byCode();
 
     private final int code;
+
+    private static CloseReason[] byCode() {
+        CloseReason[] known = Arrays.stream(values()).filter(reason -> reason != UNKNOWN).toArray(CloseReason[]::new);
+        CloseReason[] byCode = new CloseReason[Arrays.stream(known).mapToInt(reason -> reason.code).max().orElse(0) + 1];
+        for (CloseReason reason : known) {
+            byCode[reason.code] = reason;
+        }
+        return byCode;
+    }
 
     /**
      * The peers disagree on encryption, or two share a node id: logged as an error at both ends, since only an

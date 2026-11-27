@@ -47,6 +47,12 @@ class TestAckWait {
     }
 
     @Test
+    void aTimeoutBeyondWhatNanosecondsHoldIsRefused() {
+        assertThatThrownBy(() -> AckWait.of(StreamReplicationMode.SYNC_APPLIED, Duration.ofSeconds(Long.MAX_VALUE)))
+                .isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
     void withoutAQuorumItWaitsForEveryFollower() {
         AckWait wait = AckWait.of(StreamReplicationMode.SYNC_RECEIVED, Duration.ofMillis(5));
 

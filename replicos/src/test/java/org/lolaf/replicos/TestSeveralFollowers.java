@@ -15,6 +15,7 @@
  */
 package org.lolaf.replicos;
 
+import com.github.valfirst.slf4jtest.TestLoggerFactory;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.lolaf.ringos.Deadline;
@@ -22,7 +23,10 @@ import org.lolaf.replicos.journal.Journal;
 import org.lolaf.replicos.journal.JournalCopy;
 import org.lolaf.replicos.journal.JournalReplica;
 import org.lolaf.replicos.journal.JournalStream;
+import org.lolaf.replicos.follower.LeaderConnection;
+import org.lolaf.replicos.leader.FollowerConnection;
 import org.lolaf.replicos.spi.StreamReplicationMode;
+import org.slf4j.event.Level;
 
 import java.net.InetSocketAddress;
 import java.time.Duration;
@@ -50,6 +54,7 @@ class TestSeveralFollowers {
     private final JournalReplica replicaC;
     private final JournalCopy copyB;
     private final JournalCopy copyC;
+    private final CountDownLatch bHeld;
     private final CountDownLatch cHeld;
     private final AtomicLong epoch;
     private final InetSocketAddress addressA;
@@ -65,6 +70,7 @@ class TestSeveralFollowers {
         this.replicaC = new JournalReplica();
         this.copyB = replicaB.configure(MAIN);
         this.copyC = replicaC.configure(MAIN);
+        this.bHeld = new CountDownLatch(1);
         this.cHeld = new CountDownLatch(1);
         this.epoch = new AtomicLong(1);
         this.addressA = new InetSocketAddress("localhost", TestingPorts.findFree());
@@ -76,12 +82,7 @@ class TestSeveralFollowers {
 
     private static ReplicationNode node(String nodeId, InetSocketAddress bindAddress, Journal journal,
                                         JournalReplica replica) {
-        return node(nodeId, bindAddress, journal, replica, Duration.ZERO);
-    }
-
-    private static ReplicationNode node(String nodeId, InetSocketAddress bindAddress, Journal journal,
-                                        JournalReplica replica, Duration followerStallTimeout) {
-        return node(nodeId, bindAddress, journal, replica, followerStallTimeout, Set.of());
+        return node(nodeId, bindAddress, journal, replica, Duration.ZERO, Set.of());
     }
 
     private static ReplicationNode node(String nodeId, InetSocketAddress bindAddress, Journal journal,
@@ -108,13 +109,46 @@ class TestSeveralFollowers {
         return node;
     }
 
+    /**
+     * Runs {@code test} with a leader {@code d} of its own settings, which {@code b} and {@code c} follow.
+     */
+    private void withLeaderD(Duration followerStallTimeout, Set<String> syncFollowers, LeaderDTest test) {
+        Journal journalD = new Journal();
+        InetSocketAddress addressD = new InetSocketAddress("localhost", TestingPorts.findFree());
+        ReplicationNode d = node("d", addressD, journalD, new JournalReplica(), followerStallTimeout, syncFollowers);
+        try {
+            JournalStream main = journalD.add(MAIN, StreamReplicationMode.SYNC_APPLIED);
+            d.lead(1, stop());
+            b.follow(addressD, epoch::get, stop());
+            c.follow(addressD, epoch::get, stop());
+            test.run(d, main);
+        } finally {
+            bHeld.countDown();
+            cHeld.countDown();
+            d.close(stop());
+        }
+    }
+
+    @FunctionalInterface
+    private interface LeaderDTest {
+        void run(ReplicationNode d, JournalStream main);
+    }
+
     private static Deadline stop() {
         return Deadline.of(Duration.ofSeconds(2));
     }
 
+    private static long errorsMentioning(Class<?> logger, String text) {
+        return TestLoggerFactory.getTestLogger(logger).getAllLoggingEvents().stream()
+                .filter(event -> event.getLevel() == Level.ERROR && event.getFormattedMessage().contains(text))
+                .count();
+    }
+
     @AfterEach
     void close() {
+        bHeld.countDown();
         cHeld.countDown();
+        TestLoggerFactory.clearAll();
         a.close(stop());
         b.close(stop());
         c.close(stop());
@@ -252,14 +286,7 @@ class TestSeveralFollowers {
 
     @Test
     void aFollowerStuckDuringAWaitIsDroppedAsStalledAndTheOtherEndsIt() {
-        Journal journalD = new Journal();
-        InetSocketAddress addressD = new InetSocketAddress("localhost", TestingPorts.findFree());
-        ReplicationNode d = node("d", addressD, journalD, new JournalReplica(), Duration.ofSeconds(1));
-        try {
-            JournalStream main = journalD.add(MAIN, StreamReplicationMode.SYNC_APPLIED);
-            d.lead(1, stop());
-            b.follow(addressD, epoch::get, stop());
-            c.follow(addressD, epoch::get, stop());
+        withLeaderD(Duration.ofSeconds(1), Set.of(), (d, main) -> {
             await().until(() -> d.followers().countInSync() == 2);
             copyC.setWritesHeld(cHeld);
 
@@ -270,23 +297,12 @@ class TestSeveralFollowers {
             assertThat(d.followers().getAckTimeouts(0)).isZero();
             assertThat(copyB.getStored()).containsExactly("1 first");
             assertThat(copyC.getStored()).isEmpty();
-        } finally {
-            cHeld.countDown();
-            d.close(stop());
-        }
+        });
     }
 
     @Test
     void aFollowerNotASyncFollowerGetsEveryRecordButNeverAcksASyncAppend() {
-        Journal journalD = new Journal();
-        InetSocketAddress addressD = new InetSocketAddress("localhost", TestingPorts.findFree());
-        ReplicationNode d = node("d", addressD, journalD, new JournalReplica(), Duration.ZERO, Set.of("b", "d"));
-        CountDownLatch bHeld = new CountDownLatch(1);
-        try {
-            JournalStream main = journalD.add(MAIN, StreamReplicationMode.SYNC_APPLIED);
-            d.lead(1, stop());
-            b.follow(addressD, epoch::get, stop());
-            c.follow(addressD, epoch::get, stop());
+        withLeaderD(Duration.ZERO, Set.of("b", "d"), (d, main) -> {
             await().until(() -> d.followers().getLaneStatuses().stream().filter(FollowerLaneStatus::isInSync).count() == 2);
             assertThat(d.followers().getLaneStatuses())
                     .extracting(FollowerLaneStatus::getNodeId, FollowerLaneStatus::isSyncFollower)
@@ -305,10 +321,7 @@ class TestSeveralFollowers {
             assertThat(main.awaitAck(ACK_TIMEOUT)).isEqualTo(StreamWriter.Ack.NO_FOLLOWER_IN_SYNC);
             assertThat(d.followers().isStreamInSync(0)).isFalse();
             await().until(() -> copyC.getStored().equals(List.of("1 first", "2 second")));
-        } finally {
-            bHeld.countDown();
-            d.close(stop());
-        }
+        });
     }
 
     @Test
@@ -322,6 +335,8 @@ class TestSeveralFollowers {
             await().until(() -> a.followers().getCloses().containsKey("DUPLICATE_NODE_ID")
                     && impostor.leader().getCloses().containsKey("DUPLICATE_NODE_ID"));
             assertThat(a.followers().countConnected()).isEqualTo(2);
+            assertThat(errorsMentioning(FollowerConnection.class, "DUPLICATE_NODE_ID")).as("on the leader").isPositive();
+            assertThat(errorsMentioning(LeaderConnection.class, "DUPLICATE_NODE_ID")).as("on the follower").isPositive();
             c.close(stop());
             await().until(() -> impostor.leader().isConnected() && a.followers().countConnected() == 2);
         } finally {

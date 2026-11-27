@@ -69,6 +69,10 @@ public class AckWait {
         if (timeout.isNegative()) {
             throw new IllegalArgumentException("A timeout of " + timeout);
         }
-        return new AckWait(mode, quorum, timeout.toNanos());
+        try {
+            return new AckWait(mode, quorum, timeout.toNanos());
+        } catch (ArithmeticException e) {
+            throw new IllegalArgumentException("A timeout of " + timeout + ", beyond what nanoseconds hold", e);
+        }
     }
 }

@@ -84,7 +84,9 @@ sequenceDiagram
 - **Sync followers.** `LeaderSettings.syncFollowers` names the followers a `SYNC` append may wait for, by node id: a
   local standby, say, and not a disaster-recovery copy far away, which then replicates as if `ASYNC`. Only they count
   as in sync, since only a failover to one of them is sure to keep every acknowledged write. Empty, the default,
-  every follower is one. A second connection claiming a node id already connected is refused, `DUPLICATE_NODE_ID`.
+  every follower is one. A second connection claiming a node id already connected is refused, `DUPLICATE_NODE_ID`,
+  unless the first has acked nothing for two heartbeats: that is the follower reconnecting before the leader saw its
+  connection go, and the first is closed as `STALLED`.
 - A follower moves its **lane position**, the leadership and log offset of the last record it wrote, only after
   `writePending`, so it never claims more than its sinks hold. The lane position is kept in memory: see
   [section 5](#5-what-triggers-a-snapshot).

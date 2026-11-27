@@ -56,12 +56,12 @@ public final class Followers {
     }
 
     /**
-     * Claims the node id on the lane for {@code claimant}, refused while another connection holds it: a second node
-     * given the same id would otherwise ack in the first one's place.
+     * Claims the node id on the lane for {@code claimant}, refused while another connection holds it and still acks: a
+     * second node given the same id would otherwise ack in the first one's place.
      */
     synchronized boolean claim(FollowerConnection claimant, String nodeId, int lane) {
         for (FollowerConnection connection : connections) {
-            if (connection != claimant && connection.holdsClaim(nodeId, lane)) {
+            if (connection != claimant && connection.holdsClaim(nodeId, lane) && !connection.closeIfSilent()) {
                 return false;
             }
         }
@@ -122,7 +122,7 @@ public final class Followers {
      *
      * @param streamCount the streams the leader replicates
      */
-    public boolean isAnyFollowerInSync(int streamCount, int lanes) {
+    public boolean isAnySyncFollowerInSync(int streamCount, int lanes) {
         return countFollowers(lanes, connection -> connection.isSyncFollowerLaneInSync(streamCount)) > 0;
     }
 
@@ -254,10 +254,10 @@ public final class Followers {
         if (inSync < quorum) {
             return Ack.NOT_ENOUGH_FOLLOWERS;
         }
-        int needed = quorum == AckWait.ALL_FOLLOWERS ? waitedFor : quorum;
-        if (waitedFor == 0 || waitedFor < needed) {
+        if (waitedFor == 0 || waitedFor < quorum) {
             return Ack.TIMED_OUT;
         }
+        int needed = quorum == AckWait.ALL_FOLLOWERS ? waitedFor : quorum;
         if (acked >= needed) {
             return Ack.ACKED;
         }

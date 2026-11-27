@@ -96,6 +96,13 @@ public final class FollowerConnection implements FrameHandler {
     private final FollowerSender sender;
     private final KeyExchange keyExchange;
     private final KeyAgreement keyAgreement;
+    private final Followers followers;
+    private final Set<String> syncFollowers;
+    /**
+     * Two heartbeats: a follower that has not acked for that long while its node id connects again is gone, not alive
+     * beside a second node given its id.
+     */
+    private final long reconnectSilenceNanos;
     /**
      * Opens the follower's frames once its KEY_CONFIRMATION verified; IO thread only.
      */
@@ -106,7 +113,6 @@ public final class FollowerConnection implements FrameHandler {
     private volatile boolean followerHungUp;
     @Getter
     private volatile @Nullable String followerId;
-    private final Set<String> syncFollowers;
     /**
      * Set by the HELLO, before the state turns streaming: plain, since the other threads read it after the state.
      */
@@ -116,7 +122,7 @@ public final class FollowerConnection implements FrameHandler {
      * This connection holds its follower's node id on its lane, see {@link Followers#claim}.
      */
     private volatile boolean claimed;
-    private final Followers followers;
+    private volatile long claimedNanos;
     /**
      * Recorded by the first close; the IO thread sends it once the sender stopped, sealed after the sender's last frame.
      */
@@ -146,6 +152,7 @@ public final class FollowerConnection implements FrameHandler {
         this.logs = logs;
         this.streams = settings.getStreams();
         this.syncFollowers = settings.getSyncFollowers();
+        this.reconnectSilenceNanos = 2 * settings.getHeartbeatInterval().toNanos();
         this.followers = followers;
         this.nodeEpoch = nodeEpoch;
         this.leadership = leadership;
@@ -410,7 +417,24 @@ public final class FollowerConnection implements FrameHandler {
     }
 
     void claimed() {
+        claimedNanos = clock.nanoTime();
         claimed = true;
+    }
+
+    /**
+     * Closes this connection as stalled when its follower has acked nothing for two heartbeats, as one reconnecting
+     * before this leader saw its connection go: a second node given its id finds it acking, and is refused.
+     *
+     * @return whether the connection no longer holds its claim
+     */
+    boolean closeIfSilent() {
+        long silentNanos = clock.nanoTime() - Math.max(claimedNanos, acks.getLastAckNanos());
+        if (silentNanos <= reconnectSilenceNanos) {
+            return false;
+        }
+        close(CloseReason.STALLED, "no ack for " + TimeUnit.NANOSECONDS.toMillis(silentNanos)
+                + " ms, and its node id connected again");
+        return true;
     }
 
     /**

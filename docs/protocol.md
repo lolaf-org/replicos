@@ -281,7 +281,7 @@ Header flag `0x01`: in sync, the follower holds every stream of the lane the lea
   | 11 | `ENCRYPTION_REQUIRED` | either: one requires encryption, the other has it disabled |
   | 12 | `APPLICATION_MISMATCH` | either: another application id |
   | 13 | `LEADER_MISMATCH` | follower: a lane's WELCOME names another leader than lane 0 follows, as when its leader addresses mix two nodes |
-  | 14 | `DUPLICATE_NODE_ID` | leader: HELLO for a lane another connection of the same node id holds, two nodes given one id |
+  | 14 | `DUPLICATE_NODE_ID` | leader: HELLO for a lane another connection of the same node id holds and still acks on, two nodes given one id |
 
   A code the peer does not know reads as `UNKNOWN` (0xFFFF, never sent) rather than refusing the frame. The text is at
   most 1024 characters, for the logs.
