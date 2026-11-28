@@ -1,5 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd" child.project.url.inherit.append.path="false">
+<project xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns="http://maven.apache.org/POM/4.0.0"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd"
+         child.project.url.inherit.append.path="false">
     <modelVersion>4.0.0</modelVersion>
 
     <groupId>org.lolaf.replicos</groupId>
@@ -74,7 +76,7 @@
         <!-- Appended to what maven-release-plugin passes to its forked builds. It exists because
              <arguments> below is set in the pom, which makes -Darguments= on the command line a
              silently ignored no-op. -->
-        <release.extraArguments />
+        <release.extraArguments/>
         <lombok-maven-plugin.version>1.18.20.0</lombok-maven-plugin.version>
         <license-maven-plugin.version>5.1.2</license-maven-plugin.version>
         <versions-maven-plugin.version>2.25.2</versions-maven-plugin.version>
@@ -98,7 +100,7 @@
             -Xshare:off
             ${surefire.argLine.extra}
         </surefire.argLine>
-        <surefire.argLine.extra />
+        <surefire.argLine.extra/>
         <automatic.module.name>org.lolaf.replicos.MODULE.NAME.NOT.SET</automatic.module.name>
         <license.source.dir>${project.basedir}/..</license.source.dir>
         <delombok.skip>false</delombok.skip>
@@ -113,7 +115,8 @@
         <module>examples</module>
     </modules>
 
-    <scm child.scm.connection.inherit.append.path="false" child.scm.developerConnection.inherit.append.path="false" child.scm.url.inherit.append.path="false">
+    <scm child.scm.connection.inherit.append.path="false" child.scm.developerConnection.inherit.append.path="false"
+         child.scm.url.inherit.append.path="false">
         <connection>scm:git:https://github.com/lolaf-org/replicos.git</connection>
         <developerConnection>scm:git:https://github.com/lolaf-org/replicos.git</developerConnection>
         <url>https://github.com/lolaf-org/replicos</url>

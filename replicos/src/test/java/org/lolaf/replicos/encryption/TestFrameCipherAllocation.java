@@ -15,22 +15,17 @@
  */
 package org.lolaf.replicos.encryption;
 
-import org.lolaf.replicos.testkit.TestingKeyExchanges;
 import lombok.Value;
 import lombok.extern.slf4j.Slf4j;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
-import org.lolaf.replicos.journal.JournalStream;
 import org.lolaf.replicos.EncryptionMode;
 import org.lolaf.replicos.ReplicationEncryptionSettings;
+import org.lolaf.replicos.journal.JournalStream;
 import org.lolaf.replicos.spi.RecordFlag;
 import org.lolaf.replicos.testkit.AllocatedBytes;
-import org.lolaf.replicos.wire.FrameCipher;
-import org.lolaf.replicos.wire.FrameDecoder;
-import org.lolaf.replicos.wire.FrameEncoder;
-import org.lolaf.replicos.wire.FrameHandler;
-import org.lolaf.replicos.wire.FrameType;
-import org.lolaf.replicos.wire.WireFormat;
+import org.lolaf.replicos.testkit.TestingKeyExchanges;
+import org.lolaf.replicos.wire.*;
 
 import javax.crypto.Cipher;
 import java.nio.ByteBuffer;

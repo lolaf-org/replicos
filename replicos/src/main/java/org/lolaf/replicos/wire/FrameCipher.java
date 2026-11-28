@@ -15,8 +15,8 @@
  */
 package org.lolaf.replicos.wire;
 
-import org.lolaf.replicos.spi.WireFormatException;
 import org.lolaf.replicos.spi.RecordFlag;
+import org.lolaf.replicos.spi.WireFormatException;
 
 import java.nio.ByteBuffer;
 

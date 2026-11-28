@@ -19,18 +19,14 @@ import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.Nullable;
-import org.lolaf.ringos.Deadline;
 import org.lolaf.replicos.CatchUp;
 import org.lolaf.replicos.LanePosition;
 import org.lolaf.replicos.ReplicaStream;
-import org.lolaf.replicos.spi.LatencyRecorder;
-import org.lolaf.replicos.spi.RecordFlag;
-import org.lolaf.replicos.spi.ReplicaSinks;
-import org.lolaf.replicos.spi.StreamAnswer;
-import org.lolaf.replicos.spi.StreamReplicationMode;
+import org.lolaf.replicos.spi.*;
 import org.lolaf.replicos.wire.CatchUpCheck;
 import org.lolaf.replicos.wire.RecordDigest;
 import org.lolaf.replicos.wire.WireFormat;
+import org.lolaf.ringos.Deadline;
 
 import java.nio.ByteBuffer;
 import java.util.Arrays;
@@ -64,13 +60,13 @@ public final class FollowerStreams {
     @Getter(AccessLevel.PACKAGE)
     private final CatchUp catchUp;
     private final LanePositions positions;
-    private volatile BoundStream[] streamsByKey;
     private final Map<String, BoundStream> streamsByName;
     private final Map<String, BoundStream> displaced;
     @Getter(AccessLevel.PACKAGE)
     private final LatencyRecorder receivedWriteLatency;
     @Getter
     private final FollowerStats stats;
+    private volatile BoundStream[] streamsByKey;
 
     public FollowerStreams(ReplicaSinks replicaSinks, int clusterId, CatchUp catchUp,
                            LatencyRecorder receivedWriteLatency) {
@@ -83,6 +79,17 @@ public final class FollowerStreams {
         this.replicaSinks = replicaSinks;
         this.clusterId = clusterId;
         this.catchUp = catchUp;
+    }
+
+    private static RecordFlag recordFlag(byte flags) {
+        if (RecordFlag.RESET.isSet(flags)) {
+            return RecordFlag.RESET;
+        }
+        return RecordFlag.PLAINTEXT.isSet(flags) ? RecordFlag.PLAINTEXT : RecordFlag.NONE;
+    }
+
+    private static byte fragmentFlags(byte flags) {
+        return (byte) (flags & (WireFormat.MORE_FRAGMENTS | WireFormat.CONTINUED_FRAGMENT));
     }
 
     public int getLanes() {
@@ -396,17 +403,6 @@ public final class FollowerStreams {
     boolean snapshotEnd(int lane, int key, int recordCount, ByteBuffer state, int stateIndex, int stateLength) {
         BoundStream stream = replicatedStream(lane, key);
         return stream != null && stream.snapshotEnd(recordCount, state, stateIndex, stateLength);
-    }
-
-    private static RecordFlag recordFlag(byte flags) {
-        if (RecordFlag.RESET.isSet(flags)) {
-            return RecordFlag.RESET;
-        }
-        return RecordFlag.PLAINTEXT.isSet(flags) ? RecordFlag.PLAINTEXT : RecordFlag.NONE;
-    }
-
-    private static byte fragmentFlags(byte flags) {
-        return (byte) (flags & (WireFormat.MORE_FRAGMENTS | WireFormat.CONTINUED_FRAGMENT));
     }
 
     /**

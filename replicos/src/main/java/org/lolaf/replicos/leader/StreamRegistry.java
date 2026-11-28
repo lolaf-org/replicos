@@ -56,6 +56,18 @@ public final class StreamRegistry {
         this.byKey = new StreamRegistration[0];
     }
 
+    private static String requireValidName(String streamName) {
+        if (streamName.isEmpty()) {
+            throw new IllegalArgumentException("A stream name cannot be empty");
+        }
+        int bytes = streamName.getBytes(StandardCharsets.UTF_8).length;
+        if (bytes > WireFormat.MAX_STRING_BYTES) {
+            throw new IllegalArgumentException("A stream name is at most " + WireFormat.MAX_STRING_BYTES
+                    + " UTF-8 bytes, got " + bytes);
+        }
+        return streamName;
+    }
+
     /**
      * @throws IllegalArgumentException for a name empty, longer than the STREAM frame carries, or registered already
      */
@@ -72,18 +84,6 @@ public final class StreamRegistry {
         byName.put(streamName, added);
         byKey = grown;
         return added;
-    }
-
-    private static String requireValidName(String streamName) {
-        if (streamName.isEmpty()) {
-            throw new IllegalArgumentException("A stream name cannot be empty");
-        }
-        int bytes = streamName.getBytes(StandardCharsets.UTF_8).length;
-        if (bytes > WireFormat.MAX_STRING_BYTES) {
-            throw new IllegalArgumentException("A stream name is at most " + WireFormat.MAX_STRING_BYTES
-                    + " UTF-8 bytes, got " + bytes);
-        }
-        return streamName;
     }
 
     public int count() {

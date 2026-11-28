@@ -15,10 +15,10 @@
  */
 package org.lolaf.replicos.log;
 
+import org.lolaf.replicos.spi.ReplicationClock;
 import org.lolaf.ringos.idling.BackoffIdleStrategy;
 import org.lolaf.ringos.idling.IdleStrategy;
 import org.lolaf.ringos.idling.RetryStrategy;
-import org.lolaf.replicos.spi.ReplicationClock;
 
 import java.time.Duration;
 

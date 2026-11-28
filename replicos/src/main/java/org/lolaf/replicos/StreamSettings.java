@@ -34,12 +34,14 @@ public class StreamSettings {
     /**
      * What a follower finds its own copy of the stream by, unique to the node.
      */
-    @NonNull String name;
+    @NonNull
+    String name;
     /**
      * What the stream's appends wait for from the followers; {@link StreamReplicationMode#NONE} replicates it not at
      * all. {@link RegisteredStream#reconfigure} changes it.
      */
-    @NonNull StreamReplicationMode replicationMode;
+    @NonNull
+    StreamReplicationMode replicationMode;
     /**
      * Where the leader stores the stream, so a follower storing into the same place refuses it: replicating into it
      * would rewrite the leader's data. Absent when the leader cannot tell: each follower's sink decides, refusing the
@@ -50,5 +52,6 @@ public class StreamSettings {
     /**
      * Asked for a source as each snapshot of the stream starts, on the sender thread of the lane that needs it.
      */
-    @NonNull Supplier<SnapshotSource> snapshotSource;
+    @NonNull
+    Supplier<SnapshotSource> snapshotSource;
 }

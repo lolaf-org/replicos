@@ -17,22 +17,18 @@ package org.lolaf.replicos.journal;
 
 import lombok.Getter;
 import org.jspecify.annotations.Nullable;
-import org.lolaf.ringos.idling.BackoffIdleStrategy;
 import org.lolaf.replicos.LeaderSettings;
 import org.lolaf.replicos.RegisteredStream;
 import org.lolaf.replicos.ReplicationNode;
 import org.lolaf.replicos.StreamSettings;
-import org.lolaf.replicos.leader.Followers;
-import org.lolaf.replicos.leader.ReplicationStats;
-import org.lolaf.replicos.leader.SlowFollowers;
-import org.lolaf.replicos.leader.StreamRegistry;
-import org.lolaf.replicos.leader.StreamWriters;
+import org.lolaf.replicos.leader.*;
 import org.lolaf.replicos.log.ReplicationLogs;
 import org.lolaf.replicos.spi.LatencyRecorder;
 import org.lolaf.replicos.spi.ReplicationClock;
 import org.lolaf.replicos.spi.ReplicationMetrics;
 import org.lolaf.replicos.spi.StreamReplicationMode;
 import org.lolaf.replicos.wire.WireFormat;
+import org.lolaf.ringos.idling.BackoffIdleStrategy;
 
 import java.net.InetSocketAddress;
 import java.time.Duration;
@@ -66,7 +62,6 @@ public final class Journal {
      */
     @Getter
     private final @Nullable StreamRegistry streams;
-    private volatile Function<StreamSettings, RegisteredStream> registrar;
     /**
      * What its writers counted; null for a journal written through a node.
      */
@@ -77,6 +72,7 @@ public final class Journal {
      */
     @Getter
     private final List<Long> logFullWaitNanos;
+    private volatile Function<StreamSettings, RegisteredStream> registrar;
 
     /**
      * @param logFullTimeout how long an append waits for a follower a whole log behind before the log drops it
@@ -115,6 +111,13 @@ public final class Journal {
     }
 
     /**
+     * One lane, a follower a whole log behind dropped after 50 ms.
+     */
+    public static Journal ofCapacity(int logCapacity) {
+        return new Journal(new ReplicationLogs(1, logCapacity), Duration.ofMillis(50));
+    }
+
+    /**
      * Settings leading this journal on any port, a follower never dropped as stalled and a snapshot sent in one chunk.
      */
     public LeaderSettings.LeaderSettingsBuilder settings() {
@@ -129,13 +132,6 @@ public final class Journal {
      */
     public void writeThrough(ReplicationNode node) {
         registrar = node::register;
-    }
-
-    /**
-     * One lane, a follower a whole log behind dropped after 50 ms.
-     */
-    public static Journal ofCapacity(int logCapacity) {
-        return new Journal(new ReplicationLogs(1, logCapacity), Duration.ofMillis(50));
     }
 
     public JournalStream add(String name, StreamReplicationMode mode, @Nullable String storageIdentity) {

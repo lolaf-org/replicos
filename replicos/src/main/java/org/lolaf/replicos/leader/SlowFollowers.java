@@ -15,10 +15,9 @@
  */
 package org.lolaf.replicos.leader;
 
-import org.lolaf.replicos.DroppedFollower;
 import lombok.Value;
 import org.jspecify.annotations.Nullable;
-
+import org.lolaf.replicos.DroppedFollower;
 import org.lolaf.replicos.spi.ReplicationClock;
 
 import java.time.Duration;

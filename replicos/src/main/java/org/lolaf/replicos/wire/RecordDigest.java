@@ -56,6 +56,14 @@ public final class RecordDigest implements ReplicaSink.RecordConsumer {
         this.lastPosition = -1;
     }
 
+    public static int proofRecords(ByteBuffer proof, int index) {
+        return proof.getInt(index);
+    }
+
+    public static long proofFirstPosition(ByteBuffer proof, int index) {
+        return proof.getLong(index + 4);
+    }
+
     public void reset() {
         sha256.reset();
         firstPosition = -1;
@@ -111,14 +119,6 @@ public final class RecordDigest implements ReplicaSink.RecordConsumer {
             out.put(index + 12 + i, digest[i]);
         }
         return PROOF_BYTES;
-    }
-
-    public static int proofRecords(ByteBuffer proof, int index) {
-        return proof.getInt(index);
-    }
-
-    public static long proofFirstPosition(ByteBuffer proof, int index) {
-        return proof.getLong(index + 4);
     }
 
     /**

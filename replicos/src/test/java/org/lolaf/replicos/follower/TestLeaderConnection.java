@@ -16,17 +16,17 @@
 package org.lolaf.replicos.follower;
 
 import org.junit.jupiter.api.Test;
-import org.lolaf.ringos.Deadline;
-import org.lolaf.replicos.ReplicaStream;
 import org.lolaf.replicos.EncryptionMode;
-import org.lolaf.replicos.testkit.TestingKeyExchanges;
+import org.lolaf.replicos.ReplicaStream;
 import org.lolaf.replicos.journal.Journal;
 import org.lolaf.replicos.journal.JournalCopy;
+import org.lolaf.replicos.spi.RecordFlag;
+import org.lolaf.replicos.testkit.TestingKeyExchanges;
 import org.lolaf.replicos.wire.CloseReason;
 import org.lolaf.replicos.wire.FrameDecoder;
 import org.lolaf.replicos.wire.FrameEncoder;
-import org.lolaf.replicos.spi.RecordFlag;
 import org.lolaf.replicos.wire.WireFormat;
+import org.lolaf.ringos.Deadline;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;

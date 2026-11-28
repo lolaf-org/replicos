@@ -15,9 +15,9 @@
  */
 package org.lolaf.replicos.wire;
 
-import org.lolaf.replicos.EncryptionMode;
 import lombok.experimental.UtilityClass;
 import org.jspecify.annotations.Nullable;
+import org.lolaf.replicos.EncryptionMode;
 import org.lolaf.replicos.spi.StreamAnswer;
 import org.lolaf.replicos.spi.StreamReplicationMode;
 

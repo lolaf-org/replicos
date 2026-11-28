@@ -49,6 +49,14 @@ public final class JournalStream {
     public static final byte TEXT = 1;
 
     private final NavigableMap<Long, Entry> entries;
+    /**
+     * Each range a snapshot asked for, from and to.
+     */
+    @Getter
+    private final List<long[]> snapshotRanges;
+    @Getter
+    private final RegisteredStream registered;
+    private final StreamWriter writer;
     @Getter
     private volatile long nextPosition;
     private long lastAppendedOffset;
@@ -62,14 +70,6 @@ public final class JournalStream {
      */
     @Setter
     private volatile LongConsumer snapshotReads;
-    /**
-     * Each range a snapshot asked for, from and to.
-     */
-    @Getter
-    private final List<long[]> snapshotRanges;
-    @Getter
-    private final RegisteredStream registered;
-    private final StreamWriter writer;
 
     JournalStream(String streamName, StreamReplicationMode replicationMode, @Nullable String storageIdentity,
                   Function<StreamSettings, RegisteredStream> registrar) {

@@ -20,12 +20,7 @@ import org.HdrHistogram.Histogram;
 import org.lolaf.replicos.FollowersView;
 import org.lolaf.replicos.StreamWriter;
 import org.lolaf.replicos.spi.StreamReplicationMode;
-import org.openjdk.jmh.annotations.Level;
-import org.openjdk.jmh.annotations.Param;
-import org.openjdk.jmh.annotations.Scope;
-import org.openjdk.jmh.annotations.Setup;
-import org.openjdk.jmh.annotations.State;
-import org.openjdk.jmh.annotations.TearDown;
+import org.openjdk.jmh.annotations.*;
 
 import java.nio.ByteBuffer;
 import java.security.GeneralSecurityException;
@@ -40,7 +35,12 @@ import java.util.concurrent.TimeUnit;
 public class ReplicationLoad {
 
     private static final long HIGHEST_LATENCY_NANOS = TimeUnit.SECONDS.toNanos(60);
-
+    private final Histogram writeLatency;
+    private final LagMetrics leaderMetrics;
+    /**
+     * Each iteration's line, built without the logger's formatting, which the gc profiler would count.
+     */
+    private final StringBuilder line;
     @Param({"STREAMS_1", "STREAMS_4", "STREAMS_16"})
     ReplicationParams.Streams streams;
     /**
@@ -69,13 +69,6 @@ public class ReplicationLoad {
     CipherParams.Encryption encryption;
     @Param({"PROVIDER_JDK"})
     CipherParams.CryptoProvider provider;
-
-    private final Histogram writeLatency;
-    private final LagMetrics leaderMetrics;
-    /**
-     * Each iteration's line, built without the logger's formatting, which the gc profiler would count.
-     */
-    private final StringBuilder line;
     private ReplicationPair pair;
     private BenchmarkStream[] written;
     private ByteBuffer payload;
@@ -90,6 +83,10 @@ public class ReplicationLoad {
         this.writeLatency = new Histogram(HIGHEST_LATENCY_NANOS, 3);
         this.leaderMetrics = new LagMetrics();
         this.line = new StringBuilder(512);
+    }
+
+    private static long micros(long nanos) {
+        return TimeUnit.NANOSECONDS.toMicros(nanos);
     }
 
     @Setup(Level.Trial)
@@ -184,9 +181,5 @@ public class ReplicationLoad {
     @TearDown(Level.Trial)
     public void tearDown() {
         pair.close();
-    }
-
-    private static long micros(long nanos) {
-        return TimeUnit.NANOSECONDS.toMicros(nanos);
     }
 }

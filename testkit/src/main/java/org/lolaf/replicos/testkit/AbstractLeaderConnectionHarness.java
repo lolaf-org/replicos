@@ -17,30 +17,20 @@ package org.lolaf.replicos.testkit;
 
 import org.jspecify.annotations.Nullable;
 import org.lolaf.betty.api.io.IOSession;
-import org.lolaf.replicos.spi.ReplicationClock;
 import org.lolaf.replicos.encryption.KeyExchange;
 import org.lolaf.replicos.follower.FollowerStreams;
-import org.lolaf.replicos.follower.LeaderLanes;
 import org.lolaf.replicos.follower.LeaderConnection;
+import org.lolaf.replicos.follower.LeaderLanes;
 import org.lolaf.replicos.follower.OnNetworkThreadAnswerSender;
-import org.lolaf.replicos.wire.CloseReason;
-import org.lolaf.replicos.wire.FrameCipher;
-import org.lolaf.replicos.wire.FrameDecoder;
-import org.lolaf.replicos.wire.FrameEncoder;
-import org.lolaf.replicos.wire.FrameHandler;
-import org.lolaf.replicos.wire.FrameType;
-import org.lolaf.replicos.wire.WireFormat;
+import org.lolaf.replicos.spi.ReplicationClock;
+import org.lolaf.replicos.wire.*;
 
 import java.nio.ByteBuffer;
 import java.util.concurrent.TimeUnit;
 import java.util.function.ToIntBiFunction;
 
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyBoolean;
-import static org.mockito.ArgumentMatchers.anyInt;
-import static org.mockito.Mockito.doAnswer;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.when;
+import static org.mockito.ArgumentMatchers.*;
+import static org.mockito.Mockito.*;
 
 /**
  * A follower's connection to a leader over a mocked IO session, fed the frames a leader would send, whatever the
@@ -50,11 +40,10 @@ public abstract class AbstractLeaderConnectionHarness {
 
     protected static final long EPOCH = 7;
     protected static final long LEADERSHIP = 41;
-    private static final int MAX_FRAME_BYTES = 1 << 20;
     protected static final int FIRST = WireFormat.MORE_FRAGMENTS;
     protected static final int MIDDLE = WireFormat.MORE_FRAGMENTS | WireFormat.CONTINUED_FRAGMENT;
     protected static final int LAST = WireFormat.CONTINUED_FRAGMENT;
-
+    private static final int MAX_FRAME_BYTES = 1 << 20;
     protected final IOSession ioSession;
     protected final RecordingHandler sent;
     protected final FollowerStreams followerStreams;
@@ -89,22 +78,6 @@ public abstract class AbstractLeaderConnectionHarness {
         }
     }
 
-    /**
-     * As the leader reads them: every frame after the KEY_CONFIRMATION opened, with the keys the leader derives from
-     * the HELLO's nonce and its WELCOME's.
-     */
-    private void decodeSent(ByteBuffer frames) {
-        int index = frames.position();
-        int consumed;
-        while (index < frames.limit() && (consumed = sentDecoder.decode(frames, index, frames.limit() - index, sent, sentOpener)) > 0) {
-            if (frames.get(index + WireFormat.OFFSET_TYPE) == FrameType.KEY_CONFIRMATION.getCode()) {
-                sentOpener = latestKeyExchange.newOpener(
-                        latestKeyExchange.deriveKeys(sent.lastNonce, leaderNonce).getFollowerToLeader());
-            }
-            index += consumed;
-        }
-    }
-
     protected static ToIntBiFunction<ByteBuffer, Integer> announced(int count) {
         return (out, index) -> FrameEncoder.streamsAnnounced(out, index, EPOCH, count);
     }
@@ -125,6 +98,22 @@ public abstract class AbstractLeaderConnectionHarness {
             length += frame.applyAsInt(buffer, length);
         }
         return buffer.limit(length);
+    }
+
+    /**
+     * As the leader reads them: every frame after the KEY_CONFIRMATION opened, with the keys the leader derives from
+     * the HELLO's nonce and its WELCOME's.
+     */
+    private void decodeSent(ByteBuffer frames) {
+        int index = frames.position();
+        int consumed;
+        while (index < frames.limit() && (consumed = sentDecoder.decode(frames, index, frames.limit() - index, sent, sentOpener)) > 0) {
+            if (frames.get(index + WireFormat.OFFSET_TYPE) == FrameType.KEY_CONFIRMATION.getCode()) {
+                sentOpener = latestKeyExchange.newOpener(
+                        latestKeyExchange.deriveKeys(sent.lastNonce, leaderNonce).getFollowerToLeader());
+            }
+            index += consumed;
+        }
     }
 
     /**

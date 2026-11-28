@@ -51,13 +51,6 @@ public enum StreamAnswer {
     private final int code;
 
     /**
-     * The follower would replicate the stream but cannot: a problem to fix, unlike an answer the leader expects.
-     */
-    public boolean isRefusal() {
-        return this == SHARED_STORAGE || this == UNKNOWN_STORAGE || this == UNKNOWN_STREAM;
-    }
-
-    /**
      * @throws WireFormatException for a code no answer has
      */
     public static StreamAnswer from(int code) {
@@ -77,5 +70,12 @@ public enum StreamAnswer {
             default:
                 throw new WireFormatException("Unknown stream answer " + code);
         }
+    }
+
+    /**
+     * The follower would replicate the stream but cannot: a problem to fix, unlike an answer the leader expects.
+     */
+    public boolean isRefusal() {
+        return this == SHARED_STORAGE || this == UNKNOWN_STORAGE || this == UNKNOWN_STREAM;
     }
 }

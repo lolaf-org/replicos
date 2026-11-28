@@ -16,12 +16,12 @@
 package org.lolaf.replicos.follower;
 
 import org.lolaf.betty.api.io.IOSession;
-import org.lolaf.ringos.rb.ByteFrameHandler;
-import org.lolaf.ringos.rb.ByteRingBuffer;
-import org.lolaf.ringos.rb.ByteRingBufferFactory;
 import org.lolaf.replicos.wire.FrameCipher;
 import org.lolaf.replicos.wire.FrameEncoder;
 import org.lolaf.replicos.wire.WireFormat;
+import org.lolaf.ringos.rb.ByteFrameHandler;
+import org.lolaf.ringos.rb.ByteRingBuffer;
+import org.lolaf.ringos.rb.ByteRingBufferFactory;
 
 import java.nio.ByteBuffer;
 import java.util.concurrent.atomic.AtomicBoolean;

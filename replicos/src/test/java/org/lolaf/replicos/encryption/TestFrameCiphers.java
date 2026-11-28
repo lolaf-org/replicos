@@ -15,23 +15,18 @@
  */
 package org.lolaf.replicos.encryption;
 
-import org.lolaf.replicos.testkit.TestingKeyExchanges;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.ValueSource;
+import org.lolaf.replicos.EncryptionMode;
+import org.lolaf.replicos.ReplicationEncryptionSettings;
 import org.lolaf.replicos.journal.JournalStream;
 import org.lolaf.replicos.spi.RecordFlag;
 import org.lolaf.replicos.spi.StreamReplicationMode;
-import org.lolaf.replicos.wire.TestingFrameEncoder;
-import org.lolaf.replicos.EncryptionMode;
-import org.lolaf.replicos.ReplicationEncryptionSettings;
-import org.lolaf.replicos.wire.FrameCipher;
-import org.lolaf.replicos.wire.FrameDecoder;
-import org.lolaf.replicos.wire.FrameEncoder;
-import org.lolaf.replicos.wire.FrameType;
-import org.lolaf.replicos.wire.WireFormat;
 import org.lolaf.replicos.spi.WireFormatException;
+import org.lolaf.replicos.testkit.TestingKeyExchanges;
+import org.lolaf.replicos.wire.*;
 
 import javax.crypto.Cipher;
 import javax.crypto.Mac;
@@ -54,6 +49,22 @@ class TestFrameCiphers {
 
     private FrameCipher sealer;
     private FrameCipher opener;
+
+    private static ByteBuffer buffer(boolean direct) {
+        return direct ? ByteBuffer.allocateDirect(1 << 16) : ByteBuffer.allocate(1 << 16);
+    }
+
+    private static int entry(ByteBuffer out, int index, String message, boolean unencrypted) {
+        ByteBuffer bytes = ByteBuffer.wrap(message.getBytes(StandardCharsets.US_ASCII));
+        int body = FrameEncoder.recordBody(out, index + WireFormat.RECORD_BODY_OFFSET, 3,
+                JournalStream.TEXT, unencrypted ? RecordFlag.PLAINTEXT.getBits() : 0, 42, bytes, 0,
+                bytes.remaining());
+        return FrameEncoder.recordHeader(out, index, 7, 1_000, body);
+    }
+
+    private static String text(ByteBuffer buffer, int index, int length) {
+        return new String(FrameDecoder.bytes(buffer, index, length), StandardCharsets.US_ASCII);
+    }
 
     private void ciphers(String cipher, int keyBits, String mac) {
         KeyExchange exchange = new KeyExchange(ReplicationEncryptionSettings.builder().mode(EncryptionMode.REQUIRED)
@@ -87,22 +98,6 @@ class TestFrameCiphers {
         return encrypted;
     }
 
-    private static ByteBuffer buffer(boolean direct) {
-        return direct ? ByteBuffer.allocateDirect(1 << 16) : ByteBuffer.allocate(1 << 16);
-    }
-
-    private static int entry(ByteBuffer out, int index, String message, boolean unencrypted) {
-        ByteBuffer bytes = ByteBuffer.wrap(message.getBytes(StandardCharsets.US_ASCII));
-        int body = FrameEncoder.recordBody(out, index + WireFormat.RECORD_BODY_OFFSET, 3,
-                JournalStream.TEXT, unencrypted ? RecordFlag.PLAINTEXT.getBits() : 0, 42, bytes, 0,
-                bytes.remaining());
-        return FrameEncoder.recordHeader(out, index, 7, 1_000, body);
-    }
-
-    private static String text(ByteBuffer buffer, int index, int length) {
-        return new String(FrameDecoder.bytes(buffer, index, length), StandardCharsets.US_ASCII);
-    }
-
     @ParameterizedTest(name = "{0} {1} {2}, direct {3}")
     @CsvSource({
             "AES/GCM/NoPadding, 256, HmacSHA256, true",
@@ -114,7 +109,7 @@ class TestFrameCiphers {
             "ChaCha20,          256, HmacSHA3-256, false",
             "AES/CTR/NoPadding, 256, HmacSHA1, true"})
     void aRecordsPayloadIsEncryptedItsFixedFieldsReadableAndItOpensAsSent(String cipher, int keyBits, String mac,
-                                                                              boolean direct) {
+                                                                          boolean direct) {
         ciphers(cipher, keyBits, mac);
         ByteBuffer frames = buffer(direct);
         int length = entry(frames, 0, MESSAGE, false);

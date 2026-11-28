@@ -15,12 +15,12 @@
  */
 package org.lolaf.replicos.follower;
 
+import org.lolaf.replicos.CatchUp;
 import org.lolaf.replicos.EncryptionMode;
 import org.lolaf.replicos.journal.Journal;
 import org.lolaf.replicos.journal.JournalCopy;
 import org.lolaf.replicos.journal.JournalReplica;
 import org.lolaf.replicos.journal.JournalStream;
-import org.lolaf.replicos.CatchUp;
 import org.lolaf.replicos.spi.LatencyRecorder;
 import org.lolaf.replicos.spi.StreamReplicationMode;
 import org.lolaf.replicos.testkit.AbstractLeaderConnectionHarness;

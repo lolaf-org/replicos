@@ -35,18 +35,21 @@ public class FollowerSettings {
     /**
      * Where the node applies its leader's streams.
      */
-    @NonNull ReplicaSinks sinks;
+    @NonNull
+    ReplicaSinks sinks;
     /**
      * How long the follower waits between two attempts to connect to its leader.
      */
     @Builder.Default
-    @NonNull Duration reconnectInterval = Duration.ofSeconds(1);
+    @NonNull
+    Duration reconnectInterval = Duration.ofSeconds(1);
     /**
      * How often the follower checks again its sinks' pending writes, which it reports to its leader, and whether a
      * stream refused until its configuration changes may be opened now.
      */
     @Builder.Default
-    @NonNull Duration checkInterval = Duration.ofSeconds(1);
+    @NonNull
+    Duration checkInterval = Duration.ofSeconds(1);
     /**
      * Threads writing what the follower receives into its sinks, its lanes spread over them; 0 writes on each lane's
      * network thread. With writer threads the network thread keeps reading while a sink writes, so a
@@ -58,5 +61,6 @@ public class FollowerSettings {
      * How a sink writer thread waits for what to write, woken by the network thread that read it.
      */
     @Builder.Default
-    @NonNull Supplier<IdleStrategy> sinkWriterIdleStrategy = BackoffIdleStrategy::new;
+    @NonNull
+    Supplier<IdleStrategy> sinkWriterIdleStrategy = BackoffIdleStrategy::new;
 }

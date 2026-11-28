@@ -27,34 +27,6 @@ import java.nio.ByteBuffer;
 public interface StreamWriter extends AutoCloseable {
 
     /**
-     * What a wait for the followers' acks ended with. Anything but {@link #ACKED} means the record may be lost on a
-     * failover: whether to carry on is the application's choice, the record being in the log either way.
-     */
-    enum Ack {
-        /**
-         * The quorum, or every follower in sync, received or applied the record as the mode asks: a failover to one
-         * of them keeps it.
-         */
-        ACKED,
-        /**
-         * The timeout passed before enough followers acked, or too few are left that an earlier wait did not time out
-         * on. Those are not waited for again until they applied what they missed, so a hung follower costs one
-         * timeout, not one per record.
-         */
-        TIMED_OUT,
-        /**
-         * No {@link LeaderSettings#getSyncFollowers() sync follower} holds the stream in sync, none connected or all
-         * catching up or refusing it, so the wait ended at once: no node a failover may go to holds the record.
-         */
-        NO_FOLLOWER_IN_SYNC,
-        /**
-         * Fewer followers in sync than the quorum asked for, so the wait ended at once; those in sync still get the
-         * record.
-         */
-        NOT_ENOUGH_FOLLOWERS
-    }
-
-    /**
      * Records must be appended in their position order, the application having stored each one first: a follower
      * catching up by snapshot reads them from there. Waits, up to the log full timeout, for a follower a whole log
      * behind, then drops it.
@@ -94,4 +66,32 @@ public interface StreamWriter extends AutoCloseable {
      */
     @Override
     void close();
+
+    /**
+     * What a wait for the followers' acks ended with. Anything but {@link #ACKED} means the record may be lost on a
+     * failover: whether to carry on is the application's choice, the record being in the log either way.
+     */
+    enum Ack {
+        /**
+         * The quorum, or every follower in sync, received or applied the record as the mode asks: a failover to one
+         * of them keeps it.
+         */
+        ACKED,
+        /**
+         * The timeout passed before enough followers acked, or too few are left that an earlier wait did not time out
+         * on. Those are not waited for again until they applied what they missed, so a hung follower costs one
+         * timeout, not one per record.
+         */
+        TIMED_OUT,
+        /**
+         * No {@link LeaderSettings#getSyncFollowers() sync follower} holds the stream in sync, none connected or all
+         * catching up or refusing it, so the wait ended at once: no node a failover may go to holds the record.
+         */
+        NO_FOLLOWER_IN_SYNC,
+        /**
+         * Fewer followers in sync than the quorum asked for, so the wait ended at once; those in sync still get the
+         * record.
+         */
+        NOT_ENOUGH_FOLLOWERS
+    }
 }

@@ -19,7 +19,6 @@ import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 import org.jspecify.annotations.Nullable;
-import org.lolaf.replicos.spi.StreamAnswer;
 
 /**
  * Where a follower applies the streams its leader announces, from its own configuration. Called on a lane's network

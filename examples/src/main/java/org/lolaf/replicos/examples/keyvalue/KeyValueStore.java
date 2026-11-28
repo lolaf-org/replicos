@@ -17,12 +17,7 @@ package org.lolaf.replicos.examples.keyvalue;
 
 import org.jspecify.annotations.Nullable;
 
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.List;
-import java.util.Map;
-import java.util.NavigableMap;
-import java.util.TreeMap;
+import java.util.*;
 
 /**
  * The application's own storage: the entries, and the journal of the changes that made them, which a snapshot reads

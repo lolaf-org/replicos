@@ -43,6 +43,14 @@ class TestKeyValueNode {
         this.nodes = new ArrayList<>();
     }
 
+    private static int freePort() {
+        try (ServerSocket socket = new ServerSocket(0)) {
+            return socket.getLocalPort();
+        } catch (IOException e) {
+            throw new UncheckedIOException(e);
+        }
+    }
+
     @AfterEach
     void close() {
         nodes.forEach(KeyValueNode::close);
@@ -112,13 +120,5 @@ class TestKeyValueNode {
         KeyValueNode node = new KeyValueNode(nodeId, address);
         nodes.add(node);
         return node;
-    }
-
-    private static int freePort() {
-        try (ServerSocket socket = new ServerSocket(0)) {
-            return socket.getLocalPort();
-        } catch (IOException e) {
-            throw new UncheckedIOException(e);
-        }
     }
 }

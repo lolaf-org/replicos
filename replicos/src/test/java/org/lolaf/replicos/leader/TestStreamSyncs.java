@@ -28,6 +28,15 @@ class TestStreamSyncs {
 
     private final StreamSyncs syncs = new StreamSyncs();
 
+    private static void await(CountDownLatch latch) {
+        try {
+            latch.await();
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new IllegalStateException(e);
+        }
+    }
+
     @Test
     void aKeyPastTheFirstCapacityGrowsItKeepingWhatItHeld() {
         syncs.announced(1);
@@ -97,14 +106,5 @@ class TestStreamSyncs {
 
         syncs.set(1, StreamSyncState.IN_SYNC);
         assertThat(syncs.isSnapshotInProgress(2)).isFalse();
-    }
-
-    private static void await(CountDownLatch latch) {
-        try {
-            latch.await();
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            throw new IllegalStateException(e);
-        }
     }
 }

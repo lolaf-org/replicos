@@ -17,23 +17,14 @@ package org.lolaf.replicos;
 
 import org.jspecify.annotations.Nullable;
 import org.lolaf.betty.api.ss.SelectStrategy;
-import org.lolaf.ringos.Deadline;
 import org.lolaf.replicos.encryption.KeyExchange;
 import org.lolaf.replicos.follower.FollowerStreams;
 import org.lolaf.replicos.follower.ReplicationClient;
-import org.lolaf.replicos.leader.Followers;
-import org.lolaf.replicos.leader.ReplicationServer;
-import org.lolaf.replicos.leader.ReplicationStats;
-import org.lolaf.replicos.leader.SlowFollowers;
-import org.lolaf.replicos.leader.StreamRegistry;
-import org.lolaf.replicos.leader.StreamWriters;
+import org.lolaf.replicos.leader.*;
 import org.lolaf.replicos.log.ReplicationLogs;
-import org.lolaf.replicos.spi.ReplicaSinks;
-import org.lolaf.replicos.spi.ReplicationClock;
-import org.lolaf.replicos.spi.LatencyRecorder;
-import org.lolaf.replicos.spi.ReplicationMetrics;
-import org.lolaf.replicos.spi.StreamAnswer;
+import org.lolaf.replicos.spi.*;
 import org.lolaf.replicos.wire.WireFormat;
+import org.lolaf.ringos.Deadline;
 
 import java.net.InetSocketAddress;
 import java.security.SecureRandom;
@@ -104,6 +95,14 @@ final class ReplicationNodeImpl implements ReplicationNode {
         this.leaderView = new LeaderViewImpl(() -> client, followerStreams);
     }
 
+    private static LatencyRecorder[] logFullWaits(int lanes, ReplicationMetrics metrics) {
+        LatencyRecorder[] logFullWaits = new LatencyRecorder[lanes];
+        for (int lane = 0; lane < lanes; lane++) {
+            logFullWaits[lane] = metrics.logFullWait(lane);
+        }
+        return logFullWaits;
+    }
+
     @Override
     public synchronized void lead(long epoch, Deadline deadline) {
         LeaderSettings leader = requireLeaderSettings();
@@ -162,14 +161,6 @@ final class ReplicationNodeImpl implements ReplicationNode {
     @Override
     public boolean isFollowing() {
         return client != null;
-    }
-
-    private static LatencyRecorder[] logFullWaits(int lanes, ReplicationMetrics metrics) {
-        LatencyRecorder[] logFullWaits = new LatencyRecorder[lanes];
-        for (int lane = 0; lane < lanes; lane++) {
-            logFullWaits[lane] = metrics.logFullWait(lane);
-        }
-        return logFullWaits;
     }
 
     @Override

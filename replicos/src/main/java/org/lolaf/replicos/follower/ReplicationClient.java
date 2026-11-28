@@ -25,13 +25,13 @@ import org.lolaf.betty.api.io.IOWorkersGroup;
 import org.lolaf.betty.api.settings.IOSettings;
 import org.lolaf.betty.api.settings.IOWorkersGroupSettings;
 import org.lolaf.betty.api.ss.SelectStrategy;
-import org.lolaf.ringos.Deadline;
 import org.lolaf.replicos.FollowerSettings;
 import org.lolaf.replicos.LeaderStatus;
 import org.lolaf.replicos.encryption.KeyExchange;
 import org.lolaf.replicos.spi.ReplicationClock;
 import org.lolaf.replicos.wire.FrameDecoder;
 import org.lolaf.replicos.wire.WireFormat;
+import org.lolaf.ringos.Deadline;
 
 import java.net.InetSocketAddress;
 import java.net.StandardSocketOptions;

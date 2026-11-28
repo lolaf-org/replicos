@@ -15,28 +15,22 @@
  */
 package org.lolaf.replicos.leader;
 
-import org.lolaf.replicos.CatchUp;
-import org.lolaf.replicos.spi.ReplicationMetrics;
-import org.lolaf.replicos.encryption.ConnectionEncryptionKeys;
-import org.lolaf.replicos.encryption.KeyExchange;
-import org.lolaf.replicos.testkit.TestingKeyExchanges;
-import org.lolaf.replicos.wire.WireFormat;
-import org.lolaf.replicos.wire.CatchUpCheck;
-import org.lolaf.replicos.wire.RecordDigest;
-import org.lolaf.replicos.spi.StreamAnswer;
-import org.lolaf.replicos.wire.FrameType;
-import java.util.concurrent.CopyOnWriteArrayList;
 import org.lolaf.betty.api.io.IOSession;
 import org.lolaf.betty.api.io.IOWriter.MessageSentCallback;
-import org.lolaf.ringos.idling.BackoffIdleStrategy;
-import org.lolaf.ringos.idling.IdleStrategy;
+import org.lolaf.replicos.CatchUp;
+import org.lolaf.replicos.encryption.ConnectionEncryptionKeys;
+import org.lolaf.replicos.encryption.KeyExchange;
 import org.lolaf.replicos.journal.Journal;
 import org.lolaf.replicos.journal.JournalStream;
+import org.lolaf.replicos.spi.ReplicationMetrics;
+import org.lolaf.replicos.spi.StreamAnswer;
 import org.lolaf.replicos.spi.StreamReplicationMode;
-import org.lolaf.replicos.wire.FrameCipher;
-import org.lolaf.replicos.wire.FrameDecoder;
-import org.lolaf.replicos.testkit.RecordingHandler;
 import org.lolaf.replicos.spi.TestingReplicationClock;
+import org.lolaf.replicos.testkit.RecordingHandler;
+import org.lolaf.replicos.testkit.TestingKeyExchanges;
+import org.lolaf.replicos.wire.*;
+import org.lolaf.ringos.idling.BackoffIdleStrategy;
+import org.lolaf.ringos.idling.IdleStrategy;
 
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
@@ -46,17 +40,14 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Queue;
 import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.stream.Collectors;
 
 import static org.awaitility.Awaitility.await;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyBoolean;
-import static org.mockito.ArgumentMatchers.anyInt;
-import static org.mockito.Mockito.doAnswer;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.when;
+import static org.mockito.ArgumentMatchers.*;
+import static org.mockito.Mockito.*;
 
 /**
  * A follower connection over a mocked IO session, whose frames sent are decoded as a follower would.
@@ -67,32 +58,6 @@ abstract class FollowerConnectionHarness {
     static final long LEADERSHIP = 41;
     static final int MESSAGE_BYTES = 1_000;
     private static final ByteBuffer NO_PROOF = ByteBuffer.allocate(0);
-
-    /**
-     * The follower's answer for a stream, catching up by full copy.
-     */
-    static void answer(FollowerConnection connection, int streamKey, StreamAnswer answer) {
-        connection.onStreamAnswer(EPOCH, streamKey, answer, CatchUpCheck.FULL_COPY, -1, NO_PROOF, 0, 0);
-    }
-
-    /**
-     * The follower needs a snapshot of the stream and proves it holds {@code texts}, its last records, the last at
-     * {@code lastPosition}.
-     */
-    static void answerHolding(FollowerConnection connection, int streamKey, int records, long lastPosition,
-                              String... texts) {
-        RecordDigest digest = new RecordDigest();
-        for (int i = 0; i < texts.length; i++) {
-            byte[] payload = texts[i].getBytes(StandardCharsets.US_ASCII);
-            digest.onRecord(JournalStream.TEXT, lastPosition - texts.length + 1 + i, ByteBuffer.wrap(payload), 0,
-                    payload.length);
-        }
-        ByteBuffer proof = ByteBuffer.allocate(RecordDigest.PROOF_BYTES);
-        int proofLength = digest.writeProof(records, proof, 0);
-        connection.onStreamAnswer(EPOCH, streamKey, StreamAnswer.SNAPSHOT_NEEDED, CatchUpCheck.LAST_RECORDS,
-                lastPosition, proof, 0, proofLength);
-    }
-
     final IOSession ioSession;
     final RecordingHandler sent;
     /**
@@ -103,21 +68,24 @@ abstract class FollowerConnectionHarness {
      * Every byte sent, as it went on the socket.
      */
     final List<byte[]> sentBytes;
-    ReplicationStats stats;
     /**
      * The batches sent, whose write betty has not reported yet while {@link #holdingWrites}.
      */
     final Queue<Runnable> unwrittenBatches;
     final AtomicInteger batchesSent;
-    volatile boolean holdingWrites;
     /**
      * The sender's clock in the connections {@link #connectionStallingAfter} builds.
      */
     final TestingReplicationClock senderClock;
     final AtomicLong senderIdles;
+    ReplicationStats stats;
+    volatile boolean holdingWrites;
     KeyExchange keyExchange;
     Journal journal;
     FollowerConnection connection;
+    private ConnectionEncryptionKeys openedKeys;
+    private FrameCipher opener;
+    private boolean leaderAccepted;
 
     FollowerConnectionHarness() {
         this.ioSession = mock(IOSession.class);
@@ -169,18 +137,29 @@ abstract class FollowerConnectionHarness {
         }).when(ioSession).send(any(ByteBuffer.class), any(), any(), anyBoolean());
     }
 
-    FollowerConnection connection() {
-        return connection(CatchUp.fullCopy());
+    /**
+     * The follower's answer for a stream, catching up by full copy.
+     */
+    static void answer(FollowerConnection connection, int streamKey, StreamAnswer answer) {
+        connection.onStreamAnswer(EPOCH, streamKey, answer, CatchUpCheck.FULL_COPY, -1, NO_PROOF, 0, 0);
     }
 
-    FollowerConnection connection(CatchUp catchUp) {
-        return new FollowerConnection(ioSession, journal.settings().heartbeatInterval(Duration.ofMillis(100)).build(),
-                journal.getStreams(), journal.getLogs(), () -> EPOCH, LEADERSHIP, "leader-a", catchUp, stats, loop -> {
-                }, new TestingReplicationClock(), keyExchange, new Followers(new TestingReplicationClock()));
-    }
-
-    JournalStream stream(String name) {
-        return journal.add(name, StreamReplicationMode.SYNC_APPLIED);
+    /**
+     * The follower needs a snapshot of the stream and proves it holds {@code texts}, its last records, the last at
+     * {@code lastPosition}.
+     */
+    static void answerHolding(FollowerConnection connection, int streamKey, int records, long lastPosition,
+                              String... texts) {
+        RecordDigest digest = new RecordDigest();
+        for (int i = 0; i < texts.length; i++) {
+            byte[] payload = texts[i].getBytes(StandardCharsets.US_ASCII);
+            digest.onRecord(JournalStream.TEXT, lastPosition - texts.length + 1 + i, ByteBuffer.wrap(payload), 0,
+                    payload.length);
+        }
+        ByteBuffer proof = ByteBuffer.allocate(RecordDigest.PROOF_BYTES);
+        int proofLength = digest.writeProof(records, proof, 0);
+        connection.onStreamAnswer(EPOCH, streamKey, StreamAnswer.SNAPSHOT_NEEDED, CatchUpCheck.LAST_RECORDS,
+                lastPosition, proof, 0, proofLength);
     }
 
     /**
@@ -190,6 +169,20 @@ abstract class FollowerConnectionHarness {
         for (int i = 0; i < count; i++) {
             stream.append("");
         }
+    }
+
+    FollowerConnection connection() {
+        return connection(CatchUp.fullCopy());
+    }
+
+    FollowerConnection connection(CatchUp catchUp) {
+        return new FollowerConnection(ioSession, journal.settings().heartbeatInterval(Duration.ofMillis(100)).build(),
+                journal.getStreams(), journal.getLogs(), () -> EPOCH, LEADERSHIP, "leader-a", catchUp, stats, loop -> {
+        }, new TestingReplicationClock(), keyExchange, new Followers(new TestingReplicationClock()));
+    }
+
+    JournalStream stream(String name) {
+        return journal.add(name, StreamReplicationMode.SYNC_APPLIED);
     }
 
     /**
@@ -208,10 +201,6 @@ abstract class FollowerConnectionHarness {
             index += consumed;
         }
     }
-
-    private ConnectionEncryptionKeys openedKeys;
-    private FrameCipher opener;
-    private boolean leaderAccepted;
 
     /**
      * As the follower: the WELCOME clear, and a CLOSE before the leader's first sealed frame, a refusal.

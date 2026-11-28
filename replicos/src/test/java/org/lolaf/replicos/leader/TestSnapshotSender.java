@@ -15,20 +15,20 @@
  */
 package org.lolaf.replicos.leader;
 
-import org.lolaf.replicos.CatchUp;
 import com.github.valfirst.slf4jtest.LoggingEvent;
 import com.github.valfirst.slf4jtest.TestLogger;
 import com.github.valfirst.slf4jtest.TestLoggerFactory;
 import org.junit.jupiter.api.Test;
+import org.lolaf.replicos.CatchUp;
 import org.lolaf.replicos.EncryptionMode;
-import org.lolaf.replicos.testkit.TestingKeyExchanges;
 import org.lolaf.replicos.journal.Journal;
 import org.lolaf.replicos.journal.JournalStream;
 import org.lolaf.replicos.spi.RecordFlag;
+import org.lolaf.replicos.spi.StreamAnswer;
 import org.lolaf.replicos.spi.TestingReplicationClock;
+import org.lolaf.replicos.testkit.TestingKeyExchanges;
 import org.lolaf.replicos.wire.CatchUpCheck;
 import org.lolaf.replicos.wire.FrameEncoder;
-import org.lolaf.replicos.spi.StreamAnswer;
 import org.lolaf.replicos.wire.WireFormat;
 import org.slf4j.event.Level;
 
@@ -47,18 +47,6 @@ import static org.awaitility.Awaitility.await;
 
 class TestSnapshotSender extends FollowerConnectionHarness {
 
-    private void hello() {
-        connection.onHello(EPOCH, WireFormat.VERSION, Journal.CLUSTER_ID, "follower-b", 0, LEADERSHIP, -1, 0, EncryptionMode.DISABLED,
-                TestingKeyExchanges.NO_NONCE);
-        fill();
-    }
-
-    private FollowerConnection connectionChunking(int snapshotChunkBytes) {
-        return new FollowerConnection(ioSession, journal.settings().heartbeatInterval(Duration.ofMillis(100))
-                .snapshotChunkBytes(snapshotChunkBytes).build(), journal.getStreams(), journal.getLogs(), () -> EPOCH, LEADERSHIP, "leader-a", CatchUp.fullCopy(), stats, loop -> {
-        }, new TestingReplicationClock(), TestingKeyExchanges.CLEAR, new Followers(new TestingReplicationClock()));
-    }
-
     /**
      * Holds {@code count} more entries once the snapshot reads its first, as appends landing while it runs.
      */
@@ -73,6 +61,18 @@ class TestSnapshotSender extends FollowerConnectionHarness {
 
     private static List<Long> range(long from, long to) {
         return LongStream.rangeClosed(from, to).boxed().collect(Collectors.toList());
+    }
+
+    private void hello() {
+        connection.onHello(EPOCH, WireFormat.VERSION, Journal.CLUSTER_ID, "follower-b", 0, LEADERSHIP, -1, 0, EncryptionMode.DISABLED,
+                TestingKeyExchanges.NO_NONCE);
+        fill();
+    }
+
+    private FollowerConnection connectionChunking(int snapshotChunkBytes) {
+        return new FollowerConnection(ioSession, journal.settings().heartbeatInterval(Duration.ofMillis(100))
+                .snapshotChunkBytes(snapshotChunkBytes).build(), journal.getStreams(), journal.getLogs(), () -> EPOCH, LEADERSHIP, "leader-a", CatchUp.fullCopy(), stats, loop -> {
+        }, new TestingReplicationClock(), TestingKeyExchanges.CLEAR, new Followers(new TestingReplicationClock()));
     }
 
     @Test

@@ -19,11 +19,7 @@ import org.lolaf.replicos.EncryptionMode;
 import org.lolaf.replicos.spi.RecordFlag;
 import org.lolaf.replicos.spi.StreamAnswer;
 import org.lolaf.replicos.spi.StreamReplicationMode;
-import org.lolaf.replicos.wire.CatchUpCheck;
-import org.lolaf.replicos.wire.CloseReason;
-import org.lolaf.replicos.wire.FrameDecoder;
-import org.lolaf.replicos.wire.FrameHandler;
-import org.lolaf.replicos.wire.WireFormat;
+import org.lolaf.replicos.wire.*;
 
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
@@ -38,12 +34,12 @@ import java.util.List;
 public class RecordingHandler implements FrameHandler {
 
     public final List<String> frames;
+    private final int clusterId;
     /**
      * The nonce of the last HELLO or WELCOME, and the last KEY_CONFIRMATION, which the frames only summarise.
      */
     public byte[] lastNonce;
     public byte[] lastKeyConfirmation;
-    private final int clusterId;
 
     /**
      * @param clusterId left out of the HELLO and WELCOME lines, so a test's own frames read shorter
@@ -55,6 +51,22 @@ public class RecordingHandler implements FrameHandler {
 
     protected static String text(ByteBuffer buffer, int index, int length) {
         return new String(FrameDecoder.bytes(buffer, index, length), StandardCharsets.US_ASCII);
+    }
+
+    /**
+     * Nothing for a clear peer, so the frames of the tests that do not encrypt read as they always did.
+     */
+    private static String encryption(EncryptionMode encryptionMode, byte[] nonce) {
+        if (encryptionMode == EncryptionMode.DISABLED) {
+            return "";
+        }
+        return " encryption=" + encryptionMode + " nonce=" + (Arrays.equals(nonce, new byte[nonce.length]) ? "zeros" : "random");
+    }
+
+    private static String flags(byte flags) {
+        return ((flags & WireFormat.CONTINUED_FRAGMENT) != 0 ? " continued" : "")
+                + ((flags & WireFormat.MORE_FRAGMENTS) != 0 ? " more" : "")
+                + (RecordFlag.RESET.isSet(flags) ? " reset" : "");
     }
 
     @Override
@@ -84,16 +96,6 @@ public class RecordingHandler implements FrameHandler {
     public void onKeyConfirmation(long epoch, byte[] confirmation) {
         lastKeyConfirmation = confirmation;
         frames.add("KEY_CONFIRMATION epoch=" + epoch + " bytes=" + confirmation.length);
-    }
-
-    /**
-     * Nothing for a clear peer, so the frames of the tests that do not encrypt read as they always did.
-     */
-    private static String encryption(EncryptionMode encryptionMode, byte[] nonce) {
-        if (encryptionMode == EncryptionMode.DISABLED) {
-            return "";
-        }
-        return " encryption=" + encryptionMode + " nonce=" + (Arrays.equals(nonce, new byte[nonce.length]) ? "zeros" : "random");
     }
 
     @Override
@@ -153,12 +155,6 @@ public class RecordingHandler implements FrameHandler {
                               int stateLength) {
         frames.add("SNAPSHOT_END epoch=" + epoch + " key=" + streamKey + " count=" + recordCount
                 + state(buffer, stateIndex, stateLength));
-    }
-
-    private static String flags(byte flags) {
-        return ((flags & WireFormat.CONTINUED_FRAGMENT) != 0 ? " continued" : "")
-                + ((flags & WireFormat.MORE_FRAGMENTS) != 0 ? " more" : "")
-                + (RecordFlag.RESET.isSet(flags) ? " reset" : "");
     }
 
     /**

@@ -16,11 +16,11 @@
 package org.lolaf.replicos.leader;
 
 import org.jspecify.annotations.Nullable;
-import org.lolaf.ringos.idling.IdleStrategy;
 import org.lolaf.replicos.AckWait;
 import org.lolaf.replicos.StreamWriter.Ack;
 import org.lolaf.replicos.spi.ReplicationClock;
 import org.lolaf.replicos.spi.StreamReplicationMode;
+import org.lolaf.ringos.idling.IdleStrategy;
 
 import java.util.Arrays;
 import java.util.List;
@@ -34,12 +34,11 @@ public final class Followers {
 
     private static final FollowerConnection[] NONE = new FollowerConnection[0];
     private static final IdleStrategy[] NO_WAITERS = new IdleStrategy[0];
-
+    private final AtomicInteger waiting;
+    private final ReplicationClock clock;
     private volatile FollowerConnection[] connections;
     private volatile List<FollowerConnection> connectionList;
     private volatile IdleStrategy[] waiters;
-    private final AtomicInteger waiting;
-    private final ReplicationClock clock;
 
     public Followers(ReplicationClock clock) {
         this.connections = NONE;
@@ -47,6 +46,45 @@ public final class Followers {
         this.waiters = NO_WAITERS;
         this.waiting = new AtomicInteger();
         this.clock = clock;
+    }
+
+    private static boolean isFirstOf(FollowerConnection[] connections, int index, String followerId) {
+        for (int i = 0; i < index; i++) {
+            if (followerId.equals(connections[i].getFollowerId())) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private static boolean matchesEveryLane(FollowerConnection[] connections, String followerId, int lanes,
+                                            Predicate<FollowerConnection> matching) {
+        for (int lane = 0; lane < lanes; lane++) {
+            if (!matchesLane(connections, followerId, lane, matching)) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private static boolean matchesLane(FollowerConnection[] connections, String followerId, int lane,
+                                       Predicate<FollowerConnection> matching) {
+        for (FollowerConnection connection : connections) {
+            if (connection.getLane() == lane && followerId.equals(connection.getFollowerId()) && matching.test(connection)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * A read with no record of a {@code SYNC_RECEIVED} stream sends no {@code RECEIVED}, so the received offset can
+     * trail the applied.
+     */
+    private static long ackedOffset(FollowerConnection connection, boolean received) {
+        FollowerAcks acks = connection.getAcks();
+        long applied = acks.getAppliedOffset();
+        return received ? Math.max(acks.getReceivedOffset(), applied) : applied;
     }
 
     synchronized void add(FollowerConnection connection) {
@@ -140,35 +178,6 @@ public final class Followers {
             }
         }
         return count;
-    }
-
-    private static boolean isFirstOf(FollowerConnection[] connections, int index, String followerId) {
-        for (int i = 0; i < index; i++) {
-            if (followerId.equals(connections[i].getFollowerId())) {
-                return false;
-            }
-        }
-        return true;
-    }
-
-    private static boolean matchesEveryLane(FollowerConnection[] connections, String followerId, int lanes,
-                                            Predicate<FollowerConnection> matching) {
-        for (int lane = 0; lane < lanes; lane++) {
-            if (!matchesLane(connections, followerId, lane, matching)) {
-                return false;
-            }
-        }
-        return true;
-    }
-
-    private static boolean matchesLane(FollowerConnection[] connections, String followerId, int lane,
-                                       Predicate<FollowerConnection> matching) {
-        for (FollowerConnection connection : connections) {
-            if (connection.getLane() == lane && followerId.equals(connection.getFollowerId()) && matching.test(connection)) {
-                return true;
-            }
-        }
-        return false;
     }
 
     /**
@@ -270,15 +279,5 @@ public final class Followers {
             return Ack.TIMED_OUT;
         }
         return null;
-    }
-
-    /**
-     * A read with no record of a {@code SYNC_RECEIVED} stream sends no {@code RECEIVED}, so the received offset can
-     * trail the applied.
-     */
-    private static long ackedOffset(FollowerConnection connection, boolean received) {
-        FollowerAcks acks = connection.getAcks();
-        long applied = acks.getAppliedOffset();
-        return received ? Math.max(acks.getReceivedOffset(), applied) : applied;
     }
 }

@@ -15,12 +15,10 @@
  */
 package org.lolaf.replicos.follower;
 
-import org.lolaf.replicos.spi.WireFormatException;
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.Nullable;
 import org.lolaf.betty.api.io.IOSession;
-import org.lolaf.ringos.Deadline;
 import org.lolaf.replicos.CatchUp;
 import org.lolaf.replicos.EncryptionMode;
 import org.lolaf.replicos.encryption.ConnectionEncryptionKeys;
@@ -30,14 +28,9 @@ import org.lolaf.replicos.encryption.Negotiation;
 import org.lolaf.replicos.spi.ReplicationClock;
 import org.lolaf.replicos.spi.StreamAnswer;
 import org.lolaf.replicos.spi.StreamReplicationMode;
-import org.lolaf.replicos.wire.CloseReason;
-import org.lolaf.replicos.wire.FrameCipher;
-import org.lolaf.replicos.wire.FrameDecoder;
-import org.lolaf.replicos.wire.FrameEncoder;
-import org.lolaf.replicos.wire.FrameHandler;
-import org.lolaf.replicos.wire.FrameType;
-import org.lolaf.replicos.wire.RecordDigest;
-import org.lolaf.replicos.wire.WireFormat;
+import org.lolaf.replicos.spi.WireFormatException;
+import org.lolaf.replicos.wire.*;
+import org.lolaf.ringos.Deadline;
 
 import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;

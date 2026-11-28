@@ -15,26 +15,15 @@
  */
 package org.lolaf.replicos.benchmarks;
 
+import org.lolaf.replicos.EncryptionMode;
 import org.lolaf.replicos.benchmarks.impl.CipherParams;
 import org.lolaf.replicos.benchmarks.impl.ReplicationParams;
-import org.lolaf.replicos.EncryptionMode;
 import org.lolaf.replicos.encryption.ConnectionEncryptionKeys;
 import org.lolaf.replicos.encryption.KeyExchange;
 import org.lolaf.replicos.wire.FrameCipher;
 import org.lolaf.replicos.wire.FrameEncoder;
 import org.lolaf.replicos.wire.WireFormat;
-import org.openjdk.jmh.annotations.Benchmark;
-import org.openjdk.jmh.annotations.BenchmarkMode;
-import org.openjdk.jmh.annotations.Fork;
-import org.openjdk.jmh.annotations.Level;
-import org.openjdk.jmh.annotations.Measurement;
-import org.openjdk.jmh.annotations.Mode;
-import org.openjdk.jmh.annotations.OutputTimeUnit;
-import org.openjdk.jmh.annotations.Param;
-import org.openjdk.jmh.annotations.Scope;
-import org.openjdk.jmh.annotations.Setup;
-import org.openjdk.jmh.annotations.State;
-import org.openjdk.jmh.annotations.Warmup;
+import org.openjdk.jmh.annotations.*;
 
 import java.nio.ByteBuffer;
 import java.security.GeneralSecurityException;
@@ -53,19 +42,17 @@ import java.util.concurrent.TimeUnit;
 @State(Scope.Thread)
 public class FrameCipherBenchmark {
 
+    /**
+     * Never read by the replication: any of the application's bytes.
+     */
+    private static final byte CONTENT_TYPE = 0;
+    private final ByteBuffer frames;
     @Param({"CLEAR", "AES_GCM_128", "AES_GCM_256", "CHACHA20_POLY1305", "AES_CTR_HMAC_SHA256", "CHACHA20_HMAC_SHA256"})
     CipherParams.Encryption encryption;
     @Param({"PROVIDER_JDK"})
     CipherParams.CryptoProvider provider;
     @Param({"PAYLOAD_200_B", "PAYLOAD_1_KIB", "PAYLOAD_16_KIB"})
     ReplicationParams.PayloadSize payloadSize;
-
-    /**
-     * Never read by the replication: any of the application's bytes.
-     */
-    private static final byte CONTENT_TYPE = 0;
-
-    private final ByteBuffer frames;
     private ByteBuffer payload;
     private FrameCipher sealer;
     private FrameCipher opener;

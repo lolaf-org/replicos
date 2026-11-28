@@ -18,9 +18,9 @@ package org.lolaf.replicos.journal;
 import lombok.Getter;
 import lombok.Setter;
 import org.jspecify.annotations.Nullable;
-import org.lolaf.ringos.Deadline;
 import org.lolaf.replicos.spi.RecordFlag;
 import org.lolaf.replicos.spi.ReplicaSink;
+import org.lolaf.ringos.Deadline;
 
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
@@ -40,16 +40,16 @@ import java.util.concurrent.CountDownLatch;
 public final class JournalCopy implements ReplicaSink {
 
     @Getter
-    private volatile @Nullable String storageIdentity;
-    @Getter
     private final List<String> writes;
+    private final List<Write> pending;
+    private final NavigableMap<Long, Write> stored;
+    @Getter
+    private volatile @Nullable String storageIdentity;
     /**
      * Entries held until {@link #writePending()} while true, as a sink writing in batches.
      */
     @Setter
     private volatile boolean batching;
-    private final List<Write> pending;
-    private final NavigableMap<Long, Write> stored;
     /**
      * What {@link #getPendingWrites()} reports.
      */
@@ -80,6 +80,21 @@ public final class JournalCopy implements ReplicaSink {
         this.writesHeld = new CountDownLatch(0);
     }
 
+    private static Write entry(byte contentType, boolean reset, long position, ByteBuffer buffer, int index,
+                               int length) {
+        byte[] bytes = new byte[length];
+        buffer.duplicate().position(index).get(bytes);
+        String type = contentType == JournalStream.TEXT ? "" : " type=" + contentType;
+        return new Write(contentType, reset, position, bytes, position + type + (reset ? " reset" : "") + " "
+                + new String(bytes, StandardCharsets.US_ASCII));
+    }
+
+    private static String state(ByteBuffer buffer, int index, int length) {
+        byte[] bytes = new byte[length];
+        buffer.duplicate().position(index).get(bytes);
+        return "state=" + new String(bytes, StandardCharsets.US_ASCII);
+    }
+
     void configure(@Nullable String storageIdentity) {
         this.storageIdentity = storageIdentity;
     }
@@ -101,15 +116,6 @@ public final class JournalCopy implements ReplicaSink {
     public void hold(long position, String text) {
         stored.put(position, new Write(JournalStream.TEXT, false, position, text.getBytes(StandardCharsets.US_ASCII),
                 ""));
-    }
-
-    private static Write entry(byte contentType, boolean reset, long position, ByteBuffer buffer, int index,
-                               int length) {
-        byte[] bytes = new byte[length];
-        buffer.duplicate().position(index).get(bytes);
-        String type = contentType == JournalStream.TEXT ? "" : " type=" + contentType;
-        return new Write(contentType, reset, position, bytes, position + type + (reset ? " reset" : "") + " "
-                + new String(bytes, StandardCharsets.US_ASCII));
     }
 
     /**
@@ -187,12 +193,6 @@ public final class JournalCopy implements ReplicaSink {
     @Override
     public void snapshotEnd(ByteBuffer buffer, int stateIndex, int stateLength) {
         writes.add("end " + state(buffer, stateIndex, stateLength));
-    }
-
-    private static String state(ByteBuffer buffer, int index, int length) {
-        byte[] bytes = new byte[length];
-        buffer.duplicate().position(index).get(bytes);
-        return "state=" + new String(bytes, StandardCharsets.US_ASCII);
     }
 
     @Override

@@ -19,13 +19,7 @@ import lombok.Builder;
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 import org.lolaf.betty.api.ss.IdleStrategySelectStrategy;
-import org.lolaf.replicos.EncryptionMode;
-import org.lolaf.replicos.FollowerSettings;
-import org.lolaf.replicos.LeaderSettings;
-import org.lolaf.replicos.ReplicationEncryptionSettings;
-import org.lolaf.replicos.RegisteredStream;
-import org.lolaf.replicos.ReplicationNode;
-import org.lolaf.replicos.ReplicationNodeBuilder;
+import org.lolaf.replicos.*;
 import org.lolaf.replicos.spi.ReplicationMetrics;
 import org.lolaf.replicos.spi.StreamReplicationMode;
 import org.lolaf.ringos.Deadline;
@@ -123,6 +117,14 @@ public final class ReplicationPair implements AutoCloseable {
         return builder;
     }
 
+    private static int freePort() {
+        try (ServerSocket socket = new ServerSocket(0)) {
+            return socket.getLocalPort();
+        } catch (IOException e) {
+            throw new UncheckedIOException(e);
+        }
+    }
+
     private String describeStorage() {
         try {
             return sinks.describeStorage();
@@ -143,14 +145,6 @@ public final class ReplicationPair implements AutoCloseable {
                 throw new IllegalStateException("Timed out waiting for " + what);
             }
             Thread.onSpinWait();
-        }
-    }
-
-    private static int freePort() {
-        try (ServerSocket socket = new ServerSocket(0)) {
-            return socket.getLocalPort();
-        } catch (IOException e) {
-            throw new UncheckedIOException(e);
         }
     }
 

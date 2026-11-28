@@ -54,6 +54,14 @@ public final class BenchmarkSinks implements ReplicaSinks, AutoCloseable {
         this.opened = new CopyOnWriteArrayList<>();
     }
 
+    private static void delete(Path path) {
+        try {
+            Files.delete(path);
+        } catch (IOException e) {
+            throw new UncheckedIOException(e);
+        }
+    }
+
     /**
      * Where the file sinks write, and its file system's type.
      */
@@ -90,14 +98,6 @@ public final class BenchmarkSinks implements ReplicaSinks, AutoCloseable {
         }
         try (Stream<Path> files = Files.walk(directory)) {
             files.sorted(Comparator.reverseOrder()).forEach(BenchmarkSinks::delete);
-        }
-    }
-
-    private static void delete(Path path) {
-        try {
-            Files.delete(path);
-        } catch (IOException e) {
-            throw new UncheckedIOException(e);
         }
     }
 }

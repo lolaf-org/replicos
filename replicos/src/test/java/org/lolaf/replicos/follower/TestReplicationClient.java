@@ -21,14 +21,10 @@ import org.junit.jupiter.params.Parameter;
 import org.junit.jupiter.params.ParameterizedClass;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.lolaf.betty.api.ss.WakeupSelectStrategy;
-import org.lolaf.ringos.Deadline;
 import org.lolaf.replicos.CatchUp;
-import org.lolaf.replicos.spi.LatencyRecorder;
-import org.lolaf.replicos.spi.ReplicationMetrics;
 import org.lolaf.replicos.FollowerSettings;
 import org.lolaf.replicos.StreamWriter;
 import org.lolaf.replicos.TestingPorts;
-import org.lolaf.replicos.testkit.TestingKeyExchanges;
 import org.lolaf.replicos.journal.Journal;
 import org.lolaf.replicos.journal.JournalCopy;
 import org.lolaf.replicos.journal.JournalReplica;
@@ -38,9 +34,9 @@ import org.lolaf.replicos.leader.ReplicationServer;
 import org.lolaf.replicos.leader.ReplicationStats;
 import org.lolaf.replicos.leader.SlowFollowers;
 import org.lolaf.replicos.log.ReplicationLogs;
-import org.lolaf.replicos.spi.TestingReplicationClock;
-import org.lolaf.replicos.spi.StreamAnswer;
-import org.lolaf.replicos.spi.StreamReplicationMode;
+import org.lolaf.replicos.spi.*;
+import org.lolaf.replicos.testkit.TestingKeyExchanges;
+import org.lolaf.ringos.Deadline;
 
 import java.net.InetSocketAddress;
 import java.time.Duration;
@@ -66,10 +62,6 @@ class TestReplicationClient {
     private static final String MAIN = "main";
     private static final String OTHER = "other";
     private static final Duration ACK_TIMEOUT = Duration.ofSeconds(5);
-
-    @Parameter
-    int sinkWriterThreads;
-
     private final Journal leader;
     private final JournalStream leaderMain;
     private final InetSocketAddress address;
@@ -78,6 +70,8 @@ class TestReplicationClient {
     private final JournalCopy main;
     private final FollowerStreams followerStreams;
     private final ReplicationStats twoLanesStats;
+    @Parameter
+    int sinkWriterThreads;
     private ReplicationClient client;
     private ReplicationServer twoLanesServer;
     private ReplicationServer syncReceivedServer;
@@ -107,6 +101,14 @@ class TestReplicationClient {
         return new ReplicationServer(leader.settings().bindAddress(address).heartbeatInterval(Duration.ofMillis(100)).build(),
                 leader.getStreams(), leader.getLogs(), leader.getFollowers(), () -> EPOCH, LEADERSHIP, "leader-a", CatchUp.fullCopy(), new WakeupSelectStrategy(10), stats,
                 new TestingReplicationClock(), TestingKeyExchanges.CLEAR);
+    }
+
+    /**
+     * The entries applied from the log, not by a snapshot.
+     */
+    private static List<Long> appliedPositions(JournalCopy copy) {
+        return copy.getWrites().stream().filter(write -> Character.isDigit(write.charAt(0)))
+                .map(write -> Long.parseLong(write.substring(0, write.indexOf(' ')))).collect(Collectors.toList());
     }
 
     /**
@@ -170,14 +172,6 @@ class TestReplicationClient {
         await().until(() -> !leader.getFollowers().connections().isEmpty()
                 && leader.getFollowers().connections().get(0).isStreamInSync(0));
         return leader.getFollowers().connections().get(0);
-    }
-
-    /**
-     * The entries applied from the log, not by a snapshot.
-     */
-    private static List<Long> appliedPositions(JournalCopy copy) {
-        return copy.getWrites().stream().filter(write -> Character.isDigit(write.charAt(0)))
-                .map(write -> Long.parseLong(write.substring(0, write.indexOf(' ')))).collect(Collectors.toList());
     }
 
     @AfterEach

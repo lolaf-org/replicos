@@ -19,16 +19,12 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
-import org.lolaf.ringos.Deadline;
 import org.lolaf.replicos.journal.Journal;
 import org.lolaf.replicos.journal.JournalCopy;
 import org.lolaf.replicos.journal.JournalReplica;
 import org.lolaf.replicos.journal.JournalStream;
-import org.lolaf.replicos.spi.LatencyRecorder;
-import org.lolaf.replicos.spi.RecordFlag;
-import org.lolaf.replicos.spi.ReplicationMetrics;
-import org.lolaf.replicos.spi.StreamAnswer;
-import org.lolaf.replicos.spi.StreamReplicationMode;
+import org.lolaf.replicos.spi.*;
+import org.lolaf.ringos.Deadline;
 
 import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
@@ -76,6 +72,26 @@ class TestReplicationNode {
         this.b = node("b", addressB, journalB, replicaB, ReplicationEncryptionSettings.builder().build());
     }
 
+    private static Deadline stop() {
+        return Deadline.of(Duration.ofSeconds(2));
+    }
+
+    private static List<String> entries(String prefix, int from, int to) {
+        return IntStream.rangeClosed(from, to).mapToObj(position -> prefix + " " + position)
+                .collect(Collectors.toList());
+    }
+
+    private static List<String> stored(List<String> entries) {
+        return IntStream.range(0, entries.size()).mapToObj(i -> (i + 1) + " " + entries.get(i))
+                .collect(Collectors.toList());
+    }
+
+    private static List<String> concat(List<String> first, List<String> second) {
+        List<String> all = new ArrayList<>(first);
+        all.addAll(second);
+        return all;
+    }
+
     private ReplicationNode node(String nodeId, InetSocketAddress bindAddress, Journal journal, JournalReplica replica,
                                  ReplicationEncryptionSettings encryption) {
         return node(nodeId, bindAddress, journal, replica, encryption, CatchUp.fullCopy());
@@ -114,10 +130,6 @@ class TestReplicationNode {
                 .build();
         journal.writeThrough(node);
         return node;
-    }
-
-    private static Deadline stop() {
-        return Deadline.of(Duration.ofSeconds(2));
     }
 
     @AfterEach
@@ -321,22 +333,6 @@ class TestReplicationNode {
             follower.close(stop());
             leader.close(stop());
         }
-    }
-
-    private static List<String> entries(String prefix, int from, int to) {
-        return IntStream.rangeClosed(from, to).mapToObj(position -> prefix + " " + position)
-                .collect(Collectors.toList());
-    }
-
-    private static List<String> stored(List<String> entries) {
-        return IntStream.range(0, entries.size()).mapToObj(i -> (i + 1) + " " + entries.get(i))
-                .collect(Collectors.toList());
-    }
-
-    private static List<String> concat(List<String> first, List<String> second) {
-        List<String> all = new ArrayList<>(first);
-        all.addAll(second);
-        return all;
     }
 
     /**

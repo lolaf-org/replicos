@@ -15,19 +15,17 @@
  */
 package org.lolaf.replicos.encryption;
 
-import org.lolaf.replicos.testkit.TestingKeyExchanges;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
 import org.lolaf.replicos.EncryptionMode;
+import org.lolaf.replicos.testkit.TestingKeyExchanges;
 import org.lolaf.replicos.wire.WireFormat;
 
 import java.nio.charset.StandardCharsets;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.lolaf.replicos.EncryptionMode.DISABLED;
-import static org.lolaf.replicos.EncryptionMode.PREFERRED;
-import static org.lolaf.replicos.EncryptionMode.REQUIRED;
+import static org.lolaf.replicos.EncryptionMode.*;
 
 class TestKeyExchange {
 
@@ -36,6 +34,10 @@ class TestKeyExchange {
 
     private static KeyExchange of(EncryptionMode mode) {
         return mode == DISABLED ? TestingKeyExchanges.CLEAR : TestingKeyExchanges.of(mode);
+    }
+
+    private static byte[] confirmationBy(KeyExchange follower, byte[] followerNonce, byte[] leaderNonce) {
+        return follower.confirm(follower.deriveKeys(followerNonce, leaderNonce), HELLO, WELCOME);
     }
 
     @ParameterizedTest(name = "{0} facing {1} is {2}")
@@ -113,9 +115,5 @@ class TestKeyExchange {
                 .isEqualTo("AES/GCM/NoPadding 256");
         assertThat(TestingKeyExchanges.of(REQUIRED, TestingKeyExchanges.SECRET, "AES/CTR/NoPadding").describeCipher())
                 .isEqualTo("AES/CTR/NoPadding 256 HmacSHA256");
-    }
-
-    private static byte[] confirmationBy(KeyExchange follower, byte[] followerNonce, byte[] leaderNonce) {
-        return follower.confirm(follower.deriveKeys(followerNonce, leaderNonce), HELLO, WELCOME);
     }
 }

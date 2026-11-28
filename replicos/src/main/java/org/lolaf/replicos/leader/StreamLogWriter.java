@@ -16,7 +16,6 @@
 package org.lolaf.replicos.leader;
 
 import org.jspecify.annotations.Nullable;
-import org.lolaf.ringos.idling.IdleStrategy;
 import org.lolaf.replicos.AckWait;
 import org.lolaf.replicos.StreamWriter;
 import org.lolaf.replicos.log.LogFullWait;
@@ -25,6 +24,7 @@ import org.lolaf.replicos.log.ReplicationLog;
 import org.lolaf.replicos.spi.LatencyRecorder;
 import org.lolaf.replicos.spi.RecordFlag;
 import org.lolaf.replicos.spi.ReplicationClock;
+import org.lolaf.ringos.idling.IdleStrategy;
 
 import java.nio.ByteBuffer;
 import java.time.Duration;

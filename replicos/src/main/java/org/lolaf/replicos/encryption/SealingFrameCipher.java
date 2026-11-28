@@ -16,7 +16,10 @@
 package org.lolaf.replicos.encryption;
 
 import org.lolaf.replicos.spi.WireFormatException;
-import org.lolaf.replicos.wire.*;
+import org.lolaf.replicos.wire.FrameCipher;
+import org.lolaf.replicos.wire.FrameDecoder;
+import org.lolaf.replicos.wire.FrameType;
+import org.lolaf.replicos.wire.WireFormat;
 
 import java.nio.ByteBuffer;
 

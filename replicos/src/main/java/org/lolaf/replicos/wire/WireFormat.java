@@ -16,7 +16,6 @@
 package org.lolaf.replicos.wire;
 
 import lombok.experimental.UtilityClass;
-import org.lolaf.replicos.spi.RecordFlag;
 
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
@@ -100,6 +99,41 @@ public class WireFormat {
     public static final long NO_RESUME = -1;
 
     public static final int MAX_STRING_BYTES = 0xFFFF;
+    /**
+     * The longest stream state a snapshot carries, its length being an unsigned short.
+     */
+    public static final int MAX_STATE_BYTES = 0xFFFF;
+    /**
+     * Each boundary a {@link FrameType#SNAPSHOT_END} carries after its state: leadership 8, first position 8. Reserved
+     * for a later check, so this version accepts and skips them.
+     */
+    public static final int LEADERSHIP_BOUNDARY_BYTES = 16;
+    /**
+     * The random nonce of {@link FrameType#HELLO} and {@link FrameType#WELCOME}, zeros from a peer that does not
+     * encrypt: both nonces make each connection's keys new.
+     */
+    public static final int NONCE_BYTES = 16;
+    /**
+     * The HMAC-SHA256 of {@link FrameType#KEY_CONFIRMATION}.
+     */
+    public static final int KEY_CONFIRMATION_BYTES = 32;
+    /**
+     * The tag ending an authenticated frame, whatever the cipher.
+     */
+    public static final int TAG_BYTES = 16;
+    /**
+     * {@link FrameType#STREAM}: the leader's store has a storage identity.
+     */
+    public static final int FLAG_STORAGE_IDENTITY = 0x01;
+    /**
+     * {@link FrameType#ACK}: the follower has applied everything it needs to take over.
+     */
+    public static final int FLAG_IN_SYNC = 0x01;
+    /**
+     * Initial read buffer of a connection, holding many small frames per read. Betty grows it for a larger frame, up
+     * to the connection's frame limit, so a connection pays for its largest frame only once it receives one.
+     */
+    public static final int READ_BUFFER_BYTES = 64 * 1024;
 
     /**
      * What HELLO and WELCOME carry of the cluster's name: the first 4 bytes, big-endian, of the SHA-256 of its UTF-8,
@@ -113,48 +147,6 @@ public class WireFormat {
             throw new IllegalStateException("Every Java platform has SHA-256", e);
         }
     }
-
-    /**
-     * The longest stream state a snapshot carries, its length being an unsigned short.
-     */
-    public static final int MAX_STATE_BYTES = 0xFFFF;
-    /**
-     * Each boundary a {@link FrameType#SNAPSHOT_END} carries after its state: leadership 8, first position 8. Reserved
-     * for a later check, so this version accepts and skips them.
-     */
-    public static final int LEADERSHIP_BOUNDARY_BYTES = 16;
-
-    /**
-     * The random nonce of {@link FrameType#HELLO} and {@link FrameType#WELCOME}, zeros from a peer that does not
-     * encrypt: both nonces make each connection's keys new.
-     */
-    public static final int NONCE_BYTES = 16;
-
-    /**
-     * The HMAC-SHA256 of {@link FrameType#KEY_CONFIRMATION}.
-     */
-    public static final int KEY_CONFIRMATION_BYTES = 32;
-
-    /**
-     * The tag ending an authenticated frame, whatever the cipher.
-     */
-    public static final int TAG_BYTES = 16;
-
-    /**
-     * {@link FrameType#STREAM}: the leader's store has a storage identity.
-     */
-    public static final int FLAG_STORAGE_IDENTITY = 0x01;
-
-    /**
-     * {@link FrameType#ACK}: the follower has applied everything it needs to take over.
-     */
-    public static final int FLAG_IN_SYNC = 0x01;
-
-    /**
-     * Initial read buffer of a connection, holding many small frames per read. Betty grows it for a larger frame, up
-     * to the connection's frame limit, so a connection pays for its largest frame only once it receives one.
-     */
-    public static final int READ_BUFFER_BYTES = 64 * 1024;
 
     /**
      * The size of a buffer holding frames up to {@code maxFrameBytes}, and many small ones at once. A multiple of 64,

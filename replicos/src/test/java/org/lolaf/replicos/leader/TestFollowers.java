@@ -15,27 +15,23 @@
  */
 package org.lolaf.replicos.leader;
 
-import org.lolaf.replicos.AckWait;
-import org.lolaf.replicos.CatchUp;
-import org.lolaf.replicos.LeaderSettings;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.parallel.Isolated;
 import org.lolaf.betty.api.io.IOSession;
-import org.lolaf.ringos.idling.BackoffIdleStrategy;
-import org.lolaf.ringos.idling.IdleStrategy;
-import org.lolaf.replicos.spi.ReplicationMetrics;
-import org.lolaf.replicos.StreamWriter;
-import org.lolaf.replicos.EncryptionMode;
-import org.lolaf.replicos.testkit.TestingKeyExchanges;
+import org.lolaf.replicos.*;
 import org.lolaf.replicos.journal.Journal;
 import org.lolaf.replicos.journal.JournalStream;
 import org.lolaf.replicos.log.ReplicationLogs;
-import org.lolaf.replicos.spi.StreamReplicationMode;
-import org.lolaf.replicos.testkit.AllocatedBytes;
+import org.lolaf.replicos.spi.ReplicationMetrics;
 import org.lolaf.replicos.spi.StreamAnswer;
+import org.lolaf.replicos.spi.StreamReplicationMode;
+import org.lolaf.replicos.spi.TestingReplicationClock;
+import org.lolaf.replicos.testkit.AllocatedBytes;
+import org.lolaf.replicos.testkit.TestingKeyExchanges;
 import org.lolaf.replicos.wire.CloseReason;
 import org.lolaf.replicos.wire.WireFormat;
-import org.lolaf.replicos.spi.TestingReplicationClock;
+import org.lolaf.ringos.idling.BackoffIdleStrategy;
+import org.lolaf.ringos.idling.IdleStrategy;
 
 import java.nio.ByteBuffer;
 import java.time.Duration;
@@ -81,6 +77,13 @@ class TestFollowers {
         return AckWait.of(mode, quorum, Duration.ofNanos(timeoutNanos));
     }
 
+    private static Journal twoLanes() {
+        Journal twoLanes = new Journal(new ReplicationLogs(2, 1 << 16), Duration.ofMillis(50));
+        twoLanes.add("main", StreamReplicationMode.SYNC_APPLIED);
+        twoLanes.add("other", StreamReplicationMode.SYNC_APPLIED);
+        return twoLanes;
+    }
+
     private StreamWriter.Ack awaitApplied(int quorum, long timeoutNanos) {
         return followers.awaitAck(KEY, offset, ackWait(StreamReplicationMode.SYNC_APPLIED, quorum, timeoutNanos), idle);
     }
@@ -95,13 +98,6 @@ class TestFollowers {
 
     private StreamWriter.Ack awaitReceived() {
         return followers.awaitAck(KEY, offset, ackWait(StreamReplicationMode.SYNC_RECEIVED, ALL, NO_TIMEOUT), idle);
-    }
-
-    private static Journal twoLanes() {
-        Journal twoLanes = new Journal(new ReplicationLogs(2, 1 << 16), Duration.ofMillis(50));
-        twoLanes.add("main", StreamReplicationMode.SYNC_APPLIED);
-        twoLanes.add("other", StreamReplicationMode.SYNC_APPLIED);
-        return twoLanes;
     }
 
     private FollowerConnection inSyncFollower(long appliedOffset) {

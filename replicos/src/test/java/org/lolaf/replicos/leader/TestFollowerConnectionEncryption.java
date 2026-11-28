@@ -16,36 +16,27 @@
 package org.lolaf.replicos.leader;
 
 import com.github.valfirst.slf4jtest.LoggingEvent;
-import lombok.extern.slf4j.Slf4j;
 import com.github.valfirst.slf4jtest.TestLogger;
 import com.github.valfirst.slf4jtest.TestLoggerFactory;
+import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
-import org.lolaf.replicos.spi.ReplicationClock;
 import org.lolaf.replicos.EncryptionMode;
+import org.lolaf.replicos.encryption.JceAeadAllocation;
+import org.lolaf.replicos.encryption.KeyExchange;
 import org.lolaf.replicos.journal.Journal;
 import org.lolaf.replicos.journal.JournalStream;
 import org.lolaf.replicos.log.LogFullWait;
-import org.lolaf.replicos.log.ReplicationLog;
 import org.lolaf.replicos.log.LogRecord;
+import org.lolaf.replicos.log.ReplicationLog;
 import org.lolaf.replicos.log.TestingLogFragments;
-import org.lolaf.replicos.encryption.JceAeadAllocation;
-import org.lolaf.replicos.encryption.KeyExchange;
-import org.lolaf.replicos.testkit.TestingKeyExchanges;
-import org.lolaf.replicos.spi.RecordFlag;
+import org.lolaf.replicos.spi.*;
 import org.lolaf.replicos.testkit.AllocatedBytes;
-import org.lolaf.replicos.wire.CloseReason;
-import org.lolaf.replicos.wire.FrameCipher;
-import org.lolaf.replicos.wire.FrameDecoder;
-import org.lolaf.replicos.wire.FrameEncoder;
-import org.lolaf.replicos.wire.FrameType;
-import org.lolaf.replicos.spi.StreamAnswer;
-import org.lolaf.replicos.spi.StreamReplicationMode;
-import org.lolaf.replicos.wire.WireFormat;
-import org.lolaf.replicos.spi.WireFormatException;
+import org.lolaf.replicos.testkit.TestingKeyExchanges;
+import org.lolaf.replicos.wire.*;
 import org.slf4j.event.Level;
 
 import javax.crypto.Cipher;
@@ -77,6 +68,15 @@ class TestFollowerConnectionEncryption extends FollowerConnectionHarness {
 
     private static ByteBuffer ascii(String text) {
         return ByteBuffer.wrap(text.getBytes(StandardCharsets.US_ASCII));
+    }
+
+    /**
+     * An ACK of {@code appliedOffset} as the follower sends it, sealed by {@code sealer} unless null.
+     */
+    private static ByteBuffer ack(@Nullable FrameCipher sealer, long appliedOffset) {
+        ByteBuffer frame = ByteBuffer.allocate(64);
+        int length = FrameEncoder.ack(frame, 0, EPOCH, appliedOffset, true, 0);
+        return frame.limit(sealer == null ? length : sealer.seal(frame, 0, length));
     }
 
     private JournalStream asyncStream(String name) {
@@ -431,15 +431,6 @@ class TestFollowerConnectionEncryption extends FollowerConnectionHarness {
             }
         }
         return filled + connection.getSender().fillBatch(batch);
-    }
-
-    /**
-     * An ACK of {@code appliedOffset} as the follower sends it, sealed by {@code sealer} unless null.
-     */
-    private static ByteBuffer ack(@Nullable FrameCipher sealer, long appliedOffset) {
-        ByteBuffer frame = ByteBuffer.allocate(64);
-        int length = FrameEncoder.ack(frame, 0, EPOCH, appliedOffset, true, 0);
-        return frame.limit(sealer == null ? length : sealer.seal(frame, 0, length));
     }
 
     /**

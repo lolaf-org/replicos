@@ -17,10 +17,10 @@ package org.lolaf.replicos.log;
 
 import lombok.Getter;
 import org.jspecify.annotations.Nullable;
-import org.lolaf.ringos.idling.RetryStrategy;
-import org.lolaf.ringos.rb.*;
 import org.lolaf.replicos.wire.FrameEncoder;
 import org.lolaf.replicos.wire.WireFormat;
+import org.lolaf.ringos.idling.RetryStrategy;
+import org.lolaf.ringos.rb.*;
 
 import java.nio.ByteBuffer;
 import java.util.List;

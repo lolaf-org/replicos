@@ -17,9 +17,9 @@ package org.lolaf.replicos.log;
 
 import lombok.experimental.UtilityClass;
 import org.jspecify.annotations.Nullable;
-import org.lolaf.replicos.spi.ReplicationClock;
 import org.lolaf.replicos.journal.JournalStream;
 import org.lolaf.replicos.spi.RecordFlag;
+import org.lolaf.replicos.spi.ReplicationClock;
 
 import java.nio.ByteBuffer;
 import java.time.Duration;

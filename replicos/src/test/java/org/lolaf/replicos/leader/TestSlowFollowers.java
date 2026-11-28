@@ -15,11 +15,11 @@
  */
 package org.lolaf.replicos.leader;
 
-import org.lolaf.replicos.DroppedFollower;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.parallel.Isolated;
-import org.lolaf.replicos.testkit.AllocatedBytes;
+import org.lolaf.replicos.DroppedFollower;
 import org.lolaf.replicos.spi.TestingReplicationClock;
+import org.lolaf.replicos.testkit.AllocatedBytes;
 
 import java.time.Duration;
 import java.time.Instant;

@@ -42,15 +42,15 @@ public final class StreamRegistration implements RegisteredStream {
     private final int lane;
     @Getter
     private final String streamName;
+    private final Supplier<SnapshotSource> snapshotSource;
+    private final StreamWriters writers;
+    private final Followers followers;
+    private final ReplicationStats.AckCounts acks;
     /**
      * Replaced whole, so the announcer reads a mode and an identity set together.
      */
     @Getter
     private volatile Replication replication;
-    private final Supplier<SnapshotSource> snapshotSource;
-    private final StreamWriters writers;
-    private final Followers followers;
-    private final ReplicationStats.AckCounts acks;
 
     StreamRegistration(int key, int lane, StreamSettings settings, StreamWriters writers, Followers followers,
                        ReplicationStats stats) {
@@ -70,8 +70,18 @@ public final class StreamRegistration implements RegisteredStream {
     }
 
     @Override
+    public synchronized void setReplicationMode(StreamReplicationMode replicationMode) {
+        reconfigure(replicationMode, replication.getStorageIdentity());
+    }
+
+    @Override
     public @Nullable String getStorageIdentity() {
         return replication.getStorageIdentity();
+    }
+
+    @Override
+    public synchronized void setStorageIdentity(@Nullable String storageIdentity) {
+        reconfigure(replication.getMode(), storageIdentity);
     }
 
     /**
@@ -93,16 +103,6 @@ public final class StreamRegistration implements RegisteredStream {
         }
         replication = next;
         followers.reannounce(key);
-    }
-
-    @Override
-    public synchronized void setReplicationMode(StreamReplicationMode replicationMode) {
-        reconfigure(replicationMode, replication.getStorageIdentity());
-    }
-
-    @Override
-    public synchronized void setStorageIdentity(@Nullable String storageIdentity) {
-        reconfigure(replication.getMode(), storageIdentity);
     }
 
     @Override
@@ -164,7 +164,8 @@ public final class StreamRegistration implements RegisteredStream {
     @Value
     public static class Replication {
 
-        @NonNull StreamReplicationMode mode;
+        @NonNull
+        StreamReplicationMode mode;
         @Nullable String storageIdentity;
     }
 }

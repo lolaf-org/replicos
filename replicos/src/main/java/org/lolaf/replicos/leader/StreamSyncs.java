@@ -41,6 +41,14 @@ final class StreamSyncs {
         this.streams = grown(new StreamSync[0], INITIAL_CAPACITY);
     }
 
+    private static StreamSync[] grown(StreamSync[] from, int capacity) {
+        StreamSync[] grown = Arrays.copyOf(from, capacity);
+        for (int key = from.length; key < capacity; key++) {
+            grown[key] = new StreamSync();
+        }
+        return grown;
+    }
+
     /**
      * Null for a stream not announced to the follower.
      */
@@ -126,22 +134,13 @@ final class StreamSyncs {
         return false;
     }
 
-    private static StreamSync[] grown(StreamSync[] from, int capacity) {
-        StreamSync[] grown = Arrays.copyOf(from, capacity);
-        for (int key = from.length; key < capacity; key++) {
-            grown[key] = new StreamSync();
-        }
-        return grown;
-    }
-
     private static final class StreamSync {
 
         private static final AtomicReferenceFieldUpdater<StreamSync, StreamSyncState> STATE =
                 AtomicReferenceFieldUpdater.newUpdater(StreamSync.class, StreamSyncState.class, "state");
-
+        private final Claim claim;
         private volatile @Nullable StreamSyncState state;
         private volatile @Nullable StreamAnswer answer;
-        private final Claim claim;
 
         private StreamSync() {
             this.claim = new Claim();
@@ -157,10 +156,10 @@ final class StreamSyncs {
      */
     static final class Claim {
 
+        final ByteBuffer proof;
         CatchUpCheck check;
         long lastPosition;
         int proofLength;
-        final ByteBuffer proof;
 
         Claim() {
             this.check = CatchUpCheck.FULL_COPY;

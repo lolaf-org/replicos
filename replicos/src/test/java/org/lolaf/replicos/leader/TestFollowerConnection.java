@@ -15,51 +15,33 @@
  */
 package org.lolaf.replicos.leader;
 
-import org.lolaf.replicos.CatchUp;
 import org.junit.jupiter.api.Test;
-import org.lolaf.ringos.Deadline;
-import org.lolaf.replicos.spi.ReplicationMetrics;
-import org.lolaf.replicos.spi.LatencyRecorder;
+import org.lolaf.replicos.CatchUp;
 import org.lolaf.replicos.EncryptionMode;
-import org.lolaf.replicos.testkit.TestingKeyExchanges;
 import org.lolaf.replicos.journal.Journal;
 import org.lolaf.replicos.journal.JournalStream;
 import org.lolaf.replicos.log.ReplicationLogs;
-import org.lolaf.replicos.wire.CloseReason;
-import org.lolaf.replicos.wire.FrameEncoder;
-import org.lolaf.replicos.wire.FrameType;
-import org.lolaf.replicos.wire.TestingFrameEncoder;
-import org.lolaf.replicos.spi.StreamAnswer;
-import org.lolaf.replicos.spi.StreamReplicationMode;
-import org.lolaf.replicos.wire.WireFormat;
-import org.lolaf.replicos.spi.WireFormatException;
-import org.lolaf.replicos.spi.TestingReplicationClock;
+import org.lolaf.replicos.spi.*;
+import org.lolaf.replicos.testkit.TestingKeyExchanges;
+import org.lolaf.replicos.wire.*;
+import org.lolaf.ringos.Deadline;
 
 import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CountDownLatch;
-import java.util.Map;
 import java.util.concurrent.TimeUnit;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.api.InstanceOfAssertFactories.LONG;
 import static org.awaitility.Awaitility.await;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyBoolean;
-import static org.mockito.ArgumentMatchers.anyInt;
-import static org.mockito.ArgumentMatchers.anyLong;
-import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.doAnswer;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.times;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
+import static org.mockito.ArgumentMatchers.*;
+import static org.mockito.Mockito.*;
 
 class TestFollowerConnection extends FollowerConnectionHarness {
 

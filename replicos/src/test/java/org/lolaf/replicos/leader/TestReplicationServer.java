@@ -15,7 +15,6 @@
  */
 package org.lolaf.replicos.leader;
 
-import org.lolaf.replicos.CatchUp;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.lolaf.betty.api.Client;
@@ -25,20 +24,21 @@ import org.lolaf.betty.api.io.IOSession;
 import org.lolaf.betty.api.settings.IOSettings;
 import org.lolaf.betty.api.settings.IOWorkersGroupSettings;
 import org.lolaf.betty.api.ss.WakeupSelectStrategy;
-import org.lolaf.ringos.Deadline;
-import org.lolaf.replicos.spi.ReplicationMetrics;
-import org.lolaf.replicos.TestingPorts;
+import org.lolaf.replicos.CatchUp;
 import org.lolaf.replicos.EncryptionMode;
-import org.lolaf.replicos.testkit.TestingKeyExchanges;
+import org.lolaf.replicos.TestingPorts;
 import org.lolaf.replicos.journal.Journal;
 import org.lolaf.replicos.journal.JournalStream;
+import org.lolaf.replicos.spi.ReplicationMetrics;
+import org.lolaf.replicos.spi.StreamReplicationMode;
+import org.lolaf.replicos.spi.TestingReplicationClock;
+import org.lolaf.replicos.testkit.RecordingHandler;
+import org.lolaf.replicos.testkit.TestingKeyExchanges;
 import org.lolaf.replicos.wire.FrameDecoder;
 import org.lolaf.replicos.wire.FrameEncoder;
 import org.lolaf.replicos.wire.FrameType;
-import org.lolaf.replicos.testkit.RecordingHandler;
-import org.lolaf.replicos.spi.StreamReplicationMode;
 import org.lolaf.replicos.wire.TestingFrameEncoder;
-import org.lolaf.replicos.spi.TestingReplicationClock;
+import org.lolaf.ringos.Deadline;
 
 import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;

@@ -34,7 +34,7 @@ final class LanePositions {
     private volatile Position[] positions;
 
     LanePositions() {
-        this.positions = new Position[] {new Position()};
+        this.positions = new Position[]{new Position()};
     }
 
     int count() {

@@ -15,12 +15,12 @@
  */
 package org.lolaf.replicos.wire;
 
-import org.lolaf.replicos.spi.WireFormatException;
-import org.lolaf.replicos.EncryptionMode;
 import org.jspecify.annotations.Nullable;
+import org.lolaf.replicos.EncryptionMode;
 import org.lolaf.replicos.spi.RecordFlag;
 import org.lolaf.replicos.spi.StreamAnswer;
 import org.lolaf.replicos.spi.StreamReplicationMode;
+import org.lolaf.replicos.spi.WireFormatException;
 
 import java.nio.ByteBuffer;
 
@@ -32,6 +32,10 @@ import java.nio.ByteBuffer;
  * does not take, one of the other direction's, is refused: by default every method throws {@link WireFormatException}.
  */
 public interface FrameHandler {
+
+    private static WireFormatException unexpected(FrameType type) {
+        return new WireFormatException("Unexpected " + type + " frame");
+    }
 
     /**
      * A follower's first frame.
@@ -239,9 +243,5 @@ public interface FrameHandler {
      */
     default void onClose(long epoch, CloseReason reason, String text) {
         throw unexpected(FrameType.CLOSE);
-    }
-
-    private static WireFormatException unexpected(FrameType type) {
-        return new WireFormatException("Unexpected " + type + " frame");
     }
 }

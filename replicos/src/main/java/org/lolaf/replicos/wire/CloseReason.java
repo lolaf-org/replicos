@@ -99,17 +99,17 @@ public enum CloseReason {
     }
 
     /**
+     * @return {@link #UNKNOWN} for a code no reason has
+     */
+    public static CloseReason from(int code) {
+        return code >= 0 && code < BY_CODE.length ? BY_CODE[code] : UNKNOWN;
+    }
+
+    /**
      * The peers disagree on encryption, or two share a node id: logged as an error at both ends, since only an
      * operator can fix it.
      */
     public boolean isConfigurationError() {
         return this == KEY_MISMATCH || this == ENCRYPTION_REQUIRED || this == DUPLICATE_NODE_ID;
-    }
-
-    /**
-     * @return {@link #UNKNOWN} for a code no reason has
-     */
-    public static CloseReason from(int code) {
-        return code >= 0 && code < BY_CODE.length ? BY_CODE[code] : UNKNOWN;
     }
 }

@@ -15,12 +15,12 @@
  */
 package org.lolaf.replicos.wire;
 
-import org.lolaf.replicos.spi.WireFormatException;
-import org.lolaf.replicos.EncryptionMode;
 import lombok.RequiredArgsConstructor;
+import org.lolaf.replicos.EncryptionMode;
 import org.lolaf.replicos.spi.RecordFlag;
 import org.lolaf.replicos.spi.StreamAnswer;
 import org.lolaf.replicos.spi.StreamReplicationMode;
+import org.lolaf.replicos.spi.WireFormatException;
 
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
@@ -41,44 +41,6 @@ public class FrameDecoder {
      * refused instead of buffering without end.
      */
     private final int maxFrameBytes;
-
-    /**
-     * Decodes a clear connection's frame.
-     *
-     * @param available the bytes readable from {@code index}
-     * @return the length of the frame dispatched, or 0 when {@code available} does not hold a whole frame yet
-     * @throws WireFormatException for bytes that are not a valid frame
-     */
-    public int decode(ByteBuffer in, int index, int available, FrameHandler handler) {
-        return decode(in, index, available, handler, FrameCipher.CLEAR);
-    }
-
-    /**
-     * As {@link #decode(ByteBuffer, int, int, FrameHandler)}, opening the frame first: it is dispatched only once its
-     * tag verified.
-     */
-    public int decode(ByteBuffer in, int index, int available, FrameHandler handler, FrameCipher opener) {
-        if (available < Integer.BYTES) {
-            return 0;
-        }
-        int length = in.getInt(index + WireFormat.OFFSET_LENGTH);
-        if (length < HEADER_BYTES || length > maxFrameBytes) {
-            throw new WireFormatException("Frame length " + length + " outside " + HEADER_BYTES + ".." + maxFrameBytes);
-        }
-        if (available < length) {
-            return 0;
-        }
-        FrameType type = FrameType.from(in.get(index + WireFormat.OFFSET_TYPE));
-        int contentLength = opener.open(in, index, length);
-        int variableBytes = contentLength - HEADER_BYTES - type.getFixedPayloadBytes();
-        if (variableBytes < 0) {
-            throw new WireFormatException(type + " of " + length + " bytes is shorter than its fixed part");
-        }
-        int flags = in.get(index + WireFormat.OFFSET_FLAGS);
-        long epoch = in.getLong(index + WireFormat.OFFSET_EPOCH);
-        dispatch(in, index + HEADER_BYTES, type, flags, epoch, variableBytes, handler);
-        return length;
-    }
 
     /**
      * Whether the frame at {@code frameIndex} is a RECORD or SNAPSHOT_RECORD flagged {@link RecordFlag#PLAINTEXT}.
@@ -274,5 +236,43 @@ public class FrameDecoder {
 
     private static int unsignedShort(ByteBuffer in, int index) {
         return in.getShort(index) & 0xFFFF;
+    }
+
+    /**
+     * Decodes a clear connection's frame.
+     *
+     * @param available the bytes readable from {@code index}
+     * @return the length of the frame dispatched, or 0 when {@code available} does not hold a whole frame yet
+     * @throws WireFormatException for bytes that are not a valid frame
+     */
+    public int decode(ByteBuffer in, int index, int available, FrameHandler handler) {
+        return decode(in, index, available, handler, FrameCipher.CLEAR);
+    }
+
+    /**
+     * As {@link #decode(ByteBuffer, int, int, FrameHandler)}, opening the frame first: it is dispatched only once its
+     * tag verified.
+     */
+    public int decode(ByteBuffer in, int index, int available, FrameHandler handler, FrameCipher opener) {
+        if (available < Integer.BYTES) {
+            return 0;
+        }
+        int length = in.getInt(index + WireFormat.OFFSET_LENGTH);
+        if (length < HEADER_BYTES || length > maxFrameBytes) {
+            throw new WireFormatException("Frame length " + length + " outside " + HEADER_BYTES + ".." + maxFrameBytes);
+        }
+        if (available < length) {
+            return 0;
+        }
+        FrameType type = FrameType.from(in.get(index + WireFormat.OFFSET_TYPE));
+        int contentLength = opener.open(in, index, length);
+        int variableBytes = contentLength - HEADER_BYTES - type.getFixedPayloadBytes();
+        if (variableBytes < 0) {
+            throw new WireFormatException(type + " of " + length + " bytes is shorter than its fixed part");
+        }
+        int flags = in.get(index + WireFormat.OFFSET_FLAGS);
+        long epoch = in.getLong(index + WireFormat.OFFSET_EPOCH);
+        dispatch(in, index + HEADER_BYTES, type, flags, epoch, variableBytes, handler);
+        return length;
     }
 }

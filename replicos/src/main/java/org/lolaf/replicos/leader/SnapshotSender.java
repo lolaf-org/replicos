@@ -17,19 +17,13 @@ package org.lolaf.replicos.leader;
 
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.Nullable;
-import org.lolaf.ringos.idling.BackoffIdleStrategy;
-import org.lolaf.ringos.idling.IdleStrategy;
 import org.lolaf.replicos.CatchUp;
 import org.lolaf.replicos.spi.RecordFlag;
 import org.lolaf.replicos.spi.ReplicationClock;
 import org.lolaf.replicos.spi.SnapshotSource;
-import org.lolaf.replicos.wire.CatchUpCheck;
-import org.lolaf.replicos.wire.CloseReason;
-import org.lolaf.replicos.wire.FrameCipher;
-import org.lolaf.replicos.wire.FrameEncoder;
-import org.lolaf.replicos.wire.FrameType;
-import org.lolaf.replicos.wire.RecordDigest;
-import org.lolaf.replicos.wire.WireFormat;
+import org.lolaf.replicos.wire.*;
+import org.lolaf.ringos.idling.BackoffIdleStrategy;
+import org.lolaf.ringos.idling.IdleStrategy;
 
 import java.nio.ByteBuffer;
 import java.time.Duration;
@@ -69,10 +63,6 @@ final class SnapshotSender {
      * Digests no more records than the follower may prove, whatever range it claims.
      */
     private final SnapshotSource.RecordConsumer lastRecordsReader;
-    /**
-     * A follower catching up otherwise than this leader is logged once per connection.
-     */
-    private boolean catchUpMismatchLogged;
     private final int maxRecordFrameBytes;
     private final int chunkBytes;
     private final ChunkWriter writer;
@@ -81,6 +71,10 @@ final class SnapshotSender {
      * The stream's state as of the round in progress.
      */
     private final ByteBuffer state;
+    /**
+     * A follower catching up otherwise than this leader is logged once per connection.
+     */
+    private boolean catchUpMismatchLogged;
     private volatile boolean requested;
     private long retryAtNanos;
     /**
@@ -141,6 +135,17 @@ final class SnapshotSender {
                         && lastRecords.getRecordCount() < catchUp.getRecords();
         this.maxRecordFrameBytes = maxRecordFrameBytes;
         this.chunkBytes = Math.min(chunkBytes, batches.getBatchBytes());
+    }
+
+    private static String describe(CatchUpCheck check, int records) {
+        switch (check) {
+            case FULL_COPY:
+                return "full copy";
+            case LAST_RECORDS:
+                return records > 0 ? "its last " + records + " records" : "its last records";
+            default:
+                return "a check this version does not know";
+        }
     }
 
     /**
@@ -320,17 +325,6 @@ final class SnapshotSender {
             log.warn("Follower {} catches up by {} and this leader by {}: its streams are copied whole, stream {} first",
                     connection.getFollowerId(), describe(claim.check, followerRecords),
                     describe(catchUp.getCheck(), catchUp.getRecords()), stream.getStreamName());
-        }
-    }
-
-    private static String describe(CatchUpCheck check, int records) {
-        switch (check) {
-            case FULL_COPY:
-                return "full copy";
-            case LAST_RECORDS:
-                return records > 0 ? "its last " + records + " records" : "its last records";
-            default:
-                return "a check this version does not know";
         }
     }
 

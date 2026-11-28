@@ -48,9 +48,9 @@ final class LagSampler {
     /**
      * A fill starting: samples the log's tail unless a sample is pending or nothing was written since the last one.
      *
-     * @param readOffset      where the sender reads next
-     * @param lastReadOffset  the start of the last record the sender read, -1 before any
-     * @param appliedOffset   the start of the last record the follower acked, -1 before any
+     * @param readOffset     where the sender reads next
+     * @param lastReadOffset the start of the last record the sender read, -1 before any
+     * @param appliedOffset  the start of the last record the follower acked, -1 before any
      */
     void onFill(long tail, long readOffset, long lastReadOffset, long appliedOffset) {
         if (pending || tail == sampledTail) {

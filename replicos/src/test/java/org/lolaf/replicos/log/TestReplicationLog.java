@@ -15,19 +15,19 @@
  */
 package org.lolaf.replicos.log;
 
-import org.lolaf.replicos.journal.Journal;
-import org.lolaf.replicos.spi.ReplicationClock;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 import org.junit.jupiter.api.parallel.Isolated;
-import org.lolaf.ringos.idling.RetryStrategy;
+import org.lolaf.replicos.journal.Journal;
 import org.lolaf.replicos.journal.JournalStream;
 import org.lolaf.replicos.spi.RecordFlag;
+import org.lolaf.replicos.spi.ReplicationClock;
 import org.lolaf.replicos.testkit.AllocatedBytes;
+import org.lolaf.replicos.testkit.RecordingHandler;
 import org.lolaf.replicos.wire.FrameDecoder;
 import org.lolaf.replicos.wire.FrameEncoder;
-import org.lolaf.replicos.testkit.RecordingHandler;
 import org.lolaf.replicos.wire.WireFormat;
+import org.lolaf.ringos.idling.RetryStrategy;
 
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
@@ -65,6 +65,14 @@ class TestReplicationLog {
 
     private static ByteBuffer message(String text) {
         return ByteBuffer.wrap(text.getBytes(StandardCharsets.US_ASCII));
+    }
+
+    private static void awaitQuietly(CountDownLatch latch) {
+        try {
+            latch.await();
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
     }
 
     /**
@@ -293,14 +301,6 @@ class TestReplicationLog {
 
         assertThat(failure.get()).isNull();
         assertThat(read).isEqualTo(streams * recordsPerStream);
-    }
-
-    private static void awaitQuietly(CountDownLatch latch) {
-        try {
-            latch.await();
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-        }
     }
 
     @Test

@@ -37,7 +37,8 @@ public class LeaderSettings {
     /**
      * Where the node accepts its followers.
      */
-    @NonNull InetSocketAddress bindAddress;
+    @NonNull
+    InetSocketAddress bindAddress;
     /**
      * How many lanes the streams are split over, each with its own log, sender thread and connection per follower: a
      * snapshot, or a follower too slow for one lane, then holds back only that lane's streams, and the follower applies
@@ -51,25 +52,29 @@ public class LeaderSettings {
      * waits would lap its followers.
      */
     @Builder.Default
-    @NonNull Duration logFullTimeout = Duration.ofSeconds(1);
+    @NonNull
+    Duration logFullTimeout = Duration.ofSeconds(1);
     /**
      * How long a follower dropped as too slow is refused before it may resync, since catching it up adds to the load
      * that made it too slow; doubled at each drop up to a minute. Zero never holds a follower off.
      */
     @Builder.Default
-    @NonNull Duration slowFollowerHoldOff = Duration.ofSeconds(1);
+    @NonNull
+    Duration slowFollowerHoldOff = Duration.ofSeconds(1);
     /**
      * How often a leader with nothing to send tells its followers where the log ends, so they can tell an idle leader
      * from a dead connection.
      */
     @Builder.Default
-    @NonNull Duration heartbeatInterval = Duration.ofSeconds(1);
+    @NonNull
+    Duration heartbeatInterval = Duration.ofSeconds(1);
     /**
      * How long a follower owing an ack may stay silent before the leader drops it as hung, and how long an encrypting
      * follower may take to confirm its keys. Zero never drops.
      */
     @Builder.Default
-    @NonNull Duration followerStallTimeout = Duration.ofSeconds(10);
+    @NonNull
+    Duration followerStallTimeout = Duration.ofSeconds(10);
     /**
      * The send buffers per follower lane, a power of two of at least 2; with all of them in flight the sender waits
      * for one. More help a follower far away.
@@ -87,12 +92,14 @@ public class LeaderSettings {
      * ignores {@code wakeup()} parks its whole period, which an ack wait then waits on.
      */
     @Builder.Default
-    @NonNull Supplier<IdleStrategy> senderIdleStrategy = BackoffIdleStrategy::new;
+    @NonNull
+    Supplier<IdleStrategy> senderIdleStrategy = BackoffIdleStrategy::new;
     /**
      * How a {@link StreamWriter} waits for its followers' acks, on the appending thread, woken by the acks.
      */
     @Builder.Default
-    @NonNull Supplier<IdleStrategy> ackIdleStrategy = BackoffIdleStrategy::new;
+    @NonNull
+    Supplier<IdleStrategy> ackIdleStrategy = BackoffIdleStrategy::new;
     /**
      * The node ids of the followers a {@code SYNC} append waits for, the others replicating as if {@code ASYNC}: a
      * failover to one of these loses nothing acknowledged. Empty, the default, makes every follower one. This node's

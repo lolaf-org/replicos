@@ -18,14 +18,14 @@ package org.lolaf.replicos;
 import com.github.valfirst.slf4jtest.TestLoggerFactory;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
-import org.lolaf.ringos.Deadline;
+import org.lolaf.replicos.follower.LeaderConnection;
 import org.lolaf.replicos.journal.Journal;
 import org.lolaf.replicos.journal.JournalCopy;
 import org.lolaf.replicos.journal.JournalReplica;
 import org.lolaf.replicos.journal.JournalStream;
-import org.lolaf.replicos.follower.LeaderConnection;
 import org.lolaf.replicos.leader.FollowerConnection;
 import org.lolaf.replicos.spi.StreamReplicationMode;
+import org.lolaf.ringos.Deadline;
 import org.slf4j.event.Level;
 
 import java.net.InetSocketAddress;
@@ -109,6 +109,16 @@ class TestSeveralFollowers {
                 .build();
         journal.writeThrough(node);
         return node;
+    }
+
+    private static Deadline stop() {
+        return Deadline.of(Duration.ofSeconds(2));
+    }
+
+    private static long errorsMentioning(Class<?> logger, String text) {
+        return TestLoggerFactory.getTestLogger(logger).getAllLoggingEvents().stream()
+                .filter(event -> event.getLevel() == Level.ERROR && event.getFormattedMessage().contains(text))
+                .count();
     }
 
     /**
@@ -200,21 +210,6 @@ class TestSeveralFollowers {
         }
     }
 
-    @FunctionalInterface
-    private interface LeaderDTest {
-        void run(ReplicationNode d, JournalStream main);
-    }
-
-    private static Deadline stop() {
-        return Deadline.of(Duration.ofSeconds(2));
-    }
-
-    private static long errorsMentioning(Class<?> logger, String text) {
-        return TestLoggerFactory.getTestLogger(logger).getAllLoggingEvents().stream()
-                .filter(event -> event.getLevel() == Level.ERROR && event.getFormattedMessage().contains(text))
-                .count();
-    }
-
     @AfterEach
     void close() {
         bHeld.countDown();
@@ -272,7 +267,7 @@ class TestSeveralFollowers {
                 .containsExactly(offset, offset);
     }
 
-        @Test
+    @Test
     void aModeSwitchedOnTheLeaderKeepsEveryFollowersCopy() {
         JournalStream main = aLeadsBothFollowers(StreamReplicationMode.ASYNC);
         await().until(() -> a.followers().countInSync() == 2);
@@ -451,5 +446,10 @@ class TestSeveralFollowers {
         assertThat(copyC.getStored()).containsExactly("1 first", "2 second", "3 third");
         assertThat(c.leader().getStatus()).isNotNull()
                 .satisfies(status -> assertThat(status.getLeaderId()).isEqualTo("b"));
+    }
+
+    @FunctionalInterface
+    private interface LeaderDTest {
+        void run(ReplicationNode d, JournalStream main);
     }
 }

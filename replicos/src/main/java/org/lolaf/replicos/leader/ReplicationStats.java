@@ -17,8 +17,8 @@ package org.lolaf.replicos.leader;
 
 import lombok.Getter;
 import org.jspecify.annotations.Nullable;
-import org.lolaf.replicos.spi.LatencyRecorder;
 import org.lolaf.replicos.StreamWriter;
+import org.lolaf.replicos.spi.LatencyRecorder;
 import org.lolaf.replicos.spi.ReplicationMetrics;
 import org.lolaf.replicos.wire.CloseCounts;
 

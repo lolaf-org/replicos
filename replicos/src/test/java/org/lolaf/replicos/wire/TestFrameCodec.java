@@ -15,28 +15,28 @@
  */
 package org.lolaf.replicos.wire;
 
-import org.lolaf.replicos.journal.Journal;
-import org.lolaf.replicos.testkit.AllocatedBytes;
-import org.lolaf.replicos.testkit.RecordingHandler;
-import org.lolaf.replicos.spi.WireFormatException;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.parallel.Isolated;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.jupiter.params.provider.ValueSource;
+import org.lolaf.replicos.EncryptionMode;
+import org.lolaf.replicos.encryption.ConnectionEncryptionKeys;
+import org.lolaf.replicos.encryption.KeyExchange;
+import org.lolaf.replicos.journal.Journal;
 import org.lolaf.replicos.journal.JournalStream;
+import org.lolaf.replicos.spi.RecordFlag;
+import org.lolaf.replicos.spi.StreamAnswer;
+import org.lolaf.replicos.spi.StreamReplicationMode;
+import org.lolaf.replicos.spi.WireFormatException;
+import org.lolaf.replicos.testkit.AllocatedBytes;
+import org.lolaf.replicos.testkit.RecordingHandler;
+import org.lolaf.replicos.testkit.TestingKeyExchanges;
 
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
-import org.lolaf.replicos.EncryptionMode;
-import org.lolaf.replicos.encryption.ConnectionEncryptionKeys;
-import org.lolaf.replicos.encryption.KeyExchange;
-import org.lolaf.replicos.testkit.TestingKeyExchanges;
-import org.lolaf.replicos.spi.RecordFlag;
-import org.lolaf.replicos.spi.StreamAnswer;
-import org.lolaf.replicos.spi.StreamReplicationMode;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -62,6 +62,12 @@ class TestFrameCodec {
 
     private static ByteBuffer message() {
         return ByteBuffer.wrap(MESSAGE);
+    }
+
+    private static int plaintextRecord(ByteBuffer buffer, int index, byte flags) {
+        int body = FrameEncoder.recordBody(buffer, index + WireFormat.RECORD_BODY_OFFSET, 3, CONTENT_TYPE,
+                (byte) (RecordFlag.PLAINTEXT.getBits() | flags), 42, message(), 0, MESSAGE.length);
+        return FrameEncoder.recordHeader(buffer, index, 7, 4096, body);
     }
 
     private void decodeWhole(ByteBuffer buffer, int index, int length) {
@@ -243,12 +249,6 @@ class TestFrameCodec {
 
         assertThat(handler.frames).extracting(frame -> frame.substring(0, frame.indexOf(" payload=")))
                 .containsExactly("RECORD epoch=7 offset=4096 key=3 type=1 pos=42", "SNAPSHOT_RECORD epoch=7 key=3 type=1 pos=42");
-    }
-
-    private static int plaintextRecord(ByteBuffer buffer, int index, byte flags) {
-        int body = FrameEncoder.recordBody(buffer, index + WireFormat.RECORD_BODY_OFFSET, 3, CONTENT_TYPE,
-                (byte) (RecordFlag.PLAINTEXT.getBits() | flags), 42, message(), 0, MESSAGE.length);
-        return FrameEncoder.recordHeader(buffer, index, 7, 4096, body);
     }
 
     @Test

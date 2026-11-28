@@ -21,7 +21,6 @@ import lombok.Value;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.Nullable;
 import org.lolaf.betty.api.io.IOSession;
-import org.lolaf.ringos.Deadline;
 import org.lolaf.replicos.CatchUp;
 import org.lolaf.replicos.EncryptionMode;
 import org.lolaf.replicos.FollowerLaneStatus;
@@ -35,6 +34,7 @@ import org.lolaf.replicos.log.ReplicationLogs;
 import org.lolaf.replicos.spi.ReplicationClock;
 import org.lolaf.replicos.spi.StreamAnswer;
 import org.lolaf.replicos.wire.*;
+import org.lolaf.ringos.Deadline;
 
 import java.nio.ByteBuffer;
 import java.time.Duration;
@@ -66,14 +66,6 @@ public final class FollowerConnection implements FrameHandler {
     private final IOSession ioSession;
     private final String address;
     private final ReplicationLogs logs;
-    /**
-     * The log of the lane the HELLO named, null before it.
-     */
-    private volatile @Nullable ReplicationLog replicationLog;
-    /**
-     * Opened by the HELLO, holding the lane's appends back until the connection closes; null before it.
-     */
-    private volatile ReplicationLog.@Nullable Reader reader;
     private final StreamRegistry streams;
     /**
      * This node's current election epoch, stamped on every frame it sends.
@@ -85,8 +77,6 @@ public final class FollowerConnection implements FrameHandler {
      */
     private final long leadership;
     private final String leaderId;
-    @Getter
-    private volatile int lane;
     private final ReplicationStats stats;
     private final StreamSyncs syncs;
     @Getter
@@ -102,6 +92,23 @@ public final class FollowerConnection implements FrameHandler {
      * beside a second node given its id.
      */
     private final long reconnectSilenceNanos;
+    private final AtomicBoolean closeSent;
+    private final ReplicationClock clock;
+    /**
+     * When the lane left sync, at the HELLO, a stream announced or a re-sync, -1 while it is in sync: the start of the
+     * catch-up being timed.
+     */
+    private final AtomicLong outOfSyncSinceNanos;
+    /**
+     * The log of the lane the HELLO named, null before it.
+     */
+    private volatile @Nullable ReplicationLog replicationLog;
+    /**
+     * Opened by the HELLO, holding the lane's appends back until the connection closes; null before it.
+     */
+    private volatile ReplicationLog.@Nullable Reader reader;
+    @Getter
+    private volatile int lane;
     /**
      * Opens the follower's frames once its KEY_CONFIRMATION verified; IO thread only.
      */
@@ -126,13 +133,6 @@ public final class FollowerConnection implements FrameHandler {
      * Recorded by the first close; the IO thread sends it once the sender stopped, sealed after the sender's last frame.
      */
     private volatile @Nullable PendingClose pendingClose;
-    private final AtomicBoolean closeSent;
-    private final ReplicationClock clock;
-    /**
-     * When the lane left sync, at the HELLO, a stream announced or a re-sync, -1 while it is in sync: the start of the
-     * catch-up being timed.
-     */
-    private final AtomicLong outOfSyncSinceNanos;
     /**
      * How long the lane's last return to sync took, -1 before the first; written on the IO thread, read by the status.
      */
@@ -688,6 +688,20 @@ public final class FollowerConnection implements FrameHandler {
         return true;
     }
 
+    public enum State {
+        AWAITING_HELLO,
+        /**
+         * Both peers encrypt: nothing streams until the follower's KEY_CONFIRMATION verifies.
+         */
+        AWAITING_KEY_CONFIRMATION,
+        STREAMING,
+        /**
+         * Dropped as too slow by a write, its CLOSE not sent yet.
+         */
+        DROPPED_AS_TOO_SLOW,
+        CLOSED
+    }
+
     @Value
     private static class PendingClose {
         CloseReason reason;
@@ -704,19 +718,5 @@ public final class FollowerConnection implements FrameHandler {
         static PendingClose thenAwaitHangUp(CloseReason reason, String text) {
             return new PendingClose(reason, FrameEncoder.closeText(text), false);
         }
-    }
-
-    public enum State {
-        AWAITING_HELLO,
-        /**
-         * Both peers encrypt: nothing streams until the follower's KEY_CONFIRMATION verifies.
-         */
-        AWAITING_KEY_CONFIRMATION,
-        STREAMING,
-        /**
-         * Dropped as too slow by a write, its CLOSE not sent yet.
-         */
-        DROPPED_AS_TOO_SLOW,
-        CLOSED
     }
 }
