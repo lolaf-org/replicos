@@ -276,7 +276,7 @@ Header flag `0x01`: in sync, the follower holds every stream of the lane the lea
   | 4 | `SNAPSHOT_FAILED` | leader: a stream could not be read for its snapshot |
   | 5 | `APPLY_FAILED` | follower: it could not apply what it received |
   | 6 | `STALLED` | leader: no ACK for the stall timeout while one was owed |
-  | 7 | `TOO_SLOW` | leader: an append waited the log full timeout for this follower |
+  | 7 | `TOO_SLOW` | leader: an append waited the log full timeout for this follower, or none for one not a sync follower |
   | 8 | `RETRY_LATER` | leader: a follower dropped as too slow is held off before it may resync |
   | 9 | `NO_SUCH_LANE` | leader: HELLO for a lane past its count |
   | 10 | `KEY_MISMATCH` | leader: KEY_CONFIRMATION does not verify |

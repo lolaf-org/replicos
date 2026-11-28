@@ -197,7 +197,7 @@ public final class FollowerConnection implements FrameHandler {
             close(CloseReason.RETRY_LATER, "dropped as too slow, held off until " + heldOffUntil.get());
             return;
         }
-        reader = replicationLog.newReader(this::droppedAsTooSlow);
+        reader = replicationLog.newReader(syncFollower, this::droppedAsTooSlow);
         boolean resumed = lastAppliedEpoch == currentEpoch && lastAppliedLeadership == leadership
                 && resume(lastAppliedOffset);
         if (!resumed) {

@@ -47,9 +47,9 @@ public class LeaderSettings {
     @Builder.Default
     int lanes = 1;
     /**
-     * How long an append waits for a follower a whole log behind before the follower is dropped as too slow, and
-     * caught up by snapshot. The wait holds the appending thread, so it stays short; positive, since a log that never
-     * waits would lap its followers.
+     * How long an append waits for a sync follower a whole log behind before it is dropped as too slow, and caught up
+     * by snapshot; any other follower is dropped at once. The wait holds the appending thread, so it stays short;
+     * positive, since a log that never waits would lap its followers.
      */
     @Builder.Default
     @NonNull
@@ -101,8 +101,8 @@ public class LeaderSettings {
     @NonNull
     Supplier<IdleStrategy> ackIdleStrategy = BackoffIdleStrategy::new;
     /**
-     * The node ids of the followers a {@code SYNC} append waits for, the others replicating as if {@code ASYNC}: a
-     * failover to one of these loses nothing acknowledged. Empty, the default, makes every follower one. This node's
+     * The node ids of the followers a {@code SYNC} append waits for, the others replicating as if {@code ASYNC} and
+     * never holding a full log back: a failover to one of these loses nothing acknowledged. Empty, the default, makes every follower one. This node's
      * own id may be in it, so every node can be given the same ids.
      */
     @Singular

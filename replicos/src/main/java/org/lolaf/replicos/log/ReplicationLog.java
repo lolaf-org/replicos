@@ -16,27 +16,38 @@
 package org.lolaf.replicos.log;
 
 import lombok.Getter;
-import org.jspecify.annotations.Nullable;
 import org.lolaf.replicos.wire.FrameEncoder;
 import org.lolaf.replicos.wire.WireFormat;
 import org.lolaf.ringos.idling.RetryStrategy;
 import org.lolaf.ringos.rb.*;
 
 import java.nio.ByteBuffer;
-import java.util.List;
-import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.Arrays;
+import java.util.function.Consumer;
 
 /**
  * The records of every replicated stream of a lane, in the order they were appended, in one off-heap ring.
  *
  * <p>Each record is held as a {@link FrameEncoder#recordBody record body}; a sender adds the header and the
  * record's offset, its position in the log, when it sends it. Appending allocates nothing, and waits only while a
- * reader is a whole log behind: past the appender's retry strategy, the log drops the slowest reader, telling its
- * owner, and writes over what it had not read.
+ * sync follower's reader is a whole log behind: past the appender's retry strategy, the log drops the slowest reader,
+ * telling its owner, and writes over what it had not read. Any other slowest reader is dropped at once.
  */
 public class ReplicationLog {
 
     private static final int RECORD = 0;
+
+    private static final RetryStrategy NO_WAIT = new RetryStrategy() {
+        @Override
+        public void reset() {
+            // nothing to reset
+        }
+
+        @Override
+        public boolean awaitRetry() {
+            return false;
+        }
+    };
 
     private static final ByteTranslator<LogRecord> ENCODE = (buffer, index, length, logRecord) ->
             FrameEncoder.recordBody(buffer, index, logRecord.getStreamKey(), logRecord.getContentType(),
@@ -44,7 +55,6 @@ public class ReplicationLog {
                     logRecord.getBuffer(), logRecord.getFragmentIndex(), logRecord.getFragmentLength());
 
     private final BroadcastByteRingBuffer ring;
-    private final List<Reader> readers;
     /**
      * The longest payload a record can carry, in fragments past {@link #getMaxFragmentLength()}: half the log, so the
      * other half still holds the records a follower had not read when it was written.
@@ -57,6 +67,10 @@ public class ReplicationLog {
     @Getter
     private final int maxFragmentLength;
     /**
+     * Replaced on each change under the log's lock, which the drop holds too, so finding the slowest allocates nothing.
+     */
+    private Reader[] readers;
+    /**
      * Counts the readers dropped, so writers that gave up together drop one reader, not one each.
      */
     private volatile long drops;
@@ -65,7 +79,7 @@ public class ReplicationLog {
      * @param capacity bytes, a power of two of at least 1024
      */
     public ReplicationLog(int capacity) {
-        this.readers = new CopyOnWriteArrayList<>();
+        this.readers = new Reader[0];
         this.ring = ByteRingBufferFactory.broadcast(capacity, ProducerType.MULTI);
         this.maxPayloadLength = ring.getCapacity() / 2;
         this.maxFragmentLength = ring.getMaxPayloadLength() - FrameEncoder.recordBodyBytes(0);
@@ -84,7 +98,7 @@ public class ReplicationLog {
      * longer than {@link #getMaxFragmentLength()} is appended as consecutive fragments, other streams' records
      * possibly between them. Allocates nothing.
      *
-     * @param logFullWait how long to wait for a reader a whole log behind, the appending thread's own
+     * @param logFullWait how long to wait for a sync follower's reader a whole log behind, the appending thread's own
      * @return the offset of the record, or of the payload's last fragment
      * @throws IllegalArgumentException for a payload longer than {@link #getMaxPayloadLength()}
      */
@@ -110,40 +124,47 @@ public class ReplicationLog {
     private long write(LogRecord logRecord, RetryStrategy logFullWait) {
         int length = FrameEncoder.recordBodyBytes(logRecord.getFragmentLength());
         long dropsBefore = drops;
+        RetryStrategy wait = NO_WAIT;
         long offset;
-        while ((offset = ring.writeRetrying(RECORD, length, ENCODE, logRecord, logFullWait)) == BroadcastByteRingBuffer.GATED) {
-            dropSlowestReader(dropsBefore);
-            // dropSlowestReader can modify drops
-            dropsBefore = drops;
+        while ((offset = ring.writeRetrying(RECORD, length, ENCODE, logRecord, wait)) == BroadcastByteRingBuffer.GATED) {
+            if (dropSlowestReader(dropsBefore, wait == logFullWait)) {
+                dropsBefore = drops;
+                wait = NO_WAIT;
+            } else {
+                wait = logFullWait;
+            }
         }
         return offset;
     }
 
-    private void dropSlowestReader(long dropsBefore) {
-        Reader dropped = closeSlowestReader(dropsBefore);
-        if (dropped != null) {
-            dropped.onDropped.run();
-        }
-    }
-
     /**
      * Locked so that writers that gave up together retry only once the reader is closed, rather than wait for it again.
+     *
+     * @param waited whether the append waited for the slowest reader already
+     * @return false, dropping nothing, when the append is to wait for the slowest reader first
      */
-    private synchronized @Nullable Reader closeSlowestReader(long dropsBefore) {
-        if (drops != dropsBefore) {
-            return null;
-        }
+    private boolean dropSlowestReader(long dropsBefore, boolean waited) {
         Reader slowest = null;
-        for (Reader reader : readers) {
-            if (slowest == null || reader.offset < slowest.offset) {
-                slowest = reader;
+        synchronized (this) {
+            if (drops != dropsBefore) {
+                return true;
             }
-        }
-        if (slowest != null) {
+            for (Reader reader : readers) {
+                if (slowest == null || reader.offset < slowest.offset) {
+                    slowest = reader;
+                }
+            }
+            if (slowest == null) {
+                return true;
+            }
+            if (slowest.syncFollower && !waited) {
+                return false;
+            }
             drops++;
             slowest.close();
         }
-        return slowest;
+        slowest.onDropped.run();
+        return true;
     }
 
     /**
@@ -154,32 +175,56 @@ public class ReplicationLog {
     }
 
     /**
-     * A reader for one streaming follower, at the tail: appends wait for it rather than overwrite what it has not
-     * read, until it is {@link Reader#close() closed}, or dropped as the slowest by an append that waited too long.
+     * A reader for one streaming follower, at the tail: appends do not overwrite what it has not read until it is
+     * {@link Reader#close() closed}, or dropped as the slowest, by an append that waited too long or, for one not a
+     * sync follower's, as soon as the log is full.
      *
-     * @param onDropped run on the appending thread once the log dropped this reader, already closed
+     * @param syncFollower whether the reader is a sync follower's, which a full log waits for before dropping it
+     * @param onDropped    run on the appending thread once the log dropped this reader, already closed
      */
-    public Reader newReader(Runnable onDropped) {
-        Reader reader = new Reader(ring.newGatingReader(), onDropped);
-        readers.add(reader);
+    public Reader newReader(boolean syncFollower, Runnable onDropped) {
+        return add(new Reader(ring.newGatingReader(), syncFollower, onDropped, this::remove));
+    }
+
+    private synchronized Reader add(Reader reader) {
+        Reader[] added = Arrays.copyOf(readers, readers.length + 1);
+        added[readers.length] = reader;
+        readers = added;
         return reader;
+    }
+
+    private synchronized void remove(Reader reader) {
+        for (int i = 0; i < readers.length; i++) {
+            if (readers[i] == reader) {
+                Reader[] removed = new Reader[readers.length - 1];
+                System.arraycopy(readers, 0, removed, 0, i);
+                System.arraycopy(readers, i + 1, removed, i, removed.length - i);
+                readers = removed;
+                return;
+            }
+        }
     }
 
     /**
      * Reads the log from its own offset, independently of the other readers, holding appends back while open. One
      * thread at a time, but for {@link #close()}.
      */
-    public final class Reader {
+    public static final class Reader {
 
         private final ByteRingReader byteRingReader;
+        private final boolean syncFollower;
         private final Runnable onDropped;
+        private final Consumer<Reader> onClose;
         /**
          * {@link #getOffset()} for the appending threads that look for the slowest reader.
          */
         private volatile long offset;
 
-        private Reader(ByteRingReader byteRingReader, Runnable onDropped) {
+        private Reader(ByteRingReader byteRingReader, boolean syncFollower, Runnable onDropped,
+                       Consumer<Reader> onClose) {
+            this.onClose = onClose;
             this.byteRingReader = byteRingReader;
+            this.syncFollower = syncFollower;
             this.onDropped = onDropped;
             this.offset = byteRingReader.getPosition();
         }
@@ -239,7 +284,7 @@ public class ReplicationLog {
          * Stops holding appends back. Any thread, since the log closes the reader it drops from the appending one.
          */
         public void close() {
-            readers.remove(this);
+            onClose.accept(this);
             byteRingReader.close();
         }
     }

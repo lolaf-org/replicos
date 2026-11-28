@@ -108,7 +108,8 @@ flowchart LR
   `logCapacity` bytes of records, which is what lets a briefly disconnected follower resume without a snapshot.
 - **A connected follower holds appends back.** The ring never overwrites a record a connected follower has not read.
   When a follower falls a whole ring behind, an append waits for it, at most `logFullTimeout` (1 s by default), then
-  drops it with `TOO_SLOW`. A dropped follower is refused for `slowFollowerHoldOff` (1 s, doubled at each drop up to a
+  drops it with `TOO_SLOW`. One that is not a sync follower is dropped at once: a slow disaster-recovery copy never
+  stalls the appends. A dropped follower is refused for `slowFollowerHoldOff` (1 s, doubled at each drop up to a
   minute), then reconnects and is caught up by snapshot, its place in the ring being gone.
 - **The ring is not storage.** It is memory, it starts empty when the leader starts, and its offsets are this
   leader's alone. Your storage is the durable copy, and snapshots read from it.

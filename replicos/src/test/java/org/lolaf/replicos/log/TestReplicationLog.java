@@ -91,7 +91,7 @@ class TestReplicationLog {
 
     @Test
     void recordsAreReadInTheOrderAppendedAsWholeWireFrames() {
-        ReplicationLog.Reader reader = log.newReader(() -> {
+        ReplicationLog.Reader reader = log.newReader(true, () -> {
         });
         long first = log.append(TestingLogFragments.entry(record, 3, 42, message(MESSAGE)), wait);
         long second = log.append(TestingLogFragments.entry(record, 3, 19, null), wait);
@@ -129,7 +129,7 @@ class TestReplicationLog {
 
     @Test
     void aPayloadIsReadFromItsIndexWhateverItsBufferPosition() {
-        ReplicationLog.Reader reader = log.newReader(() -> {
+        ReplicationLog.Reader reader = log.newReader(true, () -> {
         });
         ByteBuffer buffer = message("--" + MESSAGE + "--");
 
@@ -152,7 +152,7 @@ class TestReplicationLog {
     void aReaderResumesFromARecordStillInTheLog() {
         log.append(TestingLogFragments.entry(record, 1, 1, message("first")), wait);
         long second = log.append(TestingLogFragments.entry(record, 1, 2, message("second")), wait);
-        ReplicationLog.Reader reader = log.newReader(() -> {
+        ReplicationLog.Reader reader = log.newReader(true, () -> {
         });
 
         assertThat(reader.seek(second)).isTrue();
@@ -168,7 +168,7 @@ class TestReplicationLog {
         for (int i = 2; i < 100; i++) {
             small.append(TestingLogFragments.entry(record, 1, i, message(MESSAGE)), wait);
         }
-        ReplicationLog.Reader reader = small.newReader(() -> {
+        ReplicationLog.Reader reader = small.newReader(true, () -> {
         });
 
         assertThat(reader.seek(first)).isFalse();
@@ -193,7 +193,7 @@ class TestReplicationLog {
         String x = "x".repeat(fragment);
         String y = "y".repeat(fragment);
         ByteBuffer message = ByteBuffer.wrap(("ab" + x + y + "zzz").getBytes(StandardCharsets.US_ASCII)).position(2);
-        ReplicationLog.Reader reader = log.newReader(() -> {
+        ReplicationLog.Reader reader = log.newReader(true, () -> {
         });
 
         long last = log.append(TestingLogFragments.entry(record, 3, 42, message), wait);
@@ -212,7 +212,7 @@ class TestReplicationLog {
 
     @Test
     void aPayloadThatFitsAFrameIsOneRecordNotMarkedAsAFragment() {
-        ReplicationLog.Reader reader = log.newReader(() -> {
+        ReplicationLog.Reader reader = log.newReader(true, () -> {
         });
 
         log.append(TestingLogFragments.entry(record, 3, 42, ByteBuffer.wrap("x".repeat(log.getMaxFragmentLength())
@@ -252,7 +252,7 @@ class TestReplicationLog {
         int streams = 4;
         int recordsPerStream = 20_000;
         ReplicationLog big = new ReplicationLog(1 << 24);
-        ReplicationLog.Reader reader = big.newReader(() -> {
+        ReplicationLog.Reader reader = big.newReader(true, () -> {
         });
         CountDownLatch start = new CountDownLatch(1);
         List<Thread> writers = new ArrayList<>();
@@ -308,8 +308,8 @@ class TestReplicationLog {
         ReplicationLog small = new ReplicationLog(1024);
         LogFullWait briefWait = new LogFullWait(Duration.ofMillis(10), ReplicationClock.SYSTEM);
         List<String> dropped = new ArrayList<>();
-        ReplicationLog.Reader keepingUp = small.newReader(() -> dropped.add("keeping up"));
-        ReplicationLog.Reader stuck = small.newReader(() -> dropped.add("stuck"));
+        ReplicationLog.Reader keepingUp = small.newReader(true, () -> dropped.add("keeping up"));
+        ReplicationLog.Reader stuck = small.newReader(true, () -> dropped.add("stuck"));
 
         for (int i = 0; i < 100; i++) {
             small.append(TestingLogFragments.entry(record, 1, i, message(MESSAGE)), briefWait);
@@ -321,8 +321,25 @@ class TestReplicationLog {
     }
 
     @Test
+    void aFullLogDropsASlowestReaderNotASyncFollowersWithoutWaiting() {
+        ReplicationLog small = new ReplicationLog(1024);
+        LogFullWait longWait = new LogFullWait(Duration.ofSeconds(10), ReplicationClock.SYSTEM);
+        List<String> dropped = new ArrayList<>();
+        ReplicationLog.Reader syncFollower = small.newReader(true, () -> dropped.add("sync follower"));
+        small.newReader(false, () -> dropped.add("DR copy"));
+
+        for (int i = 0; i < 100; i++) {
+            small.append(TestingLogFragments.entry(record, 1, i, message(MESSAGE)), longWait);
+            assertThat(syncFollower.readInto(frame, 0)).isPositive();
+        }
+
+        assertThat(dropped).containsExactly("DR copy");
+        assertThat(longWait.takeWaitedNanos()).as("never waited").isEqualTo(-1);
+    }
+
+    @Test
     void aGatingReaderReadsAgainTheRecordItUnread() {
-        ReplicationLog.Reader reader = log.newReader(() -> {
+        ReplicationLog.Reader reader = log.newReader(true, () -> {
         });
         long first = log.append(TestingLogFragments.entry(record, 1, 7, null), wait);
         assertThat(reader.readInto(frame, 0)).isPositive();
@@ -337,7 +354,7 @@ class TestReplicationLog {
     @Test
     void aClosedGatingReaderIsNeverDropped() {
         ReplicationLog small = new ReplicationLog(1024);
-        ReplicationLog.Reader reader = small.newReader(() -> {
+        ReplicationLog.Reader reader = small.newReader(true, () -> {
             throw new AssertionError("dropped once closed");
         });
 
@@ -352,8 +369,8 @@ class TestReplicationLog {
     void writersThatGiveUpTogetherDropTheSlowestReaderOnlyNotOneEach() throws Exception {
         ReplicationLog small = new ReplicationLog(1024);
         List<String> dropped = new CopyOnWriteArrayList<>();
-        small.newReader(() -> dropped.add("stuck"));
-        ReplicationLog.Reader keepingUp = small.newReader(() -> dropped.add("keeping up"));
+        small.newReader(true, () -> dropped.add("stuck"));
+        ReplicationLog.Reader keepingUp = small.newReader(true, () -> dropped.add("keeping up"));
         LogRecord filler = new LogRecord();
         long first = small.append(TestingLogFragments.entry(filler, 1, 0, null), wait);
         long frameBytes = small.getTailOffset() - first;
