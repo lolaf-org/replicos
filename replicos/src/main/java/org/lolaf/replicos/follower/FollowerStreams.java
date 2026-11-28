@@ -274,7 +274,9 @@ public final class FollowerStreams {
         BoundStream[] streams = streamsByKey;
         for (int key = 0; key < streams.length; key++) {
             if (streams[key] == held) {
-                remove(key);
+                // left indexed by name until put replaces it, so find never misses the stream meanwhile
+                streams[key] = null;
+                streamsByKey = streams;
                 return held;
             }
         }
@@ -296,10 +298,11 @@ public final class FollowerStreams {
         if (key >= streams.length) {
             streams = Arrays.copyOf(streams, Math.max(key + 1, streams.length * 2));
         }
-        unindex(streams[key]);
+        BoundStream replaced = streams[key];
         streams[key] = stream;
         streamsByKey = streams;
         streamsByName.put(stream.getStreamName(), stream);
+        unindex(replaced);
         return stream.getAnswer();
     }
 

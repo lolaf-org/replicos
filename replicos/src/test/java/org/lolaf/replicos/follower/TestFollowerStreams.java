@@ -15,15 +15,21 @@
  */
 package org.lolaf.replicos.follower;
 
+import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.Test;
 import org.lolaf.replicos.CatchUp;
 import org.lolaf.replicos.ReplicaStream;
 import org.lolaf.replicos.journal.Journal;
 import org.lolaf.replicos.journal.JournalReplica;
 import org.lolaf.replicos.spi.LatencyRecorder;
+import org.lolaf.replicos.spi.ReplicaSinks;
 import org.lolaf.replicos.spi.StreamAnswer;
 import org.lolaf.replicos.spi.StreamReplicationMode;
 import org.lolaf.ringos.Deadline;
+
+import java.util.ArrayList;
+import java.util.List;
+import java.util.concurrent.atomic.AtomicReference;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -104,6 +110,35 @@ class TestFollowerStreams {
         assertThat(streams.bind(0, MAIN, StreamReplicationMode.ASYNC, "moved-storage"))
                 .as("caught up again").isEqualTo(StreamAnswer.SNAPSHOT_NEEDED);
         assertThat(replica.copy(MAIN).isStopped()).isFalse();
+    }
+
+    @Test
+    void aStreamOpenedAgainIsFoundWhileTheSinksOpenIt() {
+        AtomicReference<FollowerStreams> opening = new AtomicReference<>();
+        List<ReplicaStream> foundWhileOpening = new ArrayList<>();
+        ReplicaSinks finding = new ReplicaSinks() {
+            @Override
+            public Binding open(String streamName, @Nullable String leaderStorageIdentity) {
+                foundWhileOpening.add(opening.get().find(streamName));
+                return replica.open(streamName, leaderStorageIdentity);
+            }
+
+            @Override
+            public boolean isConfigured(String streamName) {
+                return replica.isConfigured(streamName);
+            }
+        };
+        opening.set(new FollowerStreams(finding, Journal.CLUSTER_ID, CatchUp.fullCopy(), LatencyRecorder.NONE));
+        opening.get().bind(0, MAIN, StreamReplicationMode.ASYNC, LEADER_STORAGE);
+        opening.get().bind(1, OTHER, StreamReplicationMode.ASYNC, LEADER_STORAGE);
+        foundWhileOpening.clear();
+
+        opening.get().bind(0, MAIN, StreamReplicationMode.ASYNC, "moved-storage");
+        opening.get().bind(2, OTHER, StreamReplicationMode.ASYNC, "moved-storage");
+
+        assertThat(foundWhileOpening).as("opened again in place, then renumbered").hasSize(2).doesNotContainNull();
+        assertThat(opening.get().find(MAIN)).isNotNull().extracting(ReplicaStream::isReplicated).isEqualTo(true);
+        assertThat(opening.get().find(OTHER)).isNotNull().extracting(ReplicaStream::isReplicated).isEqualTo(true);
     }
 
     @Test
