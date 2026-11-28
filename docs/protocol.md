@@ -251,7 +251,8 @@ Header flag `0x01`: in sync, the follower holds every stream of the lane the lea
   [Records](#records).
 - **Replication mode.** 0 `NONE` (announced, not replicated), 1 `ASYNC`, 2 `SYNC_APPLIED`, 3 `SYNC_RECEIVED`. It is
   the leader's alone: a follower holds a replicated stream whatever its mode, which tells it only whether to send
-  RECEIVED, and keeps its copy when the mode changes between the three replicated ones.
+  RECEIVED, and keeps its copy when the mode changes between the three replicated ones. A STREAM with another storage
+  identity stops the copy, which the follower opens again as for a stream it never held.
 - **Encryption mode.** 0 `DISABLED`, 1 `PREFERRED`, 2 `REQUIRED`.
 - **Resume offset** -1: the follower's position is not in the leader's log.
 - **Stream answers.**

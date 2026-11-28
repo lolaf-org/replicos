@@ -21,6 +21,7 @@ import org.lolaf.replicos.ReplicaStream;
 import org.lolaf.replicos.journal.Journal;
 import org.lolaf.replicos.journal.JournalReplica;
 import org.lolaf.replicos.spi.LatencyRecorder;
+import org.lolaf.replicos.spi.StreamAnswer;
 import org.lolaf.replicos.spi.StreamReplicationMode;
 import org.lolaf.ringos.Deadline;
 
@@ -30,6 +31,7 @@ class TestFollowerStreams {
 
     private static final String MAIN = "main";
     private static final String OTHER = "other";
+    private static final String LEADER_STORAGE = "leader-storage";
 
     private final JournalReplica replica;
     private final FollowerStreams streams;
@@ -79,6 +81,43 @@ class TestFollowerStreams {
     }
 
     @Test
+    void aModeChangeKeepsTheCopy() {
+        bind(0, MAIN);
+        ReplicaStream replicated = streams.find(MAIN);
+
+        streams.bind(0, MAIN, StreamReplicationMode.SYNC_APPLIED, LEADER_STORAGE);
+
+        assertThat(streams.find(MAIN)).isSameAs(replicated);
+        assertThat(replica.copy(MAIN).isStopped()).isFalse();
+    }
+
+    @Test
+    void aStorageIdentityChangeOpensTheStreamAgainForTheSinksToCheck() {
+        bind(0, MAIN);
+        ReplicaStream replicated = streams.find(MAIN);
+
+        assertThat(streams.bind(0, MAIN, StreamReplicationMode.ASYNC, "follower-storage"))
+                .isEqualTo(StreamAnswer.SHARED_STORAGE);
+
+        assertThat(streams.find(MAIN)).isNotSameAs(replicated).extracting(ReplicaStream::isReplicated).isEqualTo(false);
+        assertThat(replica.copy(MAIN).isStopped()).isTrue();
+        assertThat(streams.bind(0, MAIN, StreamReplicationMode.ASYNC, "moved-storage"))
+                .as("caught up again").isEqualTo(StreamAnswer.SNAPSHOT_NEEDED);
+        assertThat(replica.copy(MAIN).isStopped()).isFalse();
+    }
+
+    @Test
+    void aStorageIdentityChangeOpensAgainAStreamANewLeaderNumbersAnotherWay() {
+        bind(0, MAIN);
+        bind(1, OTHER);
+
+        assertThat(streams.bind(0, OTHER, StreamReplicationMode.ASYNC, "follower-storage"))
+                .isEqualTo(StreamAnswer.SHARED_STORAGE);
+
+        assertThat(replica.copy(OTHER).isStopped()).isTrue();
+    }
+
+    @Test
     void findsNothingOnceClosed() {
         bind(0, MAIN);
 
@@ -88,6 +127,6 @@ class TestFollowerStreams {
     }
 
     private void bind(int key, String streamName) {
-        streams.bind(key, streamName, StreamReplicationMode.ASYNC, "leader-storage");
+        streams.bind(key, streamName, StreamReplicationMode.ASYNC, LEADER_STORAGE);
     }
 }

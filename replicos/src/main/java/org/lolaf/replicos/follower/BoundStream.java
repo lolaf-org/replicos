@@ -30,6 +30,7 @@ import org.lolaf.replicos.wire.WireFormat;
 import org.lolaf.ringos.Deadline;
 
 import java.nio.ByteBuffer;
+import java.util.Objects;
 
 /**
  * One of the leader's streams as this follower holds it: its sink, none when it is not replicated here, and how far a
@@ -49,7 +50,8 @@ final class BoundStream implements ReplicaStream {
     @Getter
     private final StreamAnswer notReplicatedAnswer;
     /**
-     * Kept by a stream refused until this node's configuration changes, to bind it again once it does.
+     * The one the sinks were asked about: a stream refused is bound again with it, one replicated opened again when
+     * the leader announces another.
      */
     @Getter(AccessLevel.PACKAGE)
     private final @Nullable String leaderStorageIdentity;
@@ -89,8 +91,9 @@ final class BoundStream implements ReplicaStream {
         this.assembledFlag = RecordFlag.NONE;
     }
 
-    static BoundStream replicated(String streamName, StreamReplicationMode leaderMode, ReplicaSink sink) {
-        return new BoundStream(streamName, leaderMode, sink, StreamAnswer.SNAPSHOT_NEEDED, null);
+    static BoundStream replicated(String streamName, StreamReplicationMode leaderMode, ReplicaSink sink,
+                                  @Nullable String leaderStorageIdentity) {
+        return new BoundStream(streamName, leaderMode, sink, StreamAnswer.SNAPSHOT_NEEDED, leaderStorageIdentity);
     }
 
     /**
@@ -99,6 +102,14 @@ final class BoundStream implements ReplicaStream {
     static BoundStream notReplicated(String streamName, StreamReplicationMode leaderMode, StreamAnswer answer,
                                      @Nullable String leaderStorageIdentity) {
         return new BoundStream(streamName, leaderMode, null, answer, leaderStorageIdentity);
+    }
+
+    /**
+     * Whether the copy stays bound under that announcement: only the leader's mode changing, between replicated ones.
+     */
+    boolean keepsCopy(StreamReplicationMode mode, @Nullable String storageIdentity) {
+        return isReplicated() && mode != StreamReplicationMode.NONE
+                && Objects.equals(leaderStorageIdentity, storageIdentity);
     }
 
     public boolean isReplicated() {
