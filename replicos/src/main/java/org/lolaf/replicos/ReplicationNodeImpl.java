@@ -218,14 +218,4 @@ final class ReplicationNodeImpl implements ReplicationNode {
     public long getLogBytesWritten() {
         return logs.getBytesWritten();
     }
-
-    @Override
-    public String describeCipher() {
-        return keyExchange.describeCipher();
-    }
-
-    @Override
-    public boolean cipherAllocatesOnEveryFrame() {
-        return keyExchange.allocatesOnEveryFrame();
-    }
 }

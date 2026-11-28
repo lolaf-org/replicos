@@ -28,7 +28,7 @@ import java.security.NoSuchAlgorithmException;
  * records over those positions digest the same. Not a flag, which a follower does not keep. Allocates nothing once
  * built; one thread at a time.
  */
-public final class RecordDigest implements ReplicaSink.RecordConsumer {
+public final class RecordDigest implements ReplicaSink.LastRecordConsumer {
 
     /**
      * Records 4, first position 8, digest 32.

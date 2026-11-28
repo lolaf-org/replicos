@@ -19,8 +19,8 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * The followers of a leading node, empty while it does not lead. A follower counts once all its lanes match, one lane
- * down or behind being enough to leave it out. Any thread.
+ * The followers of a leading node, empty while it does not lead. A follower is counted only when every one of its
+ * lanes matches: one lane down or behind leaves it out. Any thread.
  */
 public interface FollowersView {
 
@@ -30,8 +30,7 @@ public interface FollowersView {
     List<FollowerLaneStatus> getLaneStatuses();
 
     /**
-     * The follower lanes dropped as too slow, for a write waited the log full timeout on them, and not back in sync
-     * since.
+     * The follower lanes dropped as too slow and not back in sync since.
      */
     List<DroppedFollower> getDroppedFollowers();
 
@@ -67,9 +66,9 @@ public interface FollowersView {
     long getMaxLagNanos();
 
     /**
-     * Follower lanes dropped as too slow, over the node's life.
+     * Times a follower lane was dropped as too slow, over the node's life.
      */
-    long getDroppedTooSlow();
+    long getTooSlowDrops();
 
     /**
      * Snapshots sent to follower lanes catching up, over the node's life.
@@ -92,8 +91,8 @@ public interface FollowersView {
     long getSendBuffersAllocated();
 
     /**
-     * Appends that found the log full and waited for a slow follower, over the node's life: a follower falling behind
-     * before the log full timeout drops it.
+     * Appends that found the log full and waited for a slow sync follower, over the node's life: a rising count warns
+     * before the log full timeout drops one.
      */
     long getLogFullWaits();
 

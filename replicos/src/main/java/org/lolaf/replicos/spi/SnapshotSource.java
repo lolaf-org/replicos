@@ -18,22 +18,27 @@ package org.lolaf.replicos.spi;
 import java.nio.ByteBuffer;
 
 /**
- * A stream's state and records, as a snapshot copies them while the stream keeps being written. The snapshot copies
- * in rounds, each up to the last position the state covered when the round started, so it relies on two things: a
- * record is readable here before it is appended to the log, and positions grow between two resets. One sender thread
- * at a time.
+ * Reads a stream's state and records for a snapshot, while the stream keeps being written. The snapshot copies in
+ * rounds, each up to the last position the state covered when the round started, so it relies on two things: a record
+ * is readable here before it is appended, and positions increase between two resets. Called from one thread at a
+ * time.
  */
 public interface SnapshotSource {
 
     /**
-     * False while the stream cannot be read, as before its storage started or once it stopped: the snapshot is retried
-     * shortly, as is one whose read failed once its source stopped.
+     * The longest state {@link #captureState} may write, its length going to the follower as an unsigned short.
+     */
+    int MAX_STATE_BYTES = 0xFFFF;
+
+    /**
+     * False while the stream cannot be read, as before its storage started or after it stopped: the snapshot is retried
+     * shortly. A read that throws while this turns false is retried the same way, rather than failing the snapshot.
      */
     boolean isReadable();
 
     /**
-     * Writes the stream's current state into {@code state}, cleared, up to its position, at most
-     * {@link org.lolaf.replicos.wire.WireFormat#MAX_STATE_BYTES}: the follower resumes the stream from it.
+     * Writes the stream's current state into {@code state}, at most {@link #MAX_STATE_BYTES}: what the follower resumes
+     * the stream from.
      *
      * @param state handed cleared, its position left at the state's end
      * @return the last position the state covers, which the round copies up to

@@ -147,14 +147,4 @@ public interface ReplicationNode {
      * The bytes written to every lane's log since the node was built.
      */
     long getLogBytesWritten();
-
-    /**
-     * The cipher, its key size and, for a stream cipher, its MAC, as the encryption settings ask: what peers agree on.
-     */
-    String describeCipher();
-
-    /**
-     * The cipher allocates on every frame, inside the JCE: replication adds garbage collections.
-     */
-    boolean cipherAllocatesOnEveryFrame();
 }

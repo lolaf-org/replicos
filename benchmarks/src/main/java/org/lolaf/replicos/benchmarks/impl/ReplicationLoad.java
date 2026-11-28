@@ -115,7 +115,7 @@ public class ReplicationLoad {
         leaderMetrics.lagSinceLastRead();
         leaderMetrics.ackLatencySinceLastRead();
         FollowersView followers = pair.getLeader().followers();
-        droppedTooSlowAtStart = followers.getDroppedTooSlow();
+        droppedTooSlowAtStart = followers.getTooSlowDrops();
         snapshotsAtStart = followers.getSnapshots();
         sendWaitsAtStart = followers.getSendWaits();
         writes = 0;
@@ -172,7 +172,7 @@ public class ReplicationLoad {
                 .append(" max ").append(micros(lag.getMaxValue()))
                 .append("; follower round trip µs p50 ").append(micros(ackLatency.getValueAtPercentile(50)))
                 .append(" p99 ").append(micros(ackLatency.getValueAtPercentile(99)))
-                .append("; dropped too slow +").append(followers.getDroppedTooSlow() - droppedTooSlowAtStart)
+                .append("; dropped too slow +").append(followers.getTooSlowDrops() - droppedTooSlowAtStart)
                 .append(", snapshots +").append(followers.getSnapshots() - snapshotsAtStart)
                 .append(", send waits +").append(followers.getSendWaits() - sendWaitsAtStart);
         log.info(line.toString());

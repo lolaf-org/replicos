@@ -28,8 +28,8 @@ public interface StreamWriter extends AutoCloseable {
 
     /**
      * Records must be appended in their position order, the application having stored each one first: a follower
-     * catching up by snapshot reads them from there. Waits, up to the log full timeout, for a follower a whole log
-     * behind, then drops it.
+     * catching up by snapshot reads them from there. Waits, up to the log full timeout, for a sync follower a whole
+     * log behind, then drops it; any other follower is dropped at once.
      *
      * @param contentType   the application's, telling a follower's sink what the payload holds
      * @param flag          {@link RecordFlag#RESET} to start the stream over at this record,

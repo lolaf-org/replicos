@@ -98,6 +98,21 @@ class TestReplicationEncryptionSettings {
     }
 
     @Test
+    void theCipherNamedIsWhatThePeersMustShare() {
+        assertThat(encrypting().cipher("AES/GCM/NoPadding").build().describeCipher()).isEqualTo("AES/GCM/NoPadding 256");
+        assertThat(encrypting().cipher("AES/CTR/NoPadding").build().describeCipher())
+                .isEqualTo("AES/CTR/NoPadding 256 HmacSHA256");
+    }
+
+    @Test
+    void onlyAnEncryptingAeadAllocatesOnEveryFrame() {
+        assertThat(encrypting().cipher("AES/GCM/NoPadding").build().cipherAllocatesOnEveryFrame()).isTrue();
+        assertThat(encrypting().cipher("AES/CTR/NoPadding").build().cipherAllocatesOnEveryFrame()).isFalse();
+        assertThat(ReplicationEncryptionSettings.builder().cipher("AES/GCM/NoPadding").build()
+                .cipherAllocatesOnEveryFrame()).isFalse();
+    }
+
+    @Test
     void theSecretIsNeverShown() {
         ReplicationEncryptionSettings.ReplicationEncryptionSettingsBuilder builder = encrypting();
 

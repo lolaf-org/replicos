@@ -49,7 +49,7 @@ final class KeyValueSink implements ReplicaSink {
     }
 
     @Override
-    public void readLast(int records, RecordConsumer consumer) {
+    public void readLast(int records, LastRecordConsumer consumer) {
         for (Map.Entry<Long, Change> entry : store.lastChanges(records)) {
             Change change = entry.getValue();
             ByteBuffer payload = change.encode();

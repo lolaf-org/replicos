@@ -140,7 +140,7 @@ public final class JournalCopy implements ReplicaSink {
     }
 
     @Override
-    public void readLast(int records, RecordConsumer consumer) {
+    public void readLast(int records, LastRecordConsumer consumer) {
         List<Write> last = new ArrayList<>(stored.descendingMap().values()).subList(0, Math.min(records, stored.size()));
         for (int i = last.size() - 1; i >= 0; i--) {
             Write entry = last.get(i);

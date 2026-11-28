@@ -46,9 +46,10 @@ public interface ReplicaStream {
     @Nullable ReplicaSink getSink();
 
     /**
-     * Why the stream is refused here, unused when it is replicated.
+     * What this node last told the leader of the stream: {@link StreamAnswer#REPLICATING} once in sync,
+     * {@link StreamAnswer#SNAPSHOT_NEEDED} until then, or why it is not replicated here.
      */
-    StreamAnswer getNotReplicatedAnswer();
+    StreamAnswer getAnswer();
 
     /**
      * Holds everything the leader sent of the stream since a snapshot filled it; false when not replicated.

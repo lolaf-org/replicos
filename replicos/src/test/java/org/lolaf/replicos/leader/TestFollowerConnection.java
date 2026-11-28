@@ -357,7 +357,7 @@ class TestFollowerConnection extends FollowerConnectionHarness {
 
         assertThat(connection.getState()).isEqualTo(FollowerConnection.State.STREAMING);
         assertThat(sent.frames).first().asString().contains("resume=-1 ");
-        assertThat(stats.getDroppedTooSlow()).as("nobody gated the writes while it was away").isZero();
+        assertThat(stats.getTooSlowDrops()).as("nobody gated the writes while it was away").isZero();
     }
 
     @Test
@@ -471,7 +471,7 @@ class TestFollowerConnection extends FollowerConnectionHarness {
         assertThat(sent.frames).noneMatch(frame -> frame.startsWith("RECORD"));
         assertThat(sent.frames).filteredOn(frame -> frame.startsWith("CLOSE")).singleElement().asString()
                 .startsWith("CLOSE epoch=7 TOO_SLOW");
-        assertThat(stats.getDroppedTooSlow()).isEqualTo(1);
+        assertThat(stats.getTooSlowDrops()).isEqualTo(1);
         assertThat(stats.getCloses().toMap()).isEqualTo(Map.of("TOO_SLOW", 1L));
         assertThat(journal.getWriterStats()).isNotNull().satisfies(writer -> assertThat(writer.getLogFullWaits())
                 .as("the next appends found room").isEqualTo(1));
@@ -543,7 +543,7 @@ class TestFollowerConnection extends FollowerConnectionHarness {
             stream.append("");
         }
 
-        assertThat(stats.getDroppedTooSlow()).isZero();
+        assertThat(stats.getTooSlowDrops()).isZero();
         assertThat(sent.frames).noneMatch(frame -> frame.startsWith("CLOSE"));
     }
 
@@ -753,7 +753,7 @@ class TestFollowerConnection extends FollowerConnectionHarness {
 
         connection.droppedAsTooSlow();
 
-        assertThat(stats.getDroppedTooSlow()).isZero();
+        assertThat(stats.getTooSlowDrops()).isZero();
         assertThat(stats.getSlowFollowers().notBackInSync()).isEmpty();
     }
 
@@ -808,7 +808,7 @@ class TestFollowerConnection extends FollowerConnectionHarness {
         fill();
         answer(connection, 0, StreamAnswer.REPLICATING);
 
-        main.getRegistered().setReplicationMode(StreamReplicationMode.NONE);
+        main.getRegistered().reconfigure(StreamReplicationMode.NONE, main.getRegistered().getStorageIdentity());
         connection.reannounce(0);
         fill();
         answer(connection, 0, StreamAnswer.NOT_REPLICATED);
@@ -827,8 +827,7 @@ class TestFollowerConnection extends FollowerConnectionHarness {
         answer(connection, 0, StreamAnswer.REPLICATING);
         sent.frames.clear();
 
-        main.getRegistered().setReplicationMode(StreamReplicationMode.SYNC_APPLIED);
-        main.getRegistered().setStorageIdentity("leader-storage");
+        main.getRegistered().reconfigure(StreamReplicationMode.SYNC_APPLIED, "leader-storage");
         fill();
         assertThat(sent.frames).as("nothing changed").noneMatch(frame -> frame.startsWith("STREAM"));
 
@@ -850,7 +849,7 @@ class TestFollowerConnection extends FollowerConnectionHarness {
         fill();
         answer(connection, 0, StreamAnswer.REPLICATING);
 
-        main.getRegistered().setStorageIdentity(null);
+        main.getRegistered().reconfigure(main.getRegistered().getReplicationMode(), null);
         fill();
 
         assertThat(sent.frames).endsWith("STREAM epoch=7 key=0 SYNC_APPLIED name=main identity=null");

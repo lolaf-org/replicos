@@ -35,6 +35,7 @@ import org.lolaf.ringos.Deadline;
 import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
 import java.time.Duration;
+import java.util.Objects;
 import java.util.function.LongSupplier;
 import java.util.function.ObjIntConsumer;
 
@@ -73,8 +74,6 @@ public final class LeaderConnection implements FrameHandler {
     private volatile @Nullable FollowedLeader leader;
     @Getter
     private volatile boolean detached;
-    private volatile long streamEpoch;
-    private long streamLeadership;
     private int streamLanes;
     private long streamResumeOffset;
     private boolean ackDue;
@@ -137,6 +136,10 @@ public final class LeaderConnection implements FrameHandler {
         return leader;
     }
 
+    private FollowedLeader followed() {
+        return Objects.requireNonNull(leader, "no WELCOME accepted");
+    }
+
     /**
      * With a sink writer thread the network thread acknowledges a record as received as it reads it, but not on an
      * encrypted connection: the writer thread then does, once the record's tag verified.
@@ -165,7 +168,8 @@ public final class LeaderConnection implements FrameHandler {
      */
     boolean isStreamEpoch(long epoch) {
         State current = state;
-        return (current == State.STREAMING || current == State.AWAITING_KEY_ACCEPTANCE) && epoch == streamEpoch;
+        return (current == State.STREAMING || current == State.AWAITING_KEY_ACCEPTANCE)
+                && epoch == followed().getEpoch();
     }
 
     /**
@@ -213,8 +217,6 @@ public final class LeaderConnection implements FrameHandler {
                     + ", the leader's " + leaderMode);
             return;
         }
-        streamEpoch = epoch;
-        streamLeadership = leadership;
         streamLanes = lanes;
         streamResumeOffset = resumeOffset;
         if (negotiation == Negotiation.ENCRYPTED) {
@@ -232,14 +234,16 @@ public final class LeaderConnection implements FrameHandler {
     private void startStreaming() {
         leaderLanes.lanesAnnounced(streamLanes);
         boolean resumed = streamResumeOffset != WireFormat.NO_RESUME;
-        followerStreams.streamStarted(lane, resumed, streamEpoch, streamLeadership);
+        FollowedLeader followed = followed();
+        followerStreams.streamStarted(lane, resumed, followed.getEpoch(), followed.getLeadership());
         state = State.STREAMING;
         ackDue = true;
         if (keyAgreement.getKeys() != null) {
-            log.info("Following leader {} encrypted on lane {}, {}", getLeaderId(), lane, keyExchange.describeCipher());
+            log.info("Following leader {} encrypted on lane {}, {}", followed.getId(), lane, keyExchange.describeCipher());
         }
-        log.info("Following leader {} through {} at epoch {} on lane {} of {}, {}", getLeaderId(), getAddress(), streamEpoch,
-                lane, streamLanes, resumed ? "resuming at offset " + streamResumeOffset : "from its log tail, needing a snapshot");
+        log.info("Following leader {} through {} at epoch {} on lane {} of {}, {}", followed.getId(), getAddress(),
+                followed.getEpoch(), lane, streamLanes,
+                resumed ? "resuming at offset " + streamResumeOffset : "from its log tail, needing a snapshot");
     }
 
     /**
@@ -297,8 +301,8 @@ public final class LeaderConnection implements FrameHandler {
         long lastPosition = followerStreams.claim(lane, streamKey, answer, lastRecords);
         int proofLength = lastPosition < 0 ? 0 : lastRecords.writeProof(catchUp.getRecords(), proof, 0);
         ByteBuffer frame = answers.claim(FrameEncoder.fixedBytes(FrameType.STREAM_ANSWER) + proofLength);
-        answers.send(frame, FrameEncoder.streamAnswer(frame, 0, streamEpoch, streamKey, answer, catchUp.getCheck(),
-                lastPosition, proof, 0, proofLength));
+        answers.send(frame, FrameEncoder.streamAnswer(frame, 0, followed().getEpoch(), streamKey, answer,
+                catchUp.getCheck(), lastPosition, proof, 0, proofLength));
     }
 
     @Override
@@ -326,7 +330,7 @@ public final class LeaderConnection implements FrameHandler {
 
     @Override
     public void onClose(long epoch, CloseReason reason, String text) {
-        if (reason == CloseReason.SHUTDOWN && state == State.STREAMING && epoch == streamEpoch) {
+        if (reason == CloseReason.SHUTDOWN && state == State.STREAMING && epoch == followed().getEpoch()) {
             log.info("Leader {} stopped cleanly and handed over: {}", leaderName(), text);
             followerStreams.handedOver(lane);
         } else if (reason == CloseReason.RETRY_LATER) {
@@ -426,7 +430,7 @@ public final class LeaderConnection implements FrameHandler {
         if (state == State.STREAMING && received > followerStreams.getLastAppliedOffset(lane)) {
             if (!isReceivedAckedOnRead()) {
                 ByteBuffer frame = answers.claim(FrameEncoder.fixedBytes(FrameType.RECEIVED));
-                answers.send(frame, FrameEncoder.received(frame, 0, streamEpoch, received));
+                answers.send(frame, FrameEncoder.received(frame, 0, followed().getEpoch(), received));
             }
             long receivedSentNanos = clock.nanoTime();
             followerStreams.writeApplied(lane);
@@ -443,8 +447,8 @@ public final class LeaderConnection implements FrameHandler {
         ackDue = false;
         boolean inSync = followerStreams.isLaneInSync(lane);
         ByteBuffer frame = answers.claim(FrameEncoder.fixedBytes(FrameType.ACK));
-        answers.send(frame, FrameEncoder.ack(frame, 0, streamEpoch, followerStreams.getLastAppliedOffset(lane), inSync,
-                pendingWrites(inSync)));
+        answers.send(frame, FrameEncoder.ack(frame, 0, followed().getEpoch(), followerStreams.getLastAppliedOffset(lane),
+                inSync, pendingWrites(inSync)));
     }
 
     /**
@@ -483,6 +487,7 @@ public final class LeaderConnection implements FrameHandler {
             close(CloseReason.PROTOCOL_ERROR, "a frame before WELCOME");
             return false;
         }
+        long streamEpoch = followed().getEpoch();
         if (epoch != streamEpoch) {
             close(CloseReason.STALE_EPOCH, "a frame of epoch " + epoch + " in a stream of epoch " + streamEpoch);
             return false;

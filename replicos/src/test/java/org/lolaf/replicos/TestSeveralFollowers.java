@@ -272,7 +272,7 @@ class TestSeveralFollowers {
         JournalStream main = aLeadsBothFollowers(StreamReplicationMode.ASYNC);
         await().until(() -> a.followers().countInSync() == 2);
 
-        main.getRegistered().setReplicationMode(StreamReplicationMode.SYNC_APPLIED);
+        main.getRegistered().reconfigure(StreamReplicationMode.SYNC_APPLIED, main.getRegistered().getStorageIdentity());
         await().until(() -> b.leader().getStream(MAIN).getLeaderMode() == StreamReplicationMode.SYNC_APPLIED
                 && c.leader().getStream(MAIN).getLeaderMode() == StreamReplicationMode.SYNC_APPLIED
                 && a.followers().countInSync() == 2);
@@ -355,10 +355,10 @@ class TestSeveralFollowers {
             for (int i = 0; i < 100; i++) {
                 main.append(record);
             }
-            return a.followers().getDroppedTooSlow() > 0;
+            return a.followers().getTooSlowDrops() > 0;
         });
 
-        assertThat(a.followers().getDroppedTooSlow()).isEqualTo(1);
+        assertThat(a.followers().getTooSlowDrops()).isEqualTo(1);
         assertThat(a.followers().getDroppedFollowers()).extracting(DroppedFollower::getNodeId).containsExactly("c");
         main.append("last");
         await().until(() -> copyB.getStored().get(copyB.getStored().size() - 1).endsWith(" last"));

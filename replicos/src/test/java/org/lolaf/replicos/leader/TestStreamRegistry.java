@@ -48,18 +48,4 @@ class TestStreamRegistry {
         assertThat(third.getRegistered().getLane()).isZero();
         assertThat(streams.getClusterId()).isEqualTo(Journal.CLUSTER_ID);
     }
-
-    @Test
-    void aSetterKeepsWhatItDoesNotChange() {
-        JournalStream first = journal.add("first", StreamReplicationMode.SYNC_APPLIED);
-        StreamRegistration registered = journal.getStreams().get(0);
-
-        first.getRegistered().setReplicationMode(StreamReplicationMode.ASYNC);
-        first.getRegistered().setStorageIdentity("elsewhere");
-
-        assertThat(registered.getReplication())
-                .isEqualTo(new StreamRegistration.Replication(StreamReplicationMode.ASYNC, "elsewhere"));
-        assertThat(registered.isReplicated()).isTrue();
-        assertThat(journal.getStreams().find("first")).isSameAs(registered);
-    }
 }

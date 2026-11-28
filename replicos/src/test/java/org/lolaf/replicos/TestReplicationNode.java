@@ -161,7 +161,7 @@ class TestReplicationNode {
         assertThat(a.getLogBytesWritten()).isPositive();
         assertThat(recordersAskedFor).containsExactlyInAnyOrder("a times log full waits on lane 0",
                 "b times log full waits on lane 0", "a times b lane 0");
-        assertThat(a.followers().getLaneStatuses().get(0).getCatchUpMillis()).as("caught up, by snapshot").isNotNegative();
+        assertThat(a.followers().getLaneStatuses().get(0).getCatchUpNanos()).as("caught up, by snapshot").isNotNegative();
     }
 
     @Test
@@ -189,7 +189,7 @@ class TestReplicationNode {
         assertThat(followers.getSnapshots()).isEqualTo(1);
         assertThat(followers.getSnapshotRecords()).isEqualTo(1);
         assertThat(followers.getDroppedFollowers()).isEmpty();
-        assertThat(followers.getDroppedTooSlow()).isZero();
+        assertThat(followers.getTooSlowDrops()).isZero();
         assertThat(followers.getSendBuffersAllocated()).isZero();
         assertThat(followers.getSendWaits()).isNotNegative();
         assertThat(followers.getLogFullWaits()).isZero();
@@ -391,7 +391,7 @@ class TestReplicationNode {
         assertThat(main.getRegistered().isInSync()).isFalse();
         assertThat(b.leader().getStream(MAIN)).isNotNull().satisfies(stream -> {
             assertThat(stream.isReplicated()).isFalse();
-            assertThat(stream.getNotReplicatedAnswer()).isEqualTo(StreamAnswer.SHARED_STORAGE);
+            assertThat(stream.getAnswer()).isEqualTo(StreamAnswer.SHARED_STORAGE);
         });
     }
 
@@ -490,7 +490,7 @@ class TestReplicationNode {
         await().until(() -> main.getRegistered().isInSync());
 
         for (StreamReplicationMode mode : List.of(StreamReplicationMode.ASYNC, StreamReplicationMode.SYNC_APPLIED)) {
-            main.getRegistered().setReplicationMode(mode);
+            main.getRegistered().reconfigure(mode, main.getRegistered().getStorageIdentity());
             await().until(() -> b.leader().getStream(MAIN).getLeaderMode() == mode && main.getRegistered().isInSync());
         }
         main.append("second");
@@ -526,9 +526,9 @@ class TestReplicationNode {
             assertThat(copyD.getWrites()).endsWith("1 first");
             assertThat(d.leader().isEncrypted()).isTrue();
             assertThat(d.leader().getStatus()).isNotNull()
-                    .satisfies(status -> assertThat(status.getCipher()).isEqualTo(c.describeCipher()));
+                    .satisfies(status -> assertThat(status.getCipher()).isEqualTo(encryption.describeCipher()));
             assertThat(c.followers().getLaneStatuses()).singleElement()
-                    .satisfies(lane -> assertThat(lane.getCipher()).isEqualTo(c.describeCipher()));
+                    .satisfies(lane -> assertThat(lane.getCipher()).isEqualTo(encryption.describeCipher()));
         } finally {
             c.close(stop());
             d.close(stop());
@@ -595,8 +595,6 @@ class TestReplicationNode {
     @Test
     void aNodeIsBuiltWithItsDefaults() {
         assertThat(a.getLanes()).isEqualTo(1);
-        assertThat(a.cipherAllocatesOnEveryFrame()).isFalse();
-        assertThat(a.describeCipher()).isNotEmpty();
     }
 
     @Test

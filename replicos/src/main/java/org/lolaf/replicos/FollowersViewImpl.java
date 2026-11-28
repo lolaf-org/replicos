@@ -90,8 +90,8 @@ final class FollowersViewImpl implements FollowersView {
     }
 
     @Override
-    public long getDroppedTooSlow() {
-        return stats.getDroppedTooSlow();
+    public long getTooSlowDrops() {
+        return stats.getTooSlowDrops();
     }
 
     @Override

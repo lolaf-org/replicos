@@ -91,13 +91,13 @@ final class SnapshotSender {
     /**
      * The next position to copy.
      */
-    private long next;
+    private long nextPosition;
     private long roundEnd;
     private long previousRoundLength;
     /**
      * The round is sent in one chunk, whatever its size.
      */
-    private boolean whole;
+    private boolean roundWhole;
     private int recordCount;
     /**
      * The positions a source read covers: what the last chunk held, doubled while it leaves room, since a source may
@@ -117,7 +117,7 @@ final class SnapshotSender {
                    int maxRecordFrameBytes, int chunkBytes) {
         this.writer = new ChunkWriter();
         this.roomWait = new BackoffIdleStrategy();
-        this.state = ByteBuffer.allocate(WireFormat.MAX_STATE_BYTES);
+        this.state = ByteBuffer.allocate(SnapshotSource.MAX_STATE_BYTES);
         this.retryAtNanos = Long.MAX_VALUE;
         this.streamKey = NONE;
         this.connection = connection;
@@ -224,9 +224,9 @@ final class SnapshotSender {
             if (!begun) {
                 // before the state is captured, so the first round covers every record past the follower's
                 fromPosition = startPosition(stream);
-                next = fromPosition;
+                nextPosition = fromPosition;
             }
-            boolean roundStarted = next > roundEnd;
+            boolean roundStarted = nextPosition > roundEnd;
             long lastPosition = roundEnd;
             if (roundStarted || resetAhead) {
                 lastPosition = source.captureState(state);
@@ -248,8 +248,8 @@ final class SnapshotSender {
                 writer.flush();
                 return;
             }
-            if (!writer.stopped) {
-                next = roundEnd + 1;
+            if (!writer.full) {
+                nextPosition = roundEnd + 1;
                 if (roundStarted) {
                     end(stream);
                     return;
@@ -279,10 +279,10 @@ final class SnapshotSender {
         snapshotOffset = offset;
         fromPosition = WHOLE_STREAM;
         begun = false;
-        next = WHOLE_STREAM;
+        nextPosition = WHOLE_STREAM;
         roundEnd = -1;
         previousRoundLength = Long.MAX_VALUE;
-        whole = false;
+        roundWhole = false;
         state.clear();
         recordCount = 0;
         readSpan = INITIAL_READ_SPAN;
@@ -330,22 +330,22 @@ final class SnapshotSender {
 
     private void startRound(long lastPosition) {
         roundEnd = lastPosition;
-        long length = roundEnd - next + 1;
-        whole = length >= previousRoundLength;
+        long length = roundEnd - nextPosition + 1;
+        roundWhole = length >= previousRoundLength;
         previousRoundLength = length;
     }
 
     private void copyChunk() {
         int recordsBefore = recordCount;
-        while (next <= roundEnd && !writer.stopped && connection.isConnected()) {
-            long stop = Math.min(roundEnd, next + readSpan - 1);
-            source.read(next, stop, writer);
-            if (!writer.stopped) {
-                next = Math.max(next, stop + 1);
+        while (nextPosition <= roundEnd && !writer.full && connection.isConnected()) {
+            long readTo = Math.min(roundEnd, nextPosition + readSpan - 1);
+            source.read(nextPosition, readTo, writer);
+            if (!writer.full) {
+                nextPosition = Math.max(nextPosition, readTo + 1);
                 readSpan = Math.min(readSpan * 2, MAX_READ_SPAN);
             }
         }
-        if (writer.stopped) {
+        if (writer.full) {
             readSpan = recordCount - recordsBefore + 1;
         }
     }
@@ -366,26 +366,26 @@ final class SnapshotSender {
     private final class ChunkWriter implements SnapshotSource.RecordConsumer {
 
         private long currentEpoch;
-        private FrameCipher cipher;
+        private FrameCipher sealer;
         private @Nullable ByteBuffer batch;
         private int filled;
-        private boolean stopped;
+        private boolean full;
 
         private ChunkWriter() {
-            this.cipher = FrameCipher.CLEAR;
+            this.sealer = FrameCipher.CLEAR;
         }
 
         void start(long epoch, FrameCipher sealer) {
             currentEpoch = epoch;
-            cipher = sealer;
+            this.sealer = sealer;
             batch = null;
             filled = 0;
-            stopped = false;
+            full = false;
         }
 
         void begin() {
             room(FrameEncoder.fixedBytes(FrameType.SNAPSHOT_BEGIN) + state.position());
-            filled += cipher.seal(batch, filled, FrameEncoder.snapshotBegin(batch, filled, currentEpoch, streamKey,
+            filled += sealer.seal(batch, filled, FrameEncoder.snapshotBegin(batch, filled, currentEpoch, streamKey,
                     snapshotOffset, fromPosition, state, 0, state.position()));
         }
 
@@ -398,10 +398,10 @@ final class SnapshotSender {
                                 int payloadLength) {
             int maxFragmentLength = maxRecordFrameBytes - FrameEncoder.snapshotRecordBytes(0);
             int fragments = Math.max(1, (payloadLength + maxFragmentLength - 1) / maxFragmentLength);
-            int fragmentBytes = FrameEncoder.snapshotRecordBytes(0) + cipher.getTagBytes();
-            if (!whole && filled > 0 && chunkBytes - filled < fragments * fragmentBytes + payloadLength) {
-                next = position;
-                stopped = true;
+            int fragmentBytes = FrameEncoder.snapshotRecordBytes(0) + sealer.getTagBytes();
+            if (!roundWhole && filled > 0 && chunkBytes - filled < fragments * fragmentBytes + payloadLength) {
+                nextPosition = position;
+                full = true;
                 return false;
             }
             int plaintext = flag == RecordFlag.PLAINTEXT ? flag.getBits() : 0;
@@ -411,18 +411,18 @@ final class SnapshotSender {
                 int fragmentFlags = (from + length < payloadLength ? WireFormat.MORE_FRAGMENTS : 0)
                         | (from > 0 ? WireFormat.CONTINUED_FRAGMENT : 0) | plaintext;
                 room(FrameEncoder.snapshotRecordBytes(length));
-                filled += cipher.seal(batch, filled, FrameEncoder.snapshotRecord(batch, filled, currentEpoch, streamKey,
+                filled += sealer.seal(batch, filled, FrameEncoder.snapshotRecord(batch, filled, currentEpoch, streamKey,
                         contentType, (byte) fragmentFlags, position, buffer, payloadIndex + from, length));
                 from += length;
             } while (from < payloadLength && connection.isConnected());
             recordCount++;
-            next = position + 1;
+            nextPosition = position + 1;
             return connection.isConnected();
         }
 
         void end() {
             room(FrameEncoder.fixedBytes(FrameType.SNAPSHOT_END) + state.position());
-            filled += cipher.seal(batch, filled, FrameEncoder.snapshotEnd(batch, filled, currentEpoch, streamKey,
+            filled += sealer.seal(batch, filled, FrameEncoder.snapshotEnd(batch, filled, currentEpoch, streamKey,
                     recordCount, state, 0, state.position()));
             flush();
         }
@@ -435,7 +435,7 @@ final class SnapshotSender {
         }
 
         private void room(int bytes) {
-            if (batch != null && batches.getBatchBytes() - filled >= bytes + cipher.getTagBytes()) {
+            if (batch != null && batches.getBatchBytes() - filled >= bytes + sealer.getTagBytes()) {
                 return;
             }
             flush();

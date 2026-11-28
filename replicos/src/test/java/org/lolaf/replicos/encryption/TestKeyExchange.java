@@ -108,12 +108,4 @@ class TestKeyExchange {
         assertThat(exchange.confirms(keys, alteredHello, WELCOME, confirmation)).isFalse();
         assertThat(exchange.confirms(keys, WELCOME, HELLO, confirmation)).as("frames swapped").isFalse();
     }
-
-    @Test
-    void theCipherNamedIsWhatThePeersMustShare() {
-        assertThat(TestingKeyExchanges.of(REQUIRED, TestingKeyExchanges.SECRET, "AES/GCM/NoPadding").describeCipher())
-                .isEqualTo("AES/GCM/NoPadding 256");
-        assertThat(TestingKeyExchanges.of(REQUIRED, TestingKeyExchanges.SECRET, "AES/CTR/NoPadding").describeCipher())
-                .isEqualTo("AES/CTR/NoPadding 256 HmacSHA256");
-    }
 }

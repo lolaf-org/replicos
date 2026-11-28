@@ -257,12 +257,12 @@ class TestFollowers {
         clock.toAdvanceableTime(Instant.parse("2026-11-27T10:00:00Z"), 1_000);
         FollowerConnection connection = hello(journal.settings().build(), "follower");
         connection.getSender().fillBatch(ByteBuffer.allocate(1 << 16));
-        assertThat(connection.getStatus(1).getCatchUpMillis()).isEqualTo(-1);
+        assertThat(connection.getStatus(1).getCatchUpNanos()).isEqualTo(-1);
 
         clock.advance(Duration.ofMillis(1_500));
         FollowerConnectionHarness.answer(connection, KEY, StreamAnswer.REPLICATING);
 
-        assertThat(connection.getStatus(1).getCatchUpMillis()).isEqualTo(1_500);
+        assertThat(connection.getStatus(1).getCatchUpNanos()).isEqualTo(Duration.ofMillis(1_500).toNanos());
     }
 
     @Test
@@ -276,10 +276,10 @@ class TestFollowers {
         clock.advance(Duration.ofSeconds(10));
         connection.resync(KEY);
         clock.advance(Duration.ofMillis(700));
-        assertThat(connection.getStatus(1).getCatchUpMillis()).as("the last one, until this one ends").isEqualTo(1_500);
+        assertThat(connection.getStatus(1).getCatchUpNanos()).as("the last one, until this one ends").isEqualTo(Duration.ofMillis(1_500).toNanos());
         FollowerConnectionHarness.answer(connection, KEY, StreamAnswer.REPLICATING);
 
-        assertThat(connection.getStatus(1).getCatchUpMillis()).isEqualTo(700);
+        assertThat(connection.getStatus(1).getCatchUpNanos()).isEqualTo(Duration.ofMillis(700).toNanos());
     }
 
     @Test
@@ -295,7 +295,7 @@ class TestFollowers {
         clock.advance(Duration.ofMillis(300));
         FollowerConnectionHarness.answer(connection, KEY, StreamAnswer.REPLICATING);
 
-        assertThat(connection.getStatus(1).getCatchUpMillis()).isEqualTo(300);
+        assertThat(connection.getStatus(1).getCatchUpNanos()).isEqualTo(Duration.ofMillis(300).toNanos());
     }
 
     @Test

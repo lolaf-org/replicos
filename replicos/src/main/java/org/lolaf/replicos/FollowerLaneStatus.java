@@ -27,7 +27,7 @@ import org.jspecify.annotations.Nullable;
 public class FollowerLaneStatus {
 
     /**
-     * Null until the follower said.
+     * Null until the follower sent its node id.
      */
     @Nullable String nodeId;
     int lane;
@@ -51,7 +51,7 @@ public class FollowerLaneStatus {
     boolean snapshotInProgress;
     /**
      * The offset in the lane's log of the last record the follower wrote, as its last ack said; -1 before it wrote
-     * one of this leadership's.
+     * one since this node started leading.
      */
     long appliedOffset;
     /**
@@ -65,13 +65,13 @@ public class FollowerLaneStatus {
     /**
      * How long the follower has been behind a record it has not applied yet, 0 when caught up.
      */
-    long lagMillis;
+    long lagNanos;
     /**
      * How long the lane's last return to sync took, from connecting, a stream announced or a re-sync to holding every
      * stream of the lane in sync, snapshots included: how long a failover to it would have lost writes; -1 before the
      * first.
      */
-    long catchUpMillis;
+    long catchUpNanos;
     /**
      * What encrypts and authenticates the lane; null while it is not connected or replicates in clear.
      */

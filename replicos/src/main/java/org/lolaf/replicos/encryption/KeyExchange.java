@@ -65,19 +65,10 @@ public final class KeyExchange {
     }
 
     /**
-     * The cipher, its key size and, for a stream cipher, its MAC: what the peers must agree on, named in the logs.
+     * See {@link ReplicationEncryptionSettings#describeCipher()}.
      */
     public String describeCipher() {
-        String cipher = settings.getCipher() + " " + settings.getKeyBits();
-        return settings.isStreamCipher() ? cipher + " " + settings.getMac() : cipher;
-    }
-
-    /**
-     * An AEAD needs a new nonce on every frame, so a new parameter spec and init in the JCE whatever the provider,
-     * where a stream cipher is initialised once per connection.
-     */
-    public boolean allocatesOnEveryFrame() {
-        return settings.getMode() != EncryptionMode.DISABLED && !settings.isStreamCipher();
+        return settings.describeCipher();
     }
 
     /**

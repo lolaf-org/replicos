@@ -100,10 +100,6 @@ public class WireFormat {
 
     public static final int MAX_STRING_BYTES = 0xFFFF;
     /**
-     * The longest stream state a snapshot carries, its length being an unsigned short.
-     */
-    public static final int MAX_STATE_BYTES = 0xFFFF;
-    /**
      * Each boundary a {@link FrameType#SNAPSHOT_END} carries after its state: leadership 8, first position 8. Reserved
      * for a later check, so this version accepts and skips them.
      */

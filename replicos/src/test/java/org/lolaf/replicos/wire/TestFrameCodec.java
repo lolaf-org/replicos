@@ -26,6 +26,7 @@ import org.lolaf.replicos.encryption.KeyExchange;
 import org.lolaf.replicos.journal.Journal;
 import org.lolaf.replicos.journal.JournalStream;
 import org.lolaf.replicos.spi.RecordFlag;
+import org.lolaf.replicos.spi.SnapshotSource;
 import org.lolaf.replicos.spi.StreamAnswer;
 import org.lolaf.replicos.spi.StreamReplicationMode;
 import org.lolaf.replicos.spi.WireFormatException;
@@ -477,7 +478,7 @@ class TestFrameCodec {
 
     @Test
     void aStateLongerThanItsLengthCanSayIsRefused() {
-        ByteBuffer state = ByteBuffer.allocate(WireFormat.MAX_STATE_BYTES + 1);
+        ByteBuffer state = ByteBuffer.allocate(SnapshotSource.MAX_STATE_BYTES + 1);
 
         assertThatThrownBy(() -> FrameEncoder.snapshotBegin(ByteBuffer.allocate(1 << 17), 0, 7, 3, 64, 0, state, 0,
                 state.capacity())).isInstanceOf(IllegalArgumentException.class);

@@ -47,7 +47,6 @@ final class BoundStream implements ReplicaStream {
     private final String streamName;
     @Getter
     private final @Nullable ReplicaSink sink;
-    @Getter
     private final StreamAnswer notReplicatedAnswer;
     /**
      * The one the sinks were asked about: a stream refused is bound again with it, one replicated opened again when
@@ -116,7 +115,8 @@ final class BoundStream implements ReplicaStream {
         return sink != null;
     }
 
-    StreamAnswer answer() {
+    @Override
+    public StreamAnswer getAnswer() {
         if (sink == null) {
             return notReplicatedAnswer;
         }

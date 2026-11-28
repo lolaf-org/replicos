@@ -33,7 +33,7 @@ import java.util.concurrent.atomic.AtomicLong;
 public final class ReplicationStats {
 
 
-    private final AtomicLong droppedTooSlow;
+    private final AtomicLong tooSlowDrops;
     @Getter
     private final SlowFollowers slowFollowers;
     private final AtomicLong snapshots;
@@ -49,7 +49,7 @@ public final class ReplicationStats {
     public ReplicationStats(SlowFollowers slowFollowers, ReplicationMetrics metrics) {
         this.slowFollowers = slowFollowers;
         this.metrics = metrics;
-        this.droppedTooSlow = new AtomicLong();
+        this.tooSlowDrops = new AtomicLong();
         this.snapshots = new AtomicLong();
         this.snapshotRecords = new AtomicLong();
         this.sendWaits = new AtomicLong();
@@ -79,7 +79,7 @@ public final class ReplicationStats {
     }
 
     void droppedTooSlow(@Nullable String followerId, int lane) {
-        droppedTooSlow.incrementAndGet();
+        tooSlowDrops.incrementAndGet();
         if (followerId != null) {
             slowFollowers.dropped(followerId, lane);
         }
@@ -106,8 +106,8 @@ public final class ReplicationStats {
         return sendBuffersAllocated.get();
     }
 
-    public long getDroppedTooSlow() {
-        return droppedTooSlow.get();
+    public long getTooSlowDrops() {
+        return tooSlowDrops.get();
     }
 
     public long getLogFullWaits() {

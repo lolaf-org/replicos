@@ -102,7 +102,7 @@ public final class ReplicationPair implements AutoCloseable {
         log.info("Replication pair ready: {} streams {} over {} lanes, {} B payloads, follower {} in {} with {} sink writer "
                         + "threads, {} waiting, {}", streamCount, mode, lanes, payloadBytes, followerSink, pair.describeStorage(),
                 sinkWriterThreads, waiting,
-                encryption.getMode() == EncryptionMode.DISABLED ? "clear" : "encrypted with " + leader.describeCipher());
+                encryption.getMode() == EncryptionMode.DISABLED ? "clear" : "encrypted with " + encryption.describeCipher());
         return pair;
     }
 

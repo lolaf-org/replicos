@@ -425,8 +425,8 @@ public final class FollowerConnection implements FrameHandler {
                 .appliedOffset(acks.getAppliedOffset())
                 .pendingWrites(acks.getPendingWrites())
                 .unsentBytes(getUnsentBytes())
-                .lagMillis(TimeUnit.NANOSECONDS.toMillis(getLagNanos()))
-                .catchUpMillis(catchUpNanos < 0 ? -1 : TimeUnit.NANOSECONDS.toMillis(catchUpNanos))
+                .lagNanos(getLagNanos())
+                .catchUpNanos(catchUpNanos)
                 .cipher(isEncrypted() ? keyExchange.describeCipher() : null)
                 .build();
     }

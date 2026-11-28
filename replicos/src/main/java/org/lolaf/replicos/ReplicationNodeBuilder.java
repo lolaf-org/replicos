@@ -54,9 +54,9 @@ public final class ReplicationNodeBuilder {
      */
     private @Nullable FollowerSettings follower;
     /**
-     * Bytes of off-heap memory of each lane's log, a power of two. A follower this far behind makes appends wait for
-     * it, at most {@link LeaderSettings#getLogFullTimeout()}. The longest payload is half of it, on the leader and on
-     * a follower alike, so every node takes the same. 16 MiB by default.
+     * Bytes of off-heap memory of each lane's log, a power of two. A sync follower this far behind makes appends wait
+     * for it, at most {@link LeaderSettings#getLogFullTimeout()}. The longest payload is half of it, on the leader and
+     * on a follower alike, so every node takes the same. 16 MiB by default.
      */
     private int logCapacity;
     /**

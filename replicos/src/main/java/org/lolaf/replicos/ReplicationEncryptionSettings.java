@@ -103,6 +103,23 @@ public class ReplicationEncryptionSettings {
     }
 
     /**
+     * The cipher, its key size and, for a stream cipher, its MAC: what the peers must agree on, named in the logs and
+     * the statuses.
+     */
+    public String describeCipher() {
+        String described = cipher + " " + keyBits;
+        return isStreamCipher() ? described + " " + mac : described;
+    }
+
+    /**
+     * An encrypting AEAD needs a new nonce on every frame, so a new cipher init inside the JCE whatever the provider:
+     * replication then adds garbage collections. A stream cipher is initialised once per connection.
+     */
+    public boolean cipherAllocatesOnEveryFrame() {
+        return mode != EncryptionMode.DISABLED && !isStreamCipher();
+    }
+
+    /**
      * @throws IllegalArgumentException for an encrypting setting this JVM cannot run; nothing is checked when
      *                                  {@link EncryptionMode#DISABLED DISABLED}
      */

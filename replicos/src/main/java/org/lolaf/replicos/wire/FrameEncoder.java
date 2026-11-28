@@ -18,6 +18,7 @@ package org.lolaf.replicos.wire;
 import lombok.experimental.UtilityClass;
 import org.jspecify.annotations.Nullable;
 import org.lolaf.replicos.EncryptionMode;
+import org.lolaf.replicos.spi.SnapshotSource;
 import org.lolaf.replicos.spi.StreamAnswer;
 import org.lolaf.replicos.spi.StreamReplicationMode;
 
@@ -360,8 +361,8 @@ public class FrameEncoder {
     }
 
     private static int checkState(int stateLength) {
-        if (stateLength > WireFormat.MAX_STATE_BYTES) {
-            throw new IllegalArgumentException("A stream state is at most " + WireFormat.MAX_STATE_BYTES + " bytes, got "
+        if (stateLength > SnapshotSource.MAX_STATE_BYTES) {
+            throw new IllegalArgumentException("A stream state is at most " + SnapshotSource.MAX_STATE_BYTES + " bytes, got "
                     + stateLength);
         }
         return stateLength;

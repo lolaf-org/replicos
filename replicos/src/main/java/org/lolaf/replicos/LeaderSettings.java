@@ -102,8 +102,8 @@ public class LeaderSettings {
     Supplier<IdleStrategy> ackIdleStrategy = BackoffIdleStrategy::new;
     /**
      * The node ids of the followers a {@code SYNC} append waits for, the others replicating as if {@code ASYNC} and
-     * never holding a full log back: a failover to one of these loses nothing acknowledged. Empty, the default, makes every follower one. This node's
-     * own id may be in it, so every node can be given the same ids.
+     * never holding a full log back: a failover to one of these loses nothing acknowledged. Empty, the default, makes
+     * every follower one. This node's own id may be in it, so every node can be given the same ids.
      */
     @Singular
     Set<String> syncFollowers;

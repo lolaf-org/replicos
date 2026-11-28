@@ -246,12 +246,16 @@ final class FollowerSender {
         lastSendNanos = clock.nanoTime();
         owedSinceNanos = lastSendNanos;
         long startedNanos = lastSendNanos;
-        while (connection.getState() != FollowerConnection.State.CLOSED && !stopping) {
-            if (connection.getState() == FollowerConnection.State.DROPPED_AS_TOO_SLOW) {
+        while (!stopping) {
+            FollowerConnection.State state = connection.getState();
+            if (state == FollowerConnection.State.CLOSED) {
+                break;
+            }
+            if (state == FollowerConnection.State.DROPPED_AS_TOO_SLOW) {
                 connection.closeDropped();
                 break;
             }
-            if (connection.getState() == FollowerConnection.State.AWAITING_KEY_CONFIRMATION) {
+            if (state == FollowerConnection.State.AWAITING_KEY_CONFIRMATION) {
                 if (stallTimeoutNanos > 0 && clock.nanoTime() - startedNanos > stallTimeoutNanos) {
                     connection.close(CloseReason.PROTOCOL_ERROR, "no KEY_CONFIRMATION within "
                             + TimeUnit.NANOSECONDS.toMillis(stallTimeoutNanos) + " ms");

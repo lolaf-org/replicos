@@ -46,13 +46,13 @@ public interface LeaderView {
     boolean isEncrypted();
 
     /**
-     * Every stream the leader replicates is in sync here, connected or not: what a node about to lead holds. One
-     * refused is missing; a node that never followed misses nothing.
+     * Every stream the leader replicates is in sync here, connected or not: what to check before this node takes
+     * over. A stream refused here counts as missing; a node that never followed misses nothing.
      */
     boolean isCopyInSync();
 
     /**
-     * The leader's lane count, from its last WELCOME, 1 before any.
+     * The leader's lane count, as it last told a connecting lane; 1 before any connection.
      */
     int getLanes();
 

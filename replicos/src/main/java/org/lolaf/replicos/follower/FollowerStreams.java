@@ -227,19 +227,19 @@ public final class FollowerStreams {
      * Binds the leader's key to the stream of that name, unless the leader does not replicate it. A stream refused is
      * looked at again on the next connection, the sinks' answer having changed perhaps. A mode change keeps the copy,
      * only its acknowledgement changing; one the leader no longer replicates, or whose storage identity changed, has
-     * its sink stopped and is opened again, for the sinks to check where the leader's storage now is. Each leader numbers its streams its own way, so a stream held under
-     * another key moves to this one with its sink: opening the name again would hand out the sink the other key still
-     * holds, which stopping that key would then stop under this one.
+     * its sink stopped and is opened again, for the sinks to check where the leader's storage now is. Each leader
+     * numbers its streams its own way, so a stream held under another key moves to this one with its sink: opening the
+     * name again would hand out the sink the other key still holds, which stopping that key would then stop under this
+     * one.
      */
     synchronized StreamAnswer bind(int key, String streamName, StreamReplicationMode leaderMode,
                                    @Nullable String leaderStorageIdentity) {
         BoundStream current = key < streamsByKey.length ? streamsByKey[key] : null;
-        if (current != null && current.getStreamName().equals(streamName)
-                && current.keepsCopy(leaderMode, leaderStorageIdentity)) {
-            current.setLeaderMode(leaderMode);
-            return current.answer();
-        }
         if (current != null && current.getStreamName().equals(streamName)) {
+            if (current.keepsCopy(leaderMode, leaderStorageIdentity)) {
+                current.setLeaderMode(leaderMode);
+                return current.getAnswer();
+            }
             current.stop(Deadline.unlimited());
         } else if (current != null) {
             displaced.put(current.getStreamName(), current);
@@ -300,7 +300,7 @@ public final class FollowerStreams {
         streams[key] = stream;
         streamsByKey = streams;
         streamsByName.put(stream.getStreamName(), stream);
-        return stream.answer();
+        return stream.getAnswer();
     }
 
     private void remove(int key) {

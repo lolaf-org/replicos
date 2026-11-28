@@ -37,19 +37,9 @@ public interface RegisteredStream {
     StreamReplicationMode getReplicationMode();
 
     /**
-     * {@link #reconfigure} with the storage identity kept.
-     */
-    void setReplicationMode(StreamReplicationMode replicationMode);
-
-    /**
      * Null when the leader cannot tell where it stores the stream.
      */
     @Nullable String getStorageIdentity();
-
-    /**
-     * {@link #reconfigure} with the replication mode kept.
-     */
-    void setStorageIdentity(@Nullable String storageIdentity);
 
     /**
      * Opens a writer, for one thread at a time. Its records reach the followers while the node leads.

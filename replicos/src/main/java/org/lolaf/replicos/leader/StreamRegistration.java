@@ -70,18 +70,8 @@ public final class StreamRegistration implements RegisteredStream {
     }
 
     @Override
-    public synchronized void setReplicationMode(StreamReplicationMode replicationMode) {
-        reconfigure(replicationMode, replication.getStorageIdentity());
-    }
-
-    @Override
     public @Nullable String getStorageIdentity() {
         return replication.getStorageIdentity();
-    }
-
-    @Override
-    public synchronized void setStorageIdentity(@Nullable String storageIdentity) {
-        reconfigure(replication.getMode(), storageIdentity);
     }
 
     /**

@@ -27,11 +27,11 @@ import org.jspecify.annotations.Nullable;
 public class LeaderStatus {
 
     /**
-     * Null until the leader said.
+     * Null until the leader sent its id.
      */
     @Nullable String leaderId;
     /**
-     * The one lane 0 connected through, or every address it tries.
+     * The address lane 0 connected through, or every address it tries while not connected.
      */
     String address;
     /**
