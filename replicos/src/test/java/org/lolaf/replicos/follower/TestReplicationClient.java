@@ -62,6 +62,8 @@ class TestReplicationClient {
     private static final String MAIN = "main";
     private static final String OTHER = "other";
     private static final Duration ACK_TIMEOUT = Duration.ofSeconds(5);
+    private static final FollowedLeader LEADER_A = new FollowedLeader("leader-a", EPOCH, LEADERSHIP);
+    private static final FollowedLeader LEADER_N = new FollowedLeader("leader-n", EPOCH + 1, LEADERSHIP + 1);
     private final Journal leader;
     private final JournalStream leaderMain;
     private final InetSocketAddress address;
@@ -208,14 +210,70 @@ class TestReplicationClient {
     void everyLaneFollowsTheLeaderLaneZeroFollows() {
         InetSocketAddress refusing = new InetSocketAddress("localhost", TestingPorts.findFree());
         connect(List.of(refusing), leader.getLogs().get(0).getMaxRecordFrameBytes());
-        assertThat(client.refuseLeader(1, "leader-a")).isEqualTo("lane 0 follows no leader yet");
+        assertThat(client.refuseLeader(1, LEADER_A)).isEqualTo("lane 0 follows no leader yet");
         client.stop(Deadline.of(Duration.ofSeconds(2)));
 
         connect();
 
-        assertThat(client.refuseLeader(0, "leader-c")).isNull();
-        assertThat(client.refuseLeader(1, "leader-a")).isNull();
-        assertThat(client.refuseLeader(1, "leader-c")).isEqualTo("leader leader-c on lane 1, lane 0 follows leader leader-a");
+        assertThat(client.refuseLeader(1, LEADER_A)).isNull();
+        assertThat(client.refuseLeader(1, new FollowedLeader("leader-c", EPOCH, LEADERSHIP)))
+                .isEqualTo("leader leader-c (epoch 7, leadership 29) on lane 1, lane 0 follows leader leader-a (epoch 7, leadership 29)");
+        assertThat(client.refuseLeader(1, new FollowedLeader("leader-a", EPOCH, LEADERSHIP + 1))).as("restarted")
+                .startsWith("leader leader-a (epoch 7, leadership 2a) on lane 1");
+    }
+
+    @Test
+    void aNewLeaderOnLaneZeroFirstEndsTheOtherLanesConnectionsToThePreviousOne() {
+        followTwoLanes();
+        LeaderConnection previous = client.getConnection(1);
+
+        assertThat(client.refuseLeader(0, LEADER_A)).as("the same leader").isNull();
+        assertThat(previous.isDetached()).isFalse();
+        assertThat(client.refuseLeader(0, LEADER_N)).isNull();
+
+        assertThat(previous.isDetached()).isTrue();
+        await().until(() -> client.getConnection(1) != null && client.getConnection(1) != previous
+                && client.getConnection(1).getState() == LeaderConnection.State.STREAMING);
+    }
+
+    /**
+     * The new leader may move the stream that write is for to lane 0, which must not touch it at the same time.
+     */
+    @Test
+    void aNewLeaderOnLaneZeroWaitsForTheWriteAnotherLaneMakesForThePreviousOne() {
+        JournalCopy other = followTwoLanes();
+        CountDownLatch writeHeld = new CountDownLatch(1);
+        other.setWritesHeld(writeHeld);
+        twoLanesOther.append("held");
+        await().until(other::isWriteHeld);
+
+        CompletableFuture<String> refusal = CompletableFuture.supplyAsync(() -> client.refuseLeader(0, LEADER_N));
+        try {
+            await().during(Duration.ofMillis(300)).atMost(Duration.ofSeconds(2)).until(() -> !refusal.isDone());
+        } finally {
+            writeHeld.countDown();
+        }
+
+        assertThat(refusal).succeedsWithin(Duration.ofSeconds(2)).isNull();
+        assertThat(other.getWrites()).endsWith("1 held");
+    }
+
+    @Test
+    void aNewLeaderOnLaneZeroIsRefusedWhileAnotherLaneStillWritesForThePreviousOne() {
+        JournalCopy other = followTwoLanes();
+        CountDownLatch writeHeld = new CountDownLatch(1);
+        other.setWritesHeld(writeHeld);
+        twoLanesOther.append("held");
+        await().until(other::isWriteHeld);
+
+        try {
+            assertThat(client.refuseLeader(0, LEADER_N))
+                    .isEqualTo("lane 1 still applies what leader leader-a (epoch 7, leadership 29) sent");
+        } finally {
+            writeHeld.countDown();
+        }
+
+        assertThat(client.refuseLeader(0, LEADER_N)).as("once written").isNull();
     }
 
     @Test

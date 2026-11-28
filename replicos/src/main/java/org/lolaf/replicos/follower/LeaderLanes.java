@@ -24,12 +24,13 @@ public interface LeaderLanes {
 
     /**
      * Why the lane must not follow the leader that welcomed it, null when it may: every lane follows lane 0's leader,
-     * which a list of leader addresses mixing two nodes would break.
+     * which a list of leader addresses mixing two nodes, or a leader restarted, would break. A new leader on lane 0
+     * first ends the other lanes' connections to the previous one, since it may move their streams to other lanes.
      *
-     * @param lane     the lane welcomed, from 0
-     * @param leaderId the node id its WELCOME gave
+     * @param lane   the lane welcomed, from 0
+     * @param leader the leader its WELCOME named
      */
-    @Nullable String refuseLeader(int lane, String leaderId);
+    @Nullable String refuseLeader(int lane, FollowedLeader leader);
 
     /**
      * Told the leader's lane count from its WELCOME, before the stream starts.

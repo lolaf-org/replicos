@@ -68,6 +68,11 @@ public final class JournalCopy implements ReplicaSink {
     @Getter
     private volatile boolean heldWriteInterrupted;
     /**
+     * A write is waiting for {@link #writesHeld} now.
+     */
+    @Getter
+    private volatile boolean writeHeld;
+    /**
      * Fails every write, as a storage gone would.
      */
     @Setter
@@ -154,11 +159,14 @@ public final class JournalCopy implements ReplicaSink {
             throw new IllegalStateException("storage down");
         }
         requireStarted();
+        writeHeld = true;
         try {
             writesHeld.await();
         } catch (InterruptedException e) {
             heldWriteInterrupted = true;
             Thread.currentThread().interrupt();
+        } finally {
+            writeHeld = false;
         }
         for (Write entry : entries) {
             if (entry.reset) {

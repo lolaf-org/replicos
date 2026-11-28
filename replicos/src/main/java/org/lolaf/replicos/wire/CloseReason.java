@@ -73,7 +73,8 @@ public enum CloseReason {
      */
     CLUSTER_MISMATCH(12),
     /**
-     * A follower's lane reached another leader than its lane 0 follows.
+     * A follower's lane reached another leader than its lane 0 follows, or lane 0 a new one while another lane still
+     * applied the previous one's frames.
      */
     LEADER_MISMATCH(13),
     /**

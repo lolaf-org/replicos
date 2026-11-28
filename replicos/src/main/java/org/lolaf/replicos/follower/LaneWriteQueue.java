@@ -201,6 +201,10 @@ final class LaneWriteQueue implements SinkWriterThreads.WriteQueue, ByteFrameHan
         }
     }
 
+    boolean isWrittenByCurrentThread() {
+        return thread.isCurrentThread();
+    }
+
     /**
      * @param drain whether to wait, within the deadline, for the writer to write what was queued; not from the writer
      *              thread itself, which would wait on itself

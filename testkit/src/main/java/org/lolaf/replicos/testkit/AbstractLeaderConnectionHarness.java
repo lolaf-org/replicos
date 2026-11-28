@@ -18,6 +18,7 @@ package org.lolaf.replicos.testkit;
 import org.jspecify.annotations.Nullable;
 import org.lolaf.betty.api.io.IOSession;
 import org.lolaf.replicos.encryption.KeyExchange;
+import org.lolaf.replicos.follower.FollowedLeader;
 import org.lolaf.replicos.follower.FollowerStreams;
 import org.lolaf.replicos.follower.LeaderConnection;
 import org.lolaf.replicos.follower.LeaderLanes;
@@ -176,7 +177,7 @@ public abstract class AbstractLeaderConnectionHarness {
     protected LeaderLanes anyLeader() {
         return new LeaderLanes() {
             @Override
-            public @Nullable String refuseLeader(int lane, String leaderId) {
+            public @Nullable String refuseLeader(int lane, FollowedLeader leader) {
                 return null;
             }
 

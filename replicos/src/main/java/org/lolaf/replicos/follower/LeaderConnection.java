@@ -53,9 +53,6 @@ public final class LeaderConnection implements FrameHandler {
 
     private final IOSession ioSession;
     private final FollowerStreams followerStreams;
-    /**
-     * This node's current election epoch, sent in its HELLO and CLOSE; a WELCOME of an older epoch is refused.
-     */
     private final LongSupplier nodeEpoch;
     private final String nodeId;
     @Getter
@@ -68,23 +65,14 @@ public final class LeaderConnection implements FrameHandler {
     private final ObjIntConsumer<StreamAnswer> sendBoundAnswer;
     private final KeyExchange keyExchange;
     private final KeyAgreement keyAgreement;
-    /**
-     * Digests a stream's last records for its answer, into {@link #proof}; the thread applying the frames only.
-     */
     private final RecordDigest lastRecords;
     private final ByteBuffer proof;
-    /**
-     * Opens the leader's frames once both peers encrypt; the thread applying them only.
-     */
     private FrameCipher frameOpener;
     @Getter
     private volatile State state;
+    private volatile @Nullable FollowedLeader leader;
     @Getter
-    private volatile @Nullable String leaderId;
-    /**
-     * The epoch of the stream followed, from the leader's WELCOME: every later frame must carry it, and the answers
-     * are stamped with it.
-     */
+    private volatile boolean detached;
     private volatile long streamEpoch;
     private long streamLeadership;
     private int streamLanes;
@@ -135,6 +123,18 @@ public final class LeaderConnection implements FrameHandler {
                 keyExchange.getMode(), keyAgreement.getNonce());
         keyAgreement.hello(FrameDecoder.bytes(frame, 0, length));
         answers.send(frame, length);
+    }
+
+    /**
+     * The id of the leader followed, null before its WELCOME was accepted.
+     */
+    public @Nullable String getLeaderId() {
+        FollowedLeader followed = leader;
+        return followed == null ? null : followed.getId();
+    }
+
+    @Nullable FollowedLeader getLeader() {
+        return leader;
     }
 
     /**
@@ -200,12 +200,13 @@ public final class LeaderConnection implements FrameHandler {
             close(CloseReason.PROTOCOL_ERROR, "a WELCOME on lane " + lane + " of " + lanes);
             return;
         }
-        String refusal = leaderLanes.refuseLeader(lane, leaderId);
+        FollowedLeader welcomed = new FollowedLeader(leaderId, epoch, leadership);
+        String refusal = leaderLanes.refuseLeader(lane, welcomed);
         if (refusal != null) {
             close(CloseReason.LEADER_MISMATCH, refusal);
             return;
         }
-        this.leaderId = leaderId;
+        this.leader = welcomed;
         Negotiation negotiation = keyExchange.negotiate(leaderMode);
         if (negotiation == Negotiation.REFUSED) {
             close(CloseReason.ENCRYPTION_REQUIRED, "this follower's encryption is " + keyExchange.getMode()
@@ -235,9 +236,9 @@ public final class LeaderConnection implements FrameHandler {
         state = State.STREAMING;
         ackDue = true;
         if (keyAgreement.getKeys() != null) {
-            log.info("Following leader {} encrypted on lane {}, {}", leaderId, lane, keyExchange.describeCipher());
+            log.info("Following leader {} encrypted on lane {}, {}", getLeaderId(), lane, keyExchange.describeCipher());
         }
-        log.info("Following leader {} through {} at epoch {} on lane {} of {}, {}", leaderId, getAddress(), streamEpoch,
+        log.info("Following leader {} through {} at epoch {} on lane {} of {}, {}", getLeaderId(), getAddress(), streamEpoch,
                 lane, streamLanes, resumed ? "resuming at offset " + streamResumeOffset : "from its log tail, needing a snapshot");
     }
 
@@ -379,7 +380,7 @@ public final class LeaderConnection implements FrameHandler {
         } catch (WireFormatException e) {
             failed(CloseReason.PROTOCOL_ERROR, e.getMessage());
         } catch (RuntimeException e) {
-            log.warn("Failed to apply what leader {} sent", leaderId, e);
+            log.warn("Failed to apply what leader {} sent", leaderName(), e);
             failed(CloseReason.APPLY_FAILED, e.toString());
         }
         return limit;
@@ -410,7 +411,7 @@ public final class LeaderConnection implements FrameHandler {
         try {
             writeAndAck();
         } catch (RuntimeException e) {
-            log.warn("Failed to apply what leader {} sent", leaderId, e);
+            log.warn("Failed to apply what leader {} sent", leaderName(), e);
             failed(CloseReason.APPLY_FAILED, e.toString());
         }
     }
@@ -536,7 +537,7 @@ public final class LeaderConnection implements FrameHandler {
      * The leader's id, or its address before its WELCOME named it: a leader may close before sending one.
      */
     private String leaderName() {
-        String id = leaderId;
+        String id = getLeaderId();
         return id != null ? id : "at " + ioSession.getSocketAddress();
     }
 
@@ -560,11 +561,28 @@ public final class LeaderConnection implements FrameHandler {
         ioSession.stop(Deadline.of(CLOSE_FLUSH));
     }
 
+    /**
+     * From another lane's thread: this connection applies none of the frames it reads from now on, and disconnects.
+     * {@link #isDetached()} then says when the frame it may be applying is done.
+     */
+    void fence() {
+        if (state != State.CLOSED) {
+            followerStreams.getStats().getCloses().closed(CloseReason.LEADER_MISMATCH);
+        }
+        state = State.CLOSED;
+        ioSession.processTask(() -> ioSession.stop(Deadline.immediate()), (task, disconnected) -> {
+        });
+    }
+
+    /**
+     * On the thread applying the frames, after the last.
+     */
     void disconnected() {
         if (state != State.CLOSED) {
             followerStreams.getStats().getCloses().disconnected();
         }
         state = State.CLOSED;
+        detached = true;
     }
 
     public enum State {

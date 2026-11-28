@@ -40,6 +40,7 @@ import java.time.Duration;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.locks.LockSupport;
 import java.util.function.LongSupplier;
 
 /**
@@ -52,6 +53,7 @@ import java.util.function.LongSupplier;
 public final class ReplicationClient implements LeaderLanes {
 
     private static final Duration LANE_STOP = Duration.ofSeconds(1);
+    private static final long DETACH_POLL_NANOS = 50_000;
 
     private final List<InetSocketAddress> leaderAddresses;
     private final FollowerStreams followerStreams;
@@ -117,17 +119,33 @@ public final class ReplicationClient implements LeaderLanes {
     }
 
     @Override
-    public @Nullable String refuseLeader(int lane, String leaderId) {
+    public @Nullable String refuseLeader(int lane, FollowedLeader leader) {
         if (lane == 0) {
-            return null;
+            return detachLanesFrom(leader);
         }
         LeaderConnection first = getConnection(0);
-        String followed = first == null ? null : first.getLeaderId();
-        if (leaderId.equals(followed)) {
+        FollowedLeader followed = first == null ? null : first.getLeader();
+        if (leader.equals(followed)) {
             return null;
         }
         return followed == null ? "lane 0 follows no leader yet"
-                : "leader " + leaderId + " on lane " + lane + ", lane 0 follows leader " + followed;
+                : "leader " + leader + " on lane " + lane + ", lane 0 follows leader " + followed;
+    }
+
+    /**
+     * Lane 0 binding a stream the leader numbers otherwise moves it from the lane it was on: that lane's thread must
+     * no longer apply another leader's frames to it.
+     */
+    private @Nullable String detachLanesFrom(FollowedLeader leader) {
+        LaneClient[] current = laneClients;
+        Deadline deadline = Deadline.of(LANE_STOP);
+        for (int lane = 1; lane < current.length; lane++) {
+            String refusal = current[lane].detachFrom(leader, deadline);
+            if (refusal != null) {
+                return refusal;
+            }
+        }
+        return null;
     }
 
     /**
@@ -156,7 +174,7 @@ public final class ReplicationClient implements LeaderLanes {
      */
     @Nullable LeaderConnection getConnection(int lane) {
         LaneClient[] current = laneClients;
-        return lane < current.length ? current[lane].connection : null;
+        return lane < current.length ? current[lane].current() : null;
     }
 
     public LeaderStatus getStatus() {
@@ -176,7 +194,7 @@ public final class ReplicationClient implements LeaderLanes {
     public boolean isConnected() {
         LaneClient[] current = laneClients;
         for (LaneClient laneClient : current) {
-            LeaderConnection connection = laneClient.connection;
+            LeaderConnection connection = laneClient.current();
             if (connection == null || connection.getState() != LeaderConnection.State.STREAMING) {
                 return false;
             }
@@ -194,7 +212,7 @@ public final class ReplicationClient implements LeaderLanes {
     public boolean isEncrypted() {
         LaneClient[] current = laneClients;
         for (LaneClient laneClient : current) {
-            LeaderConnection connection = laneClient.connection;
+            LeaderConnection connection = laneClient.current();
             if (connection == null || !connection.isEncrypted()) {
                 return false;
             }
@@ -212,6 +230,10 @@ public final class ReplicationClient implements LeaderLanes {
         private final IOWorkersGroup ioWorkers;
         private final Client client;
         private final @Nullable LaneWriteQueue writeQueue;
+        /**
+         * The last connection made, kept until its thread is done with it: a sink writer thread may still apply what
+         * it read once disconnected.
+         */
         private volatile @Nullable LeaderConnection connection;
         private boolean connectedBefore;
 
@@ -249,6 +271,32 @@ public final class ReplicationClient implements LeaderLanes {
             if (writeQueue != null) {
                 writeQueue.stop(deadline, drain);
             }
+        }
+
+        @Nullable LeaderConnection current() {
+            LeaderConnection last = connection;
+            return last == null || last.isDetached() ? null : last;
+        }
+
+        /**
+         * Ends the lane's connection unless it follows that leader, then waits for its thread to be done with it,
+         * unless that is the caller's own: it cannot be applying a frame then, and drops those it has queued.
+         *
+         * @return why the lane still applies another leader's frames past the deadline, null once it does not
+         */
+        @Nullable String detachFrom(FollowedLeader leader, Deadline deadline) {
+            LeaderConnection last = current();
+            if (last == null || leader.equals(last.getLeader())) {
+                return null;
+            }
+            last.fence();
+            if (writeQueue != null && writeQueue.isWrittenByCurrentThread()) {
+                return null;
+            }
+            while (!last.isDetached() && !deadline.isExpired()) {
+                LockSupport.parkNanos(DETACH_POLL_NANOS);
+            }
+            return last.isDetached() ? null : "lane " + lane + " still applies what leader " + last.getLeader() + " sent";
         }
 
         @Override
@@ -292,9 +340,6 @@ public final class ReplicationClient implements LeaderLanes {
                     disconnected.disconnected();
                 } else {
                     writeQueue.disconnected();
-                }
-                if (connection == disconnected) {
-                    connection = null;
                 }
             }
         }

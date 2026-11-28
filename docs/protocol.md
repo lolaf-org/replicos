@@ -15,7 +15,8 @@ when it is caught up by snapshot, read [how-it-works.md](how-it-works.md) first.
 - **A record** carries a content type (one byte, the application's), flags, its position and a payload.
 - **A lane** is one TCP connection and one log. Stream `k` goes over lane `k` modulo the lane count, so a slow stream
   only holds back the streams of its lane. The follower opens lane 0 first; the leader's WELCOME gives the lane count,
-  and the follower opens the others to match.
+  and the follower opens the others to match. Every lane follows lane 0's leader and leadership: a new one on lane 0
+  first ends the other lanes' connections to the previous one, as its keys may put a stream on another lane.
 - **The log** of a lane holds its streams' records in the order they were appended, each at an increasing **log
   offset**, until the follower has them. It is bounded: a follower a whole log behind holds appends back, then is
   dropped.
@@ -281,7 +282,7 @@ Header flag `0x01`: in sync, the follower holds every stream of the lane the lea
   | 10 | `KEY_MISMATCH` | leader: KEY_CONFIRMATION does not verify |
   | 11 | `ENCRYPTION_REQUIRED` | either: one requires encryption, the other has it disabled |
   | 12 | `CLUSTER_MISMATCH` | either: another cluster id |
-  | 13 | `LEADER_MISMATCH` | follower: a lane's WELCOME names another leader than lane 0 follows, as when its leader addresses mix two nodes |
+  | 13 | `LEADER_MISMATCH` | follower: a lane's WELCOME names another leader or leadership than lane 0 follows, as when its leader addresses mix two nodes; on lane 0, another lane still applies what the previous leader sent |
   | 14 | `DUPLICATE_NODE_ID` | leader: HELLO for a lane another connection of the same node id holds and still acks on, two nodes given one id |
 
   A code the peer does not know reads as `UNKNOWN` (0xFFFF, never sent) rather than refusing the frame. The text is at

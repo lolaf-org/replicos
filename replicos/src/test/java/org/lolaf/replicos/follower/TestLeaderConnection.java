@@ -56,8 +56,8 @@ class TestLeaderConnection extends LeaderConnectionHarness {
     void aLaneReachingAnotherLeaderThanLaneZerosClosesTheStream() {
         LeaderConnection second = newConnection(1, new LeaderLanes() {
             @Override
-            public String refuseLeader(int lane, String leaderId) {
-                return "leader " + leaderId + " on lane " + lane + ", lane 0 follows leader leader-c";
+            public String refuseLeader(int lane, FollowedLeader leader) {
+                return "leader " + leader.getId() + " on lane " + lane + ", lane 0 follows leader leader-c";
             }
 
             @Override
