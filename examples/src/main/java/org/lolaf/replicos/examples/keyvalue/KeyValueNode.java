@@ -19,6 +19,7 @@ import org.jspecify.annotations.Nullable;
 import org.lolaf.replicos.CatchUp;
 import org.lolaf.replicos.FollowerSettings;
 import org.lolaf.replicos.LeaderSettings;
+import org.lolaf.replicos.RegisteredStream;
 import org.lolaf.replicos.ReplicationNode;
 import org.lolaf.replicos.StreamWriter;
 import org.lolaf.ringos.Deadline;
@@ -34,31 +35,32 @@ import java.util.Map;
 public final class KeyValueNode implements AutoCloseable {
 
     /**
-     * {@code 'KV'}: a node replicating another application is refused.
+     * A node of another cluster is refused.
      */
-    public static final int APPLICATION_ID = 0x4b56;
+    public static final String CLUSTER = "key-value-example";
     private static final Duration TIMEOUT = Duration.ofSeconds(5);
 
     private final KeyValueStore store;
-    private final KeyValueStream stream;
     private final ReplicationNode node;
+    private final RegisteredStream registered;
+    private final KeyValueStream stream;
 
     public KeyValueNode(String nodeId, InetSocketAddress bindAddress) {
         String storageIdentity = "memory of " + nodeId;
         this.store = new KeyValueStore();
-        this.stream = new KeyValueStream(store, storageIdentity);
         this.node = ReplicationNode.builder()
                 .nodeId(nodeId)
+                .cluster(CLUSTER)
                 .leader(LeaderSettings.builder()
                         .bindAddress(bindAddress)
-                        .streams(new KeyValueStreams(stream))
                         .build())
                 .follower(FollowerSettings.builder()
                         .sinks(new KeyValueSinks(store, storageIdentity))
                         .build())
                 .catchUp(CatchUp.byLastRecords())
                 .build();
-        stream.writeThrough(node.writer(KeyValueStream.KEY));
+        this.registered = node.register(KeyValueStream.settings(store, storageIdentity));
+        this.stream = new KeyValueStream(store, registered.writer());
     }
 
     public void lead(long epoch) {
@@ -84,7 +86,7 @@ public final class KeyValueNode implements AutoCloseable {
      * On the leader, whether a follower holds the stream in sync; on a follower, whether it does.
      */
     public boolean isInSync() {
-        return node.isLeading() ? node.followers().isStreamInSync(KeyValueStream.KEY) : node.leader().isInSync();
+        return node.isLeading() ? registered.isInSync() : node.leader().isInSync();
     }
 
     /**

@@ -186,7 +186,7 @@ public final class Followers {
     }
 
     /**
-     * Announces the stream again to every follower; see {@link org.lolaf.replicos.ReplicationNode#reannounce}.
+     * Announces the stream again to every follower; see {@link org.lolaf.replicos.RegisteredStream#reconfigure}.
      */
     public void reannounce(int streamKey) {
         for (FollowerConnection connection : connections) {

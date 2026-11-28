@@ -15,8 +15,6 @@
  */
 package org.lolaf.replicos;
 
-import org.lolaf.replicos.spi.StreamAnswer;
-
 import java.util.List;
 import java.util.Map;
 
@@ -69,21 +67,6 @@ public interface FollowersView {
     long getMaxLagNanos();
 
     /**
-     * A {@link LeaderSettings#getSyncFollowers() sync follower} holds the stream in sync, so a failover to it loses
-     * none of the stream's acknowledged records.
-     *
-     * @param streamKey the stream's {@link org.lolaf.replicos.spi.LeaderStream#getKey() key}
-     */
-    boolean isStreamInSync(int streamKey);
-
-    /**
-     * The followers refusing the stream, by node id, and why.
-     *
-     * @param streamKey the stream's {@link org.lolaf.replicos.spi.LeaderStream#getKey() key}
-     */
-    Map<String, StreamAnswer> getStreamRefusals(int streamKey);
-
-    /**
      * Follower lanes dropped as too slow, over the node's life.
      */
     long getDroppedTooSlow();
@@ -119,25 +102,4 @@ public interface FollowersView {
      * it, or {@code DISCONNECTED} for a connection lost without one. Only the reasons that happened.
      */
     Map<String, Long> getCloses();
-
-    /**
-     * Ack waits on the stream that timed out, over the node's life.
-     *
-     * @param streamKey the stream's {@link org.lolaf.replicos.spi.LeaderStream#getKey() key}
-     */
-    long getAckTimeouts(int streamKey);
-
-    /**
-     * Ack waits on the stream that found no follower in sync, over the node's life.
-     *
-     * @param streamKey the stream's {@link org.lolaf.replicos.spi.LeaderStream#getKey() key}
-     */
-    long getAcksWithNoFollowerInSync(int streamKey);
-
-    /**
-     * Ack waits on the stream that found fewer followers in sync than their quorum, over the node's life.
-     *
-     * @param streamKey the stream's {@link org.lolaf.replicos.spi.LeaderStream#getKey() key}
-     */
-    long getAcksWithNotEnoughFollowers(int streamKey);
 }

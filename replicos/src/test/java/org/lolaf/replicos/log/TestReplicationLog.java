@@ -60,7 +60,7 @@ class TestReplicationLog {
         this.record = new LogRecord();
         this.wait = new LogFullWait(Duration.ofSeconds(1), ReplicationClock.SYSTEM);
         this.frame = ByteBuffer.allocateDirect(CAPACITY);
-        this.handler = new RecordingHandler(Journal.APPLICATION_ID);
+        this.handler = new RecordingHandler(Journal.CLUSTER_ID);
     }
 
     private static ByteBuffer message(String text) {

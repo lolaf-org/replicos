@@ -69,9 +69,9 @@ public enum CloseReason {
      */
     ENCRYPTION_REQUIRED(11),
     /**
-     * The peers replicate different applications' streams.
+     * The peers belong to different clusters.
      */
-    APPLICATION_MISMATCH(12),
+    CLUSTER_MISMATCH(12),
     /**
      * A follower's lane reached another leader than its lane 0 follows.
      */

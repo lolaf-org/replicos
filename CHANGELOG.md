@@ -18,8 +18,9 @@ The first release, extracted from the high availability of [staffix](https://git
 ### Added
 
 - **Streams of records replicated from a leader to its followers over TCP.** Your application stores its records and
-  announces its streams; replicos carries the bytes, never reads them, and has each follower apply them into its own
-  storage. `docs/how-it-works.md` explains how, with diagrams; the wire protocol is in `docs/protocol.md`.
+  registers its streams with the node, which announces them; replicos carries the bytes, never reads them, and has
+  each follower apply them into its own storage. `docs/how-it-works.md` explains how, with diagrams; the wire protocol
+  is in `docs/protocol.md`.
 - **Three replication modes, per stream.** `ASYNC` waits for nothing; `SYNC_RECEIVED` and `SYNC_APPLIED` let a write
   wait until a follower received or applied it. The wait has a timeout, and tells a timed-out write from one with no
   follower in sync.
@@ -46,8 +47,8 @@ The first release, extracted from the high availability of [staffix](https://git
   left off.
 - **A leader reachable over several networks.** A follower can be given all of its leader's addresses, and connects
   through the first that answers.
-- **Safety checks on connecting.** Nodes of two different applications refuse each other, and a follower refuses a
-  stream the leader stores in the place it would write it.
+- **Safety checks on connecting.** Nodes of two different clusters refuse each other, two environments of one
+  application included, and a follower refuses a stream the leader stores in the place it would write it.
 - **Optional encryption with a secret the nodes share.** AES-CTR with HMAC-SHA256 by default, or AES-GCM, ChaCha20
   with HMAC or ChaCha20-Poly1305, through any JCE provider. Each connection derives its own keys. `PREFERRED` eases
   turning encryption on one node at a time; `REQUIRED` refuses a peer that does not encrypt.

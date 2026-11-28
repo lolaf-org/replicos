@@ -69,11 +69,6 @@ public final class BenchmarkSinks implements ReplicaSinks, AutoCloseable {
     }
 
     @Override
-    public int getApplicationId() {
-        return BenchmarkStreams.APPLICATION_ID;
-    }
-
-    @Override
     public Binding open(String streamName, @Nullable String leaderStorageIdentity) {
         ReplicaSink sink = kind == ReplicationParams.FollowerSink.SINK_MEMORY
                 ? new MemorySink(payloadBytes)

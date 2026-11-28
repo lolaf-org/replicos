@@ -93,7 +93,7 @@ class TestReplicationClient {
         this.server = server(address, leader);
         this.replica = new JournalReplica();
         this.main = replica.configure(MAIN);
-        this.followerStreams = new FollowerStreams(replica, CatchUp.fullCopy(), LatencyRecorder.NONE);
+        this.followerStreams = new FollowerStreams(replica, Journal.CLUSTER_ID, CatchUp.fullCopy(), LatencyRecorder.NONE);
         this.twoLanesStats = new ReplicationStats(new SlowFollowers(Duration.ZERO, new TestingReplicationClock()), ReplicationMetrics.NONE);
         leaderMain.append("first");
         server.start();
@@ -105,7 +105,7 @@ class TestReplicationClient {
 
     private static ReplicationServer server(InetSocketAddress address, Journal leader, ReplicationStats stats) {
         return new ReplicationServer(leader.settings().bindAddress(address).heartbeatInterval(Duration.ofMillis(100)).build(),
-                leader.getLogs(), leader.getFollowers(), () -> EPOCH, LEADERSHIP, "leader-a", CatchUp.fullCopy(), new WakeupSelectStrategy(10), stats,
+                leader.getStreams(), leader.getLogs(), leader.getFollowers(), () -> EPOCH, LEADERSHIP, "leader-a", CatchUp.fullCopy(), new WakeupSelectStrategy(10), stats,
                 new TestingReplicationClock(), TestingKeyExchanges.CLEAR);
     }
 

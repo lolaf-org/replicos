@@ -15,6 +15,7 @@
  */
 package org.lolaf.replicos;
 
+import org.jspecify.annotations.Nullable;
 import org.lolaf.ringos.Deadline;
 
 import java.net.InetSocketAddress;
@@ -108,29 +109,23 @@ public interface ReplicationNode {
     boolean isFollowing();
 
     /**
-     * Opens the stream's writer, for one thread at a time. Its records reach the followers while the node leads.
+     * Replicates the stream from now on, announcing it to the followers connected or connecting. Any thread, leading
+     * or not.
      *
-     * @param streamKey the stream's {@link org.lolaf.replicos.spi.LeaderStream#getKey() key}, which sets its lane
+     * @throws IllegalArgumentException for a name empty, longer than 65535 UTF-8 bytes, or registered already
+     * @throws IllegalStateException    for a node without leader settings
      */
-    StreamWriter writer(int streamKey);
+    RegisteredStream register(StreamSettings settings);
 
     /**
-     * Call after the stream's {@link org.lolaf.replicos.spi.LeaderStream LeaderStream} changed its replication mode or
-     * storage identity: its data did not change. Each follower checks the stream again against its own settings and
-     * keeps its copy when it still can, catches up by snapshot when it now needs one, or stops replicating it.
-     *
-     * @param streamKey the stream's {@link org.lolaf.replicos.spi.LeaderStream#getKey() key}
+     * Null for a name never registered.
      */
-    void reannounce(int streamKey);
+    @Nullable RegisteredStream stream(String streamName);
 
     /**
-     * Call after the stream's data changed without records appended, such as a restore or a reset of its storage:
-     * every follower holding the stream in sync discards its copy and receives the whole stream again by snapshot.
-     * Followers not holding it are left alone.
-     *
-     * @param streamKey the stream's {@link org.lolaf.replicos.spi.LeaderStream#getKey() key}
+     * In registration order.
      */
-    void resync(int streamKey);
+    List<RegisteredStream> streams();
 
     /**
      * The followers while the node leads, empty otherwise.
@@ -144,7 +139,7 @@ public interface ReplicationNode {
 
     /**
      * The leader's lanes, each a log and a connection per follower, so a snapshot or a slow follower on one lane
-     * holds back only its streams. A stream belongs to lane {@code streamKey % lanes}.
+     * holds back only its streams. A stream's is {@link RegisteredStream#getLane()}.
      */
     int getLanes();
 

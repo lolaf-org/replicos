@@ -20,6 +20,7 @@ import org.lolaf.ringos.Deadline;
 import org.lolaf.replicos.ReplicaStream;
 import org.lolaf.replicos.EncryptionMode;
 import org.lolaf.replicos.testkit.TestingKeyExchanges;
+import org.lolaf.replicos.journal.Journal;
 import org.lolaf.replicos.journal.JournalCopy;
 import org.lolaf.replicos.wire.CloseReason;
 import org.lolaf.replicos.wire.FrameDecoder;
@@ -73,13 +74,14 @@ class TestLeaderConnection extends LeaderConnectionHarness {
     }
 
     @Test
-    void aLeaderOfAnotherApplicationClosesTheStream() {
+    void aLeaderOfAnotherClusterClosesTheStream() {
         decode(writeFrames((out, index) -> FrameEncoder.welcome(out, index, EPOCH, 0x41505031, "leader-a", LEADERSHIP,
                 WireFormat.NO_RESUME, 1, EncryptionMode.DISABLED, TestingKeyExchanges.NO_NONCE)), connection);
 
         assertThat(connection.getState()).isEqualTo(LeaderConnection.State.CLOSED);
         assertThat(sent.frames).last().asString()
-                .isEqualTo("CLOSE epoch=7 APPLICATION_MISMATCH follower replicates application 4a524e4c, leader 41505031");
+                .isEqualTo("CLOSE epoch=7 CLUSTER_MISMATCH follower is of cluster " + Integer.toHexString(Journal.CLUSTER_ID)
+                        + ", leader 41505031");
     }
 
     @Test

@@ -121,17 +121,17 @@ class TestFollowers {
     }
 
     private FollowerConnection hello(LeaderSettings settings, String followerId) {
-        FollowerConnection connection = connection(settings, journal.getLogs());
+        FollowerConnection connection = connection(settings, journal);
         followers.add(connection);
-        connection.onHello(EPOCH, WireFormat.VERSION, Journal.APPLICATION_ID, followerId, EPOCH, LEADERSHIP, 0, 0, EncryptionMode.DISABLED, TestingKeyExchanges.NO_NONCE);
+        connection.onHello(EPOCH, WireFormat.VERSION, Journal.CLUSTER_ID, followerId, EPOCH, LEADERSHIP, 0, 0, EncryptionMode.DISABLED, TestingKeyExchanges.NO_NONCE);
         return connection;
     }
 
-    private FollowerConnection connection(LeaderSettings settings, ReplicationLogs logs) {
+    private FollowerConnection connection(LeaderSettings settings, Journal journal) {
         IOSession ioSession = mock(IOSession.class);
         when(ioSession.borrow(anyInt())).then(invocation -> ByteBuffer.allocate(invocation.getArgument(0)));
         ReplicationStats stats = new ReplicationStats(new SlowFollowers(Duration.ZERO, clock), ReplicationMetrics.NONE);
-        return new FollowerConnection(ioSession, settings, logs, () -> EPOCH, LEADERSHIP, "leader-a", CatchUp.fullCopy(),
+        return new FollowerConnection(ioSession, settings, journal.getStreams(), journal.getLogs(), () -> EPOCH, LEADERSHIP, "leader-a", CatchUp.fullCopy(),
                 stats, loop -> {
         }, clock, TestingKeyExchanges.CLEAR, followers);
     }
@@ -315,11 +315,11 @@ class TestFollowers {
 
     @Test
     void aSyncWaitIsOnlyForTheLaneCarryingItsStream() {
-        Journal twoLanes = twoLanes();
-        twoLanes.get(0).append("");
-        twoLanes.get(1).append("");
-        FollowerConnection connectionOfMain = connection(twoLanes.settings().build(), twoLanes.getLogs());
-        connectionOfMain.onHello(EPOCH, WireFormat.VERSION, Journal.APPLICATION_ID, "follower", EPOCH, LEADERSHIP, -1, 0, EncryptionMode.DISABLED, TestingKeyExchanges.NO_NONCE);
+        Journal twoLanes = new Journal(new ReplicationLogs(2, 1 << 16), Duration.ofMillis(50));
+        twoLanes.add("main", StreamReplicationMode.SYNC_APPLIED).append("");
+        twoLanes.add("other", StreamReplicationMode.SYNC_APPLIED).append("");
+        FollowerConnection connectionOfMain = connection(twoLanes.settings().build(), twoLanes);
+        connectionOfMain.onHello(EPOCH, WireFormat.VERSION, Journal.CLUSTER_ID, "follower", EPOCH, LEADERSHIP, -1, 0, EncryptionMode.DISABLED, TestingKeyExchanges.NO_NONCE);
         connectionOfMain.getSender().fillBatch(ByteBuffer.allocate(1 << 16));
         FollowerConnectionHarness.answer(connectionOfMain, 0, StreamAnswer.REPLICATING);
         connectionOfMain.onAck(EPOCH, twoLanes.getLogs().get(0).getTailOffset(), true, 0);
@@ -347,8 +347,8 @@ class TestFollowers {
     }
 
     private FollowerConnection laneConnection(Journal twoLanes, int lane) {
-        FollowerConnection connection = connection(twoLanes.settings().build(), twoLanes.getLogs());
-        connection.onHello(EPOCH, WireFormat.VERSION, Journal.APPLICATION_ID, "follower", EPOCH, LEADERSHIP, -1, lane, EncryptionMode.DISABLED, TestingKeyExchanges.NO_NONCE);
+        FollowerConnection connection = connection(twoLanes.settings().build(), twoLanes);
+        connection.onHello(EPOCH, WireFormat.VERSION, Journal.CLUSTER_ID, "follower", EPOCH, LEADERSHIP, -1, lane, EncryptionMode.DISABLED, TestingKeyExchanges.NO_NONCE);
         connection.getSender().fillBatch(ByteBuffer.allocate(1 << 16));
         followers.add(connection);
         return connection;

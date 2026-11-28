@@ -53,7 +53,7 @@ abstract class LeaderConnectionHarness extends AbstractLeaderConnectionHarness {
     }
 
     private LeaderConnectionHarness(JournalReplica replica, CatchUp catchUp) {
-        super(new FollowerStreams(replica, catchUp, LatencyRecorder.NONE), new RecordingHandler(Journal.APPLICATION_ID));
+        super(new FollowerStreams(replica, Journal.CLUSTER_ID, catchUp, LatencyRecorder.NONE), new RecordingHandler(Journal.CLUSTER_ID));
         this.replica = replica;
         this.main = replica.configure(MAIN);
     }

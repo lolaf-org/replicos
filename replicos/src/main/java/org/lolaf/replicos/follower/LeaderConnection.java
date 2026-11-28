@@ -136,7 +136,7 @@ public final class LeaderConnection implements FrameHandler {
 
     public void hello() {
         ByteBuffer frame = answers.claim(FrameEncoder.bytesWith(FrameType.HELLO, nodeId));
-        int length = FrameEncoder.hello(frame, 0, nodeEpoch.getAsLong(), followerStreams.getApplicationId(), nodeId,
+        int length = FrameEncoder.hello(frame, 0, nodeEpoch.getAsLong(), followerStreams.getClusterId(), nodeId,
                 followerStreams.getLastAppliedEpoch(lane), followerStreams.getLastAppliedLeadership(lane),
                 followerStreams.getLastAppliedOffset(lane), lane,
                 keyExchange.getMode(), keyAgreement.getNonce());
@@ -183,7 +183,7 @@ public final class LeaderConnection implements FrameHandler {
     }
 
     @Override
-    public void onWelcome(long epoch, int version, int applicationId, String leaderId, long leadership,
+    public void onWelcome(long epoch, int version, int clusterId, String leaderId, long leadership,
                           long resumeOffset, int lanes, EncryptionMode leaderMode, byte[] leaderNonce) {
         if (state != State.AWAITING_WELCOME) {
             close(CloseReason.PROTOCOL_ERROR, "a second WELCOME");
@@ -193,9 +193,9 @@ public final class LeaderConnection implements FrameHandler {
             close(CloseReason.VERSION_MISMATCH, "follower speaks version " + WireFormat.VERSION + ", leader " + version);
             return;
         }
-        if (applicationId != followerStreams.getApplicationId()) {
-            close(CloseReason.APPLICATION_MISMATCH, "follower replicates application "
-                    + Integer.toHexString(followerStreams.getApplicationId()) + ", leader " + Integer.toHexString(applicationId));
+        if (clusterId != followerStreams.getClusterId()) {
+            close(CloseReason.CLUSTER_MISMATCH, "follower is of cluster "
+                    + Integer.toHexString(followerStreams.getClusterId()) + ", leader " + Integer.toHexString(clusterId));
             return;
         }
         long currentEpoch = nodeEpoch.getAsLong();
@@ -224,7 +224,7 @@ public final class LeaderConnection implements FrameHandler {
         streamLanes = lanes;
         streamResumeOffset = resumeOffset;
         if (negotiation == Negotiation.ENCRYPTED) {
-            confirmKeys(epoch, applicationId, leaderId, leadership, resumeOffset, lanes, leaderMode, leaderNonce);
+            confirmKeys(epoch, clusterId, leaderId, leadership, resumeOffset, lanes, leaderMode, leaderNonce);
             state = State.AWAITING_KEY_ACCEPTANCE;
             return;
         }
@@ -251,9 +251,9 @@ public final class LeaderConnection implements FrameHandler {
     /**
      * Sent before anything else this connection answers, so the leader verifies it before it streams.
      */
-    private void confirmKeys(long epoch, int applicationId, String leaderId, long leadership, long resumeOffset,
+    private void confirmKeys(long epoch, int clusterId, String leaderId, long leadership, long resumeOffset,
                              int lanes, EncryptionMode leaderMode, byte[] leaderNonce) {
-        keyAgreement.agree(leaderNonce, FrameEncoder.welcomeBytes(epoch, applicationId, leaderId, leadership,
+        keyAgreement.agree(leaderNonce, FrameEncoder.welcomeBytes(epoch, clusterId, leaderId, leadership,
                 resumeOffset, lanes, leaderMode, leaderNonce));
         byte[] confirmation = keyAgreement.confirmation();
         frameOpener = keyAgreement.newOpener();

@@ -56,6 +56,7 @@ public final class ReplicationServer {
     private static final int MAX_INBOUND_FRAME_BYTES = 128 * 1024;
 
     private final LeaderSettings settings;
+    private final StreamRegistry streams;
     private final ReplicationLogs logs;
     private final Followers followers;
     private final LongSupplier nodeEpoch;
@@ -156,8 +157,8 @@ public final class ReplicationServer {
                 session.stop(Deadline.immediate());
                 return;
             }
-            FollowerConnection connection = new FollowerConnection(session, settings, logs, nodeEpoch, leadership,
-                    leaderId, catchUp, stats, ReplicationServer::launchSender, clock, keyExchange, followers);
+            FollowerConnection connection = new FollowerConnection(session, settings, streams, logs, nodeEpoch,
+                    leadership, leaderId, catchUp, stats, ReplicationServer::launchSender, clock, keyExchange, followers);
             session.setAttachment(connection);
             followers.add(connection);
         }

@@ -19,35 +19,37 @@ import lombok.Getter;
 import org.jspecify.annotations.Nullable;
 import org.lolaf.ringos.idling.BackoffIdleStrategy;
 import org.lolaf.replicos.LeaderSettings;
+import org.lolaf.replicos.RegisteredStream;
 import org.lolaf.replicos.ReplicationNode;
-import org.lolaf.replicos.StreamWriter;
+import org.lolaf.replicos.StreamSettings;
 import org.lolaf.replicos.leader.Followers;
 import org.lolaf.replicos.leader.ReplicationStats;
 import org.lolaf.replicos.leader.SlowFollowers;
-import org.lolaf.replicos.leader.StreamLogWriter;
+import org.lolaf.replicos.leader.StreamRegistry;
+import org.lolaf.replicos.leader.StreamWriters;
 import org.lolaf.replicos.log.ReplicationLogs;
-import org.lolaf.replicos.spi.LeaderStreams;
+import org.lolaf.replicos.spi.LatencyRecorder;
 import org.lolaf.replicos.spi.ReplicationClock;
 import org.lolaf.replicos.spi.ReplicationMetrics;
 import org.lolaf.replicos.spi.StreamReplicationMode;
+import org.lolaf.replicos.wire.WireFormat;
 
 import java.net.InetSocketAddress;
 import java.time.Duration;
+import java.util.Arrays;
 import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
-import java.util.function.IntFunction;
+import java.util.function.Function;
 
 /**
  * The application the library's tests replicate: append-only journals of text entries, each journal a stream, on the
  * leader. {@link JournalReplica} is its follower side. It writes straight to the logs, for the tests of the leader's
  * parts, or through the node {@link #writeThrough written through}.
  */
-public final class Journal implements LeaderStreams {
+public final class Journal {
 
-    /**
-     * {@code 'JRNL'}.
-     */
-    public static final int APPLICATION_ID = 0x4a524e4c;
+    public static final String CLUSTER = "journal";
+    public static final int CLUSTER_ID = WireFormat.clusterId(CLUSTER);
 
     /**
      * Null for a journal written through a node.
@@ -59,8 +61,12 @@ public final class Journal implements LeaderStreams {
      */
     @Getter
     private final @Nullable Followers followers;
-    private final List<JournalStream> streams;
-    private volatile IntFunction<StreamWriter> writers;
+    /**
+     * What the leader's parts read, null for a journal written through a node.
+     */
+    @Getter
+    private final @Nullable StreamRegistry streams;
+    private volatile Function<StreamSettings, RegisteredStream> registrar;
     /**
      * What its writers counted; null for a journal written through a node.
      */
@@ -77,16 +83,21 @@ public final class Journal implements LeaderStreams {
      */
     public Journal(ReplicationLogs logs, Duration logFullTimeout) {
         Followers direct = new Followers(ReplicationClock.SYSTEM);
-        this.logs = logs;
-        this.followers = direct;
-        this.streams = new CopyOnWriteArrayList<>();
         ReplicationStats stats = new ReplicationStats(new SlowFollowers(Duration.ZERO, ReplicationClock.SYSTEM),
                 ReplicationMetrics.NONE);
         List<Long> waits = new CopyOnWriteArrayList<>();
+        LatencyRecorder[] logFullWaits = new LatencyRecorder[logs.count()];
+        Arrays.fill(logFullWaits, (LatencyRecorder) waits::add);
+        StreamRegistry registry = new StreamRegistry(CLUSTER_ID, logs.count(), direct, stats);
+        StreamWriters writers = new StreamWriters(settings().logFullTimeout(logFullTimeout)
+                .ackIdleStrategy(BackoffIdleStrategy::new).build(), logs, direct, logFullWaits, stats,
+                ReplicationClock.SYSTEM);
+        this.logs = logs;
+        this.followers = direct;
+        this.streams = registry;
         this.writerStats = stats;
         this.logFullWaitNanos = waits;
-        this.writers = key -> new StreamLogWriter(key, logs.forStream(key), direct, logFullTimeout,
-                waits::add, new BackoffIdleStrategy(), stats, ReplicationClock.SYSTEM);
+        this.registrar = settings -> registry.register(settings, writers);
     }
 
     /**
@@ -95,10 +106,10 @@ public final class Journal implements LeaderStreams {
     public Journal() {
         this.logs = null;
         this.followers = null;
-        this.streams = new CopyOnWriteArrayList<>();
+        this.streams = null;
         this.writerStats = null;
         this.logFullWaitNanos = List.of();
-        this.writers = key -> {
+        this.registrar = settings -> {
             throw new IllegalStateException("No node to write through yet");
         };
     }
@@ -109,7 +120,6 @@ public final class Journal implements LeaderStreams {
     public LeaderSettings.LeaderSettingsBuilder settings() {
         return LeaderSettings.builder()
                 .bindAddress(new InetSocketAddress(0))
-                .streams(this)
                 .followerStallTimeout(Duration.ZERO)
                 .snapshotChunkBytes(Integer.MAX_VALUE);
     }
@@ -118,7 +128,7 @@ public final class Journal implements LeaderStreams {
      * The node replicating this journal, built with it.
      */
     public void writeThrough(ReplicationNode node) {
-        writers = node::writer;
+        registrar = node::register;
     }
 
     /**
@@ -128,11 +138,8 @@ public final class Journal implements LeaderStreams {
         return new Journal(new ReplicationLogs(1, logCapacity), Duration.ofMillis(50));
     }
 
-    public synchronized JournalStream add(String name, StreamReplicationMode mode, @Nullable String storageIdentity) {
-        JournalStream stream = new JournalStream(streams.size(), name, mode, storageIdentity,
-                writers.apply(streams.size()));
-        streams.add(stream);
-        return stream;
+    public JournalStream add(String name, StreamReplicationMode mode, @Nullable String storageIdentity) {
+        return new JournalStream(name, mode, storageIdentity, registrar);
     }
 
     /**
@@ -140,20 +147,5 @@ public final class Journal implements LeaderStreams {
      */
     public JournalStream add(String name, StreamReplicationMode mode) {
         return add(name, mode, "leader-storage");
-    }
-
-    @Override
-    public int getApplicationId() {
-        return APPLICATION_ID;
-    }
-
-    @Override
-    public int count() {
-        return streams.size();
-    }
-
-    @Override
-    public JournalStream get(int key) {
-        return streams.get(key);
     }
 }

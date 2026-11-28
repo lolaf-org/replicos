@@ -28,11 +28,6 @@ import org.lolaf.replicos.spi.StreamAnswer;
 public interface ReplicaSinks {
 
     /**
-     * Sent in HELLO; a leader replicating another application is refused.
-     */
-    int getApplicationId();
-
-    /**
      * Opens the sink the stream is applied into, or refuses it. Never called for a stream the leader does not replicate.
      * How the stream is replicated is the leader's alone to decide, so the sink is the same whatever its mode.
      *

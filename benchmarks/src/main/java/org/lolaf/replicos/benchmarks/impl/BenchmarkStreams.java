@@ -16,54 +16,34 @@
 package org.lolaf.replicos.benchmarks.impl;
 
 import org.lolaf.replicos.ReplicationNode;
-import org.lolaf.replicos.spi.LeaderStream;
-import org.lolaf.replicos.spi.LeaderStreams;
 import org.lolaf.replicos.spi.StreamReplicationMode;
 
 /**
  * The application the benchmarks replicate, on the leader: streams of records of one size, held in memory.
  */
-public final class BenchmarkStreams implements LeaderStreams {
+public final class BenchmarkStreams {
 
-    /**
-     * {@code 'BNCH'}.
-     */
-    public static final int APPLICATION_ID = 0x424e4348;
+    public static final String CLUSTER = "benchmark";
 
     private final BenchmarkStream[] streams;
 
     public BenchmarkStreams(int count, StreamReplicationMode mode, int payloadBytes) {
         this.streams = new BenchmarkStream[count];
-        for (int key = 0; key < count; key++) {
-            streams[key] = new BenchmarkStream(key, mode, payloadBytes);
+        for (int index = 0; index < count; index++) {
+            streams[index] = new BenchmarkStream(index, mode, payloadBytes);
         }
     }
 
     /**
-     * Before the first write, once the node is built: the node needs the streams first.
+     * Registers the streams with the leader, in order, before the first write.
      */
     public void writeThrough(ReplicationNode node) {
         for (BenchmarkStream stream : streams) {
-            stream.writeThrough(node.writer(stream.getKey()));
+            stream.writeThrough(node.register(stream.settings()).writer());
         }
     }
 
-    public BenchmarkStream stream(int key) {
-        return streams[key];
-    }
-
-    @Override
-    public int getApplicationId() {
-        return APPLICATION_ID;
-    }
-
-    @Override
-    public int count() {
-        return streams.length;
-    }
-
-    @Override
-    public LeaderStream get(int key) {
-        return streams[key];
+    public BenchmarkStream stream(int index) {
+        return streams[index];
     }
 }

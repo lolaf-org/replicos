@@ -23,6 +23,7 @@ import org.lolaf.replicos.EncryptionMode;
 import org.lolaf.replicos.FollowerSettings;
 import org.lolaf.replicos.LeaderSettings;
 import org.lolaf.replicos.ReplicationEncryptionSettings;
+import org.lolaf.replicos.RegisteredStream;
 import org.lolaf.replicos.ReplicationNode;
 import org.lolaf.replicos.ReplicationNodeBuilder;
 import org.lolaf.replicos.spi.ReplicationMetrics;
@@ -83,7 +84,6 @@ public final class ReplicationPair implements AutoCloseable {
         boolean spin = waiting == ReplicationParams.Waiting.SPIN;
         LeaderSettings.LeaderSettingsBuilder leaderSettings = LeaderSettings.builder()
                 .bindAddress(leaderAddress)
-                .streams(streams)
                 .lanes(lanes);
         FollowerSettings.FollowerSettingsBuilder followerSettings = FollowerSettings.builder()
                 .sinks(sinks)
@@ -104,7 +104,7 @@ public final class ReplicationPair implements AutoCloseable {
         leader.lead(1, Deadline.of(START));
         follower.follow(leaderAddress, () -> 1, Deadline.of(START));
         ReplicationPair pair = new ReplicationPair(streams, sinks, leader, follower);
-        pair.await("the follower in sync with every stream", () -> pair.isEveryStreamInSync(streamCount));
+        pair.await("the follower in sync with every stream", pair::isEveryStreamInSync);
         log.info("Replication pair ready: {} streams {} over {} lanes, {} B payloads, follower {} in {} with {} sink writer "
                         + "threads, {} waiting, {}", streamCount, mode, lanes, payloadBytes, followerSink, pair.describeStorage(),
                 sinkWriterThreads, waiting,
@@ -115,6 +115,7 @@ public final class ReplicationPair implements AutoCloseable {
     private static ReplicationNodeBuilder node(String nodeId, boolean spin, ReplicationEncryptionSettings encryption) {
         ReplicationNodeBuilder builder = ReplicationNode.builder()
                 .nodeId(nodeId)
+                .cluster(BenchmarkStreams.CLUSTER)
                 .encryption(encryption);
         if (spin) {
             builder.selectStrategy(() -> new IdleStrategySelectStrategy(BusySpinIdleStrategy::getInstance));
@@ -130,16 +131,8 @@ public final class ReplicationPair implements AutoCloseable {
         }
     }
 
-    private boolean isEveryStreamInSync(int streamCount) {
-        if (!follower.leader().isInSync()) {
-            return false;
-        }
-        for (int key = 0; key < streamCount; key++) {
-            if (!leader.followers().isStreamInSync(key)) {
-                return false;
-            }
-        }
-        return true;
+    private boolean isEveryStreamInSync() {
+        return follower.leader().isInSync() && leader.streams().stream().allMatch(RegisteredStream::isInSync);
     }
 
     private void await(String what, BooleanSupplier condition) {

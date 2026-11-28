@@ -32,7 +32,6 @@ import java.util.concurrent.atomic.AtomicLong;
  */
 public final class ReplicationStats {
 
-    private static final AckCounts NO_ACKS = new AckCounts();
 
     private final AtomicLong droppedTooSlow;
     @Getter
@@ -115,23 +114,6 @@ public final class ReplicationStats {
         return logFullWaits.get();
     }
 
-    public long getAckTimeouts(int streamKey) {
-        return ackCounts(streamKey).timedOut.get();
-    }
-
-    public long getAcksWithNoFollowerInSync(int streamKey) {
-        return ackCounts(streamKey).noFollowerInSync.get();
-    }
-
-    public long getAcksWithNotEnoughFollowers(int streamKey) {
-        return ackCounts(streamKey).notEnoughFollowers.get();
-    }
-
-    private AckCounts ackCounts(int streamKey) {
-        AckCounts counts = acksByStream.get(streamKey);
-        return counts == null ? NO_ACKS : counts;
-    }
-
     public long getSnapshots() {
         return snapshots.get();
     }
@@ -150,6 +132,18 @@ public final class ReplicationStats {
             this.timedOut = new AtomicLong();
             this.noFollowerInSync = new AtomicLong();
             this.notEnoughFollowers = new AtomicLong();
+        }
+
+        long getTimedOut() {
+            return timedOut.get();
+        }
+
+        long getNoFollowerInSync() {
+            return noFollowerInSync.get();
+        }
+
+        long getNotEnoughFollowers() {
+            return notEnoughFollowers.get();
         }
 
         void count(StreamWriter.Ack ack) {

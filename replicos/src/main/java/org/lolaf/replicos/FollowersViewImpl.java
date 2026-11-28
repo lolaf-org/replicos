@@ -19,12 +19,10 @@ import lombok.RequiredArgsConstructor;
 import org.lolaf.replicos.leader.FollowerConnection;
 import org.lolaf.replicos.leader.Followers;
 import org.lolaf.replicos.leader.ReplicationStats;
+import org.lolaf.replicos.leader.StreamRegistry;
 import org.lolaf.replicos.log.ReplicationLogs;
-import org.lolaf.replicos.spi.LeaderStreams;
-import org.lolaf.replicos.spi.StreamAnswer;
 
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -34,7 +32,7 @@ final class FollowersViewImpl implements FollowersView {
     private final Followers followers;
     private final ReplicationStats stats;
     private final ReplicationLogs logs;
-    private final LeaderStreams streams;
+    private final StreamRegistry streams;
 
     @Override
     public List<FollowerLaneStatus> getLaneStatuses() {
@@ -92,32 +90,6 @@ final class FollowersViewImpl implements FollowersView {
     }
 
     @Override
-    public boolean isStreamInSync(int streamKey) {
-        for (FollowerConnection connection : followers.connections()) {
-            if (connection.isSyncFollowerInSync(streamKey)) {
-                return true;
-            }
-        }
-        return false;
-    }
-
-    @Override
-    public Map<String, StreamAnswer> getStreamRefusals(int streamKey) {
-        Map<String, StreamAnswer> refusals = Map.of();
-        for (FollowerConnection connection : followers.connections()) {
-            StreamAnswer answer = connection.getStreamAnswer(streamKey);
-            String followerId = connection.getFollowerId();
-            if (answer != null && answer.isRefusal() && followerId != null) {
-                if (refusals.isEmpty()) {
-                    refusals = new HashMap<>();
-                }
-                refusals.put(followerId, answer);
-            }
-        }
-        return refusals;
-    }
-
-    @Override
     public long getDroppedTooSlow() {
         return stats.getDroppedTooSlow();
     }
@@ -150,20 +122,5 @@ final class FollowersViewImpl implements FollowersView {
     @Override
     public Map<String, Long> getCloses() {
         return stats.getCloses().toMap();
-    }
-
-    @Override
-    public long getAckTimeouts(int streamKey) {
-        return stats.getAckTimeouts(streamKey);
-    }
-
-    @Override
-    public long getAcksWithNoFollowerInSync(int streamKey) {
-        return stats.getAcksWithNoFollowerInSync(streamKey);
-    }
-
-    @Override
-    public long getAcksWithNotEnoughFollowers(int streamKey) {
-        return stats.getAcksWithNotEnoughFollowers(streamKey);
     }
 }

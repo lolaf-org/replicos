@@ -32,7 +32,7 @@ public enum StreamAnswer {
      */
     SHARED_STORAGE(1),
     /**
-     * The follower cannot identify its storage, so it cannot rule out sharing the leader's.
+     * The leader's storage or the follower's cannot be identified, so sharing it cannot be ruled out.
      */
     UNKNOWN_STORAGE(2),
     /**

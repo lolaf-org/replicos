@@ -59,11 +59,6 @@ public final class JournalReplica implements ReplicaSinks {
     }
 
     @Override
-    public int getApplicationId() {
-        return Journal.APPLICATION_ID;
-    }
-
-    @Override
     public Binding open(String streamName, @Nullable String leaderStorageIdentity) {
         JournalCopy copy = copies.get(streamName);
         if (copy == null) {

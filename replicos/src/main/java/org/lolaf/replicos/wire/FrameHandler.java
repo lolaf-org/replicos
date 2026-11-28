@@ -39,8 +39,8 @@ public interface FrameHandler {
      * @param epoch                 the one the follower knows, at most the leader's: a newer one means the leader was
      *                              deposed
      * @param version               the follower's protocol version, which must be the leader's
-     * @param applicationId         what the follower replicates, which must be the leader's: two applications' streams
-     *                              do not mix
+     * @param clusterId             the hash of the follower's cluster name, which must be the leader's: two clusters'
+     *                              streams do not mix
      * @param nodeId                the follower's, naming it in the leader's views, logs and metrics
      * @param lastAppliedEpoch      the epoch the last record it applied came from
      * @param lastAppliedLeadership the leadership of {@code lastAppliedEpoch} the last record applied came from
@@ -51,7 +51,7 @@ public interface FrameHandler {
      * @param encryptionMode        the follower's, which with the leader's decides whether the connection encrypts
      * @param nonce                 the follower's random part of this connection's keys, zeros when it does not encrypt
      */
-    default void onHello(long epoch, int version, int applicationId, String nodeId, long lastAppliedEpoch,
+    default void onHello(long epoch, int version, int clusterId, String nodeId, long lastAppliedEpoch,
                          long lastAppliedLeadership, long lastAppliedOffset, int lane, EncryptionMode encryptionMode,
                          byte[] nonce) {
         throw unexpected(FrameType.HELLO);
@@ -60,7 +60,7 @@ public interface FrameHandler {
     /**
      * @param epoch          the leader's, which every later frame of the connection must carry
      * @param version        the leader's protocol version
-     * @param applicationId  the leader's, as in {@link #onHello}
+     * @param clusterId      the leader's, as in {@link #onHello}
      * @param leaderId       the leader's node id, which every lane of the follower must find the same
      * @param leadership     drawn at random each time the leader starts leading: its log's offsets mean nothing to
      *                       another leadership, even of the same epoch
@@ -70,7 +70,7 @@ public interface FrameHandler {
      * @param encryptionMode the leader's, as in {@link #onHello}
      * @param nonce          the leader's, as in {@link #onHello}
      */
-    default void onWelcome(long epoch, int version, int applicationId, String leaderId, long leadership,
+    default void onWelcome(long epoch, int version, int clusterId, String leaderId, long leadership,
                            long resumeOffset, int lanes, EncryptionMode encryptionMode, byte[] nonce) {
         throw unexpected(FrameType.WELCOME);
     }

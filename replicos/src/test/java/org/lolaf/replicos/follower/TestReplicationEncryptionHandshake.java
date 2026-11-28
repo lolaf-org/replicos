@@ -76,7 +76,7 @@ class TestReplicationEncryptionHandshake {
         this.leaderMain = leader.add(MAIN, StreamReplicationMode.ASYNC);
         this.replica = new JournalReplica();
         this.main = replica.configure(MAIN);
-        this.followerStreams = new FollowerStreams(replica, CatchUp.fullCopy(), LatencyRecorder.NONE);
+        this.followerStreams = new FollowerStreams(replica, Journal.CLUSTER_ID, CatchUp.fullCopy(), LatencyRecorder.NONE);
     }
 
     private static KeyExchange exchange(EncryptionMode mode, String secret, String cipher) {
@@ -97,7 +97,7 @@ class TestReplicationEncryptionHandshake {
         followerId = "follower-" + System.identityHashCode(this);
         InetSocketAddress address = new InetSocketAddress("localhost", TestingPorts.findFree());
         server = new ReplicationServer(leader.settings().bindAddress(address).heartbeatInterval(Duration.ofMillis(100))
-                .followerStallTimeout(Duration.ofSeconds(5)).build(), leader.getLogs(), leader.getFollowers(),
+                .followerStallTimeout(Duration.ofSeconds(5)).build(), leader.getStreams(), leader.getLogs(), leader.getFollowers(),
                 () -> EPOCH, LEADERSHIP, leaderId, CatchUp.fullCopy(), new WakeupSelectStrategy(10),
                 new ReplicationStats(new SlowFollowers(Duration.ZERO, new TestingReplicationClock()), ReplicationMetrics.NONE), new TestingReplicationClock(),
                 leaderExchange);

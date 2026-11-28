@@ -16,8 +16,6 @@
 package org.lolaf.replicos.leader;
 
 import lombok.Getter;
-import org.lolaf.replicos.spi.LeaderStream;
-import org.lolaf.replicos.spi.LeaderStreams;
 import org.lolaf.replicos.wire.FrameCipher;
 import org.lolaf.replicos.wire.FrameEncoder;
 import org.lolaf.replicos.wire.FrameType;
@@ -33,7 +31,7 @@ import java.util.concurrent.ConcurrentLinkedQueue;
 final class StreamAnnouncer {
 
     private final FollowerConnection connection;
-    private final LeaderStreams streams;
+    private final StreamRegistry streams;
     private final StreamSyncs syncs;
     private final SnapshotSender snapshots;
     /**
@@ -51,7 +49,8 @@ final class StreamAnnouncer {
     private int firstPassAnnounced;
     private boolean streamsAnnounced;
 
-    StreamAnnouncer(FollowerConnection connection, LeaderStreams streams, StreamSyncs syncs, SnapshotSender snapshots) {
+    StreamAnnouncer(FollowerConnection connection, StreamRegistry streams, StreamSyncs syncs,
+                    SnapshotSender snapshots) {
         this.reannouncements = new ConcurrentLinkedQueue<>();
         this.connection = connection;
         this.streams = streams;
@@ -107,20 +106,21 @@ final class StreamAnnouncer {
     /**
      * @return the bytes written, 0 when the frame does not fit
      */
-    private int streamFrame(ByteBuffer dst, int index, long currentEpoch, LeaderStream stream, FrameCipher sealer) {
+    private int streamFrame(ByteBuffer dst, int index, long currentEpoch, StreamRegistration stream,
+                            FrameCipher sealer) {
         String name = stream.getStreamName();
-        String storageIdentity = stream.getStorageIdentity();
-        if (dst.limit() - index < FrameEncoder.bytesWith(FrameType.STREAM, name, storageIdentity)) {
+        StreamRegistration.Replication replication = stream.getReplication();
+        if (dst.limit() - index < FrameEncoder.bytesWith(FrameType.STREAM, name, replication.getStorageIdentity())) {
             return 0;
         }
         syncs.announced(stream.getKey());
         connection.leftSync(stream.getKey());
         return sealer.seal(dst, index, FrameEncoder.stream(dst, index, currentEpoch, stream.getKey(),
-                stream.getStreamReplicationMode(), name, storageIdentity));
+                replication.getMode(), name, replication.getStorageIdentity()));
     }
 
     /**
-     * See {@link org.lolaf.replicos.ReplicationNode#reannounce}. Any thread.
+     * See {@link org.lolaf.replicos.RegisteredStream#reconfigure}. Any thread.
      */
     void reannounce(int streamKey) {
         reannouncements.add(streamKey);

@@ -32,7 +32,6 @@ import org.lolaf.replicos.encryption.KeyExchange;
 import org.lolaf.replicos.encryption.Negotiation;
 import org.lolaf.replicos.log.ReplicationLog;
 import org.lolaf.replicos.log.ReplicationLogs;
-import org.lolaf.replicos.spi.LeaderStreams;
 import org.lolaf.replicos.spi.ReplicationClock;
 import org.lolaf.replicos.spi.StreamAnswer;
 import org.lolaf.replicos.wire.*;
@@ -75,7 +74,7 @@ public final class FollowerConnection implements FrameHandler {
      * Opened by the HELLO, holding the lane's appends back until the connection closes; null before it.
      */
     private volatile ReplicationLog.@Nullable Reader reader;
-    private final LeaderStreams streams;
+    private final StreamRegistry streams;
     /**
      * This node's current election epoch, stamped on every frame it sends.
      */
@@ -142,8 +141,8 @@ public final class FollowerConnection implements FrameHandler {
     /**
      * @param senderLauncher starts the loop streaming the log, on a thread of its own
      */
-    FollowerConnection(IOSession ioSession, LeaderSettings settings, ReplicationLogs logs, LongSupplier nodeEpoch,
-                       long leadership, String leaderId, CatchUp catchUp, ReplicationStats stats,
+    FollowerConnection(IOSession ioSession, LeaderSettings settings, StreamRegistry streams, ReplicationLogs logs,
+                       LongSupplier nodeEpoch, long leadership, String leaderId, CatchUp catchUp, ReplicationStats stats,
                        Consumer<Runnable> senderLauncher, ReplicationClock clock, KeyExchange keyExchange,
                        Followers followers) {
         this.syncs = new StreamSyncs();
@@ -156,7 +155,7 @@ public final class FollowerConnection implements FrameHandler {
         this.ioSession = ioSession;
         this.address = String.valueOf(ioSession.getSocketAddress());
         this.logs = logs;
-        this.streams = settings.getStreams();
+        this.streams = streams;
         this.syncFollowers = settings.getSyncFollowers();
         this.reconnectSilenceNanos = 2 * settings.getHeartbeatInterval().toNanos();
         this.followers = followers;
@@ -167,17 +166,17 @@ public final class FollowerConnection implements FrameHandler {
         this.keyExchange = keyExchange;
         this.keyAgreement = KeyAgreement.ofLeader(keyExchange);
         this.acks = new FollowerAcks(stats, clock);
-        this.sender = new FollowerSender(this, ioSession, settings, syncs, acks, nodeEpoch, logs.getMaxRecordFrameBytes(),
-                catchUp, stats, senderLauncher, clock);
+        this.sender = new FollowerSender(this, ioSession, settings, streams, syncs, acks, nodeEpoch,
+                logs.getMaxRecordFrameBytes(), catchUp, stats, senderLauncher, clock);
     }
 
     @Override
-    public void onHello(long epoch, int version, int applicationId, String nodeId, long lastAppliedEpoch,
+    public void onHello(long epoch, int version, int clusterId, String nodeId, long lastAppliedEpoch,
                         long lastAppliedLeadership, long lastAppliedOffset, int lane, EncryptionMode followerMode,
                         byte[] followerNonce) {
         followerId = nodeId;
         long currentEpoch = nodeEpoch.getAsLong();
-        if (!acceptsHello(epoch, version, applicationId, lane, currentEpoch)) {
+        if (!acceptsHello(epoch, version, clusterId, lane, currentEpoch)) {
             return;
         }
         this.lane = lane;
@@ -221,12 +220,12 @@ public final class FollowerConnection implements FrameHandler {
                     + "disabled", nodeId, lane);
         }
         long resumeOffset = resumed ? reader.getOffset() : WireFormat.NO_RESUME;
-        byte @Nullable [] helloToConfirm = encrypted ? FrameEncoder.helloBytes(epoch, applicationId, nodeId, lastAppliedEpoch,
+        byte @Nullable [] helloToConfirm = encrypted ? FrameEncoder.helloBytes(epoch, clusterId, nodeId, lastAppliedEpoch,
                 lastAppliedLeadership, lastAppliedOffset, lane, followerMode, followerNonce) : null;
         sender.start(replicationLog, reader, sendWelcome(currentEpoch, resumeOffset, helloToConfirm, followerNonce));
     }
 
-    private boolean acceptsHello(long epoch, int version, int applicationId, int lane, long currentEpoch) {
+    private boolean acceptsHello(long epoch, int version, int clusterId, int lane, long currentEpoch) {
         if (state != State.AWAITING_HELLO) {
             close(CloseReason.PROTOCOL_ERROR, "a second HELLO");
             return false;
@@ -235,9 +234,9 @@ public final class FollowerConnection implements FrameHandler {
             close(CloseReason.VERSION_MISMATCH, "leader speaks version " + WireFormat.VERSION + ", follower " + version);
             return false;
         }
-        if (applicationId != streams.getApplicationId()) {
-            close(CloseReason.APPLICATION_MISMATCH, "leader replicates application "
-                    + Integer.toHexString(streams.getApplicationId()) + ", follower " + Integer.toHexString(applicationId));
+        if (clusterId != streams.getClusterId()) {
+            close(CloseReason.CLUSTER_MISMATCH, "leader is of cluster "
+                    + Integer.toHexString(streams.getClusterId()) + ", follower " + Integer.toHexString(clusterId));
             return false;
         }
         if (epoch > currentEpoch) {
@@ -254,7 +253,7 @@ public final class FollowerConnection implements FrameHandler {
     private FrameCipher sendWelcome(long currentEpoch, long resumeOffset, byte @Nullable [] helloToConfirm,
                                     byte[] followerNonce) {
         ByteBuffer frame = ioSession.borrow(FrameEncoder.bytesWith(FrameType.WELCOME, leaderId));
-        int length = FrameEncoder.welcome(frame.clear(), 0, currentEpoch, streams.getApplicationId(), leaderId,
+        int length = FrameEncoder.welcome(frame.clear(), 0, currentEpoch, streams.getClusterId(), leaderId,
                 leadership, resumeOffset, logs.count(), keyExchange.getMode(), keyAgreement.getNonce());
         FrameCipher sealer = FrameCipher.CLEAR;
         if (helloToConfirm != null) {
@@ -516,7 +515,7 @@ public final class FollowerConnection implements FrameHandler {
     }
 
     /**
-     * See {@link org.lolaf.replicos.ReplicationNode#reannounce}.
+     * See {@link org.lolaf.replicos.RegisteredStream#reconfigure}.
      */
     void reannounce(int streamKey) {
         sender.reannounce(streamKey);

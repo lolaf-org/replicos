@@ -19,7 +19,6 @@ import lombok.Builder;
 import lombok.NonNull;
 import lombok.Singular;
 import lombok.Value;
-import org.lolaf.replicos.spi.LeaderStreams;
 import org.lolaf.ringos.idling.BackoffIdleStrategy;
 import org.lolaf.ringos.idling.IdleStrategy;
 
@@ -29,7 +28,7 @@ import java.util.Set;
 import java.util.function.Supplier;
 
 /**
- * What a node reads while it leads. The bind address and the streams are required; everything else has a default.
+ * What a node reads while it leads. The bind address is required; everything else has a default.
  */
 @Value
 @Builder
@@ -39,10 +38,6 @@ public class LeaderSettings {
      * Where the node accepts its followers.
      */
     @NonNull InetSocketAddress bindAddress;
-    /**
-     * What the node replicates.
-     */
-    @NonNull LeaderStreams streams;
     /**
      * How many lanes the streams are split over, each with its own log, sender thread and connection per follower: a
      * snapshot, or a follower too slow for one lane, then holds back only that lane's streams, and the follower applies

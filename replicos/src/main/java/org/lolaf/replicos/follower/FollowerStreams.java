@@ -37,6 +37,7 @@ import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Consumer;
 import java.util.function.ObjIntConsumer;
 import java.util.function.Predicate;
@@ -55,28 +56,33 @@ import java.util.function.ToLongFunction;
 public final class FollowerStreams {
 
     private final ReplicaSinks replicaSinks;
+    /**
+     * Sent in HELLO, so a leader of another cluster is refused.
+     */
+    @Getter
+    private final int clusterId;
     @Getter(AccessLevel.PACKAGE)
     private final CatchUp catchUp;
     private final LanePositions positions;
     private volatile BoundStream[] streamsByKey;
+    private final Map<String, BoundStream> streamsByName;
     private final Map<String, BoundStream> displaced;
     @Getter(AccessLevel.PACKAGE)
     private final LatencyRecorder receivedWriteLatency;
     @Getter
     private final FollowerStats stats;
 
-    public FollowerStreams(ReplicaSinks replicaSinks, CatchUp catchUp, LatencyRecorder receivedWriteLatency) {
+    public FollowerStreams(ReplicaSinks replicaSinks, int clusterId, CatchUp catchUp,
+                           LatencyRecorder receivedWriteLatency) {
         this.positions = new LanePositions();
         this.streamsByKey = new BoundStream[16];
+        this.streamsByName = new ConcurrentHashMap<>();
         this.displaced = new HashMap<>();
         this.receivedWriteLatency = receivedWriteLatency;
         this.stats = new FollowerStats();
         this.replicaSinks = replicaSinks;
+        this.clusterId = clusterId;
         this.catchUp = catchUp;
-    }
-
-    public int getApplicationId() {
-        return replicaSinks.getApplicationId();
     }
 
     public int getLanes() {
@@ -230,7 +236,7 @@ public final class FollowerStreams {
             current.stop(Deadline.unlimited());
         } else if (current != null) {
             displaced.put(current.getStreamName(), current);
-            streamsByKey[key] = null;
+            remove(key);
         }
         BoundStream held = takeHeldElsewhere(streamName);
         if (held != null && held.isReplicated() && leaderMode != StreamReplicationMode.NONE) {
@@ -254,12 +260,14 @@ public final class FollowerStreams {
         if (held != null) {
             return held;
         }
+        held = streamsByName.get(streamName);
+        if (held == null) {
+            return null;
+        }
         BoundStream[] streams = streamsByKey;
         for (int key = 0; key < streams.length; key++) {
-            if (streams[key] != null && streams[key].getStreamName().equals(streamName)) {
-                held = streams[key];
-                streams[key] = null;
-                streamsByKey = streams;
+            if (streams[key] == held) {
+                remove(key);
                 return held;
             }
         }
@@ -281,9 +289,24 @@ public final class FollowerStreams {
         if (key >= streams.length) {
             streams = Arrays.copyOf(streams, Math.max(key + 1, streams.length * 2));
         }
+        unindex(streams[key]);
         streams[key] = stream;
         streamsByKey = streams;
+        streamsByName.put(stream.getStreamName(), stream);
         return stream.answer();
+    }
+
+    private void remove(int key) {
+        BoundStream[] streams = streamsByKey;
+        unindex(streams[key]);
+        streams[key] = null;
+        streamsByKey = streams;
+    }
+
+    private void unindex(@Nullable BoundStream stream) {
+        if (stream != null) {
+            streamsByName.remove(stream.getStreamName(), stream);
+        }
     }
 
     /**
@@ -418,12 +441,7 @@ public final class FollowerStreams {
      * Null for a stream the leader never announced. Any thread.
      */
     public @Nullable ReplicaStream find(String streamName) {
-        for (BoundStream stream : streamsByKey) {
-            if (stream != null && stream.getStreamName().equals(streamName)) {
-                return stream;
-            }
-        }
-        return null;
+        return streamsByName.get(streamName);
     }
 
     /**
@@ -438,5 +456,6 @@ public final class FollowerStreams {
         displaced.values().forEach(stream -> stream.stop(deadline));
         displaced.clear();
         Arrays.fill(streamsByKey, null);
+        streamsByName.clear();
     }
 }

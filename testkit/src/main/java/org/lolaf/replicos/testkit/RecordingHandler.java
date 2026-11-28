@@ -43,14 +43,14 @@ public class RecordingHandler implements FrameHandler {
      */
     public byte[] lastNonce;
     public byte[] lastKeyConfirmation;
-    private final int applicationId;
+    private final int clusterId;
 
     /**
-     * @param applicationId left out of the HELLO and WELCOME lines, so a test's own frames read shorter
+     * @param clusterId left out of the HELLO and WELCOME lines, so a test's own frames read shorter
      */
-    public RecordingHandler(int applicationId) {
+    public RecordingHandler(int clusterId) {
         this.frames = new ArrayList<>();
-        this.applicationId = applicationId;
+        this.clusterId = clusterId;
     }
 
     protected static String text(ByteBuffer buffer, int index, int length) {
@@ -58,26 +58,26 @@ public class RecordingHandler implements FrameHandler {
     }
 
     @Override
-    public void onHello(long epoch, int version, int applicationId, String nodeId, long lastAppliedEpoch,
+    public void onHello(long epoch, int version, int clusterId, String nodeId, long lastAppliedEpoch,
                         long lastAppliedLeadership, long lastAppliedOffset, int lane, EncryptionMode encryptionMode,
                         byte[] nonce) {
         lastNonce = nonce;
-        frames.add("HELLO epoch=" + epoch + " version=" + version + application(applicationId) + " node=" + nodeId
+        frames.add("HELLO epoch=" + epoch + " version=" + version + cluster(clusterId) + " node=" + nodeId
                 + " lastEpoch=" + lastAppliedEpoch + " lastLeadership=" + lastAppliedLeadership
                 + " lastOffset=" + lastAppliedOffset + " lane=" + lane
                 + encryption(encryptionMode, nonce));
     }
 
     @Override
-    public void onWelcome(long epoch, int version, int applicationId, String leaderId, long leadership,
+    public void onWelcome(long epoch, int version, int clusterId, String leaderId, long leadership,
                           long resumeOffset, int lanes, EncryptionMode encryptionMode, byte[] nonce) {
         lastNonce = nonce;
-        frames.add("WELCOME epoch=" + epoch + " version=" + version + application(applicationId) + " leader=" + leaderId
+        frames.add("WELCOME epoch=" + epoch + " version=" + version + cluster(clusterId) + " leader=" + leaderId
                 + " leadership=" + leadership + " resume=" + resumeOffset + " lanes=" + lanes + encryption(encryptionMode, nonce));
     }
 
-    private String application(int frameApplicationId) {
-        return frameApplicationId == applicationId ? "" : " application=" + Integer.toHexString(frameApplicationId);
+    private String cluster(int frameClusterId) {
+        return frameClusterId == clusterId ? "" : " cluster=" + Integer.toHexString(frameClusterId);
     }
 
     @Override

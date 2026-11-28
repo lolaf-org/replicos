@@ -92,9 +92,9 @@ class TestSeveralFollowers {
                                         Set<String> syncFollowers) {
         ReplicationNode node = ReplicationNode.builder()
                 .nodeId(nodeId)
+                .cluster(Journal.CLUSTER)
                 .leader(LeaderSettings.builder()
                         .bindAddress(bindAddress)
-                        .streams(journal)
                         .heartbeatInterval(Duration.ofMillis(100))
                         .logFullTimeout(Duration.ofMillis(200))
                         .followerStallTimeout(followerStallTimeout)
@@ -277,8 +277,7 @@ class TestSeveralFollowers {
         JournalStream main = aLeadsBothFollowers(StreamReplicationMode.ASYNC);
         await().until(() -> a.followers().countInSync() == 2);
 
-        main.setStreamReplicationMode(StreamReplicationMode.SYNC_APPLIED);
-        a.reannounce(0);
+        main.getRegistered().setReplicationMode(StreamReplicationMode.SYNC_APPLIED);
         await().until(() -> b.leader().getStream(MAIN).getLeaderMode() == StreamReplicationMode.SYNC_APPLIED
                 && c.leader().getStream(MAIN).getLeaderMode() == StreamReplicationMode.SYNC_APPLIED
                 && a.followers().countInSync() == 2);
@@ -315,7 +314,7 @@ class TestSeveralFollowers {
         main.append("second");
 
         assertThat(main.awaitAck(1, ACK_TIMEOUT)).isEqualTo(StreamWriter.Ack.ACKED);
-        assertThat(a.followers().getAckTimeouts(0)).isZero();
+        assertThat(main.getRegistered().getAckTimeouts()).isZero();
         assertThat(copyB.getStored()).containsExactly("1 first", "2 second");
         assertThat(copyC.getStored()).containsExactly("1 first");
     }
@@ -330,7 +329,7 @@ class TestSeveralFollowers {
 
         assertThat(main.awaitAck(2, ACK_TIMEOUT)).isEqualTo(StreamWriter.Ack.NOT_ENOUGH_FOLLOWERS);
         assertThat(main.awaitAck(1, ACK_TIMEOUT)).isEqualTo(StreamWriter.Ack.ACKED);
-        assertThat(a.followers().getAcksWithNotEnoughFollowers(0)).isEqualTo(1);
+        assertThat(main.getRegistered().getAcksWithNotEnoughFollowers()).isEqualTo(1);
     }
 
     @Test
@@ -343,7 +342,7 @@ class TestSeveralFollowers {
         main.append("third");
 
         assertThat(main.awaitAck(ACK_TIMEOUT)).isEqualTo(StreamWriter.Ack.ACKED);
-        assertThat(a.followers().getAckTimeouts(0)).isEqualTo(1);
+        assertThat(main.getRegistered().getAckTimeouts()).isEqualTo(1);
         assertThat(copyB.getStored()).containsExactly("1 first", "2 second", "3 third");
         assertThat(copyC.getStored()).containsExactly("1 first");
         cHeld.countDown();
@@ -382,7 +381,7 @@ class TestSeveralFollowers {
 
             assertThat(main.awaitAck(ACK_TIMEOUT)).isEqualTo(StreamWriter.Ack.ACKED);
             assertThat(d.followers().getCloses()).isEqualTo(Map.of("STALLED", 1L));
-            assertThat(d.followers().getAckTimeouts(0)).isZero();
+            assertThat(main.getRegistered().getAckTimeouts()).isZero();
             assertThat(copyB.getStored()).containsExactly("1 first");
             assertThat(copyC.getStored()).isEmpty();
         });
@@ -407,7 +406,7 @@ class TestSeveralFollowers {
             await().until(() -> d.followers().countConnected() == 1);
             main.append("second");
             assertThat(main.awaitAck(ACK_TIMEOUT)).isEqualTo(StreamWriter.Ack.NO_FOLLOWER_IN_SYNC);
-            assertThat(d.followers().isStreamInSync(0)).isFalse();
+            assertThat(main.getRegistered().isInSync()).isFalse();
             await().until(() -> copyC.getStored().equals(List.of("1 first", "2 second")));
         });
     }
@@ -445,7 +444,7 @@ class TestSeveralFollowers {
         copyB.getStored().forEach(entry -> promoted.append(entry.substring(entry.indexOf(' ') + 1)));
         epoch.set(2);
         b.lead(2, stop());
-        await().until(() -> b.followers().isStreamInSync(0));
+        await().until(() -> promoted.getRegistered().isInSync());
         promoted.append("third");
 
         assertThat(promoted.awaitAck(ACK_TIMEOUT)).isEqualTo(StreamWriter.Ack.ACKED);

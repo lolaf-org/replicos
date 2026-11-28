@@ -18,8 +18,8 @@ package org.lolaf.replicos.benchmarks.impl;
 import lombok.Getter;
 import org.jspecify.annotations.Nullable;
 import org.lolaf.replicos.AckWait;
+import org.lolaf.replicos.StreamSettings;
 import org.lolaf.replicos.StreamWriter;
-import org.lolaf.replicos.spi.LeaderStream;
 import org.lolaf.replicos.spi.RecordFlag;
 import org.lolaf.replicos.spi.SnapshotSource;
 import org.lolaf.replicos.spi.StreamReplicationMode;
@@ -32,7 +32,7 @@ import java.util.Objects;
  * One stream of fixed-size records, of which it keeps the last {@link #HISTORY}: a follower catching up by snapshot
  * gets those only, as from a store that truncates its history. Written by one thread at a time; allocates nothing.
  */
-public final class BenchmarkStream implements LeaderStream {
+public final class BenchmarkStream {
 
     public static final byte CONTENT_TYPE = 1;
     private static final int HISTORY = 1024;
@@ -40,10 +40,7 @@ public final class BenchmarkStream implements LeaderStream {
     private static final Duration ACK_TIMEOUT = Duration.ofSeconds(5);
 
     @Getter
-    private final int key;
-    @Getter
     private final String streamName;
-    @Getter
     private final StreamReplicationMode streamReplicationMode;
     private final int payloadBytes;
     private final ByteBuffer[] history;
@@ -51,9 +48,8 @@ public final class BenchmarkStream implements LeaderStream {
     private volatile long lastPosition;
     private StreamWriter writer;
 
-    BenchmarkStream(int key, StreamReplicationMode streamReplicationMode, int payloadBytes) {
-        this.key = key;
-        this.streamName = "stream-" + key;
+    BenchmarkStream(int index, StreamReplicationMode streamReplicationMode, int payloadBytes) {
+        this.streamName = "stream-" + index;
         this.streamReplicationMode = streamReplicationMode;
         this.payloadBytes = payloadBytes;
         this.history = new ByteBuffer[HISTORY];
@@ -62,6 +58,15 @@ public final class BenchmarkStream implements LeaderStream {
         }
         this.ackWait = streamReplicationMode.isSync() ? AckWait.of(streamReplicationMode, ACK_TIMEOUT) : null;
         this.lastPosition = 0;
+    }
+
+    StreamSettings settings() {
+        return StreamSettings.builder()
+                .name(streamName)
+                .replicationMode(streamReplicationMode)
+                .storageIdentity("leader-memory")
+                .snapshotSource(HistorySnapshot::new)
+                .build();
     }
 
     void writeThrough(StreamWriter streamWriter) {
@@ -89,16 +94,6 @@ public final class BenchmarkStream implements LeaderStream {
      */
     public StreamWriter.Ack awaitAck(long offset) {
         return writer.awaitAck(offset, Objects.requireNonNull(ackWait));
-    }
-
-    @Override
-    public String getStorageIdentity() {
-        return "leader-memory";
-    }
-
-    @Override
-    public SnapshotSource newSnapshotSource() {
-        return new HistorySnapshot();
     }
 
     /**

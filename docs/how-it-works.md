@@ -40,11 +40,11 @@ flowchart LR
 - **A leadership** is a random id a node draws each time `lead()` is called. It tells apart two leaderships at the
   same epoch, such as a leader restarted by an application that reuses its epoch.
 
-What your application implements, in `org.lolaf.replicos.spi`:
+A stream is registered with the node from its `StreamSettings`: its name, mode, storage identity and where its
+snapshots read from. What your application implements, in `org.lolaf.replicos.spi`:
 
 | where | interface | what it does |
 |---|---|---|
-| leader | `LeaderStreams`, `LeaderStream` | the streams to replicate: key, name, mode, where they are stored |
 | leader | `SnapshotSource` | reads a stream's records back from your storage, by position, and its state |
 | follower | `ReplicaSinks` | opens the sink each stream is applied into, or refuses it |
 | follower | `ReplicaSink` | applies one stream's records and snapshots into the follower's copy |
@@ -192,7 +192,7 @@ streaming between the snapshot's chunks.
 | The same leader restarted, or `lead()` called again, even at the same epoch | no: a new leadership | every stream of the lane |
 | A stream the follower did not hold yet, or refused before and now configured | | that stream |
 | A connection resumed in the middle of a record longer than a frame | | that stream |
-| `resync(streamKey)` on the leader | | that stream, always whole |
+| `resync()` on the stream's handle, on the leader | | that stream, always whole |
 
 "Snapshot of" says which streams are caught up by snapshot. How much each snapshot copies is the `CatchUp` setting's
 choice, [section 6](#6-failover-divergence-and-the-catchup-settings): with `fullCopy()` the whole stream, with

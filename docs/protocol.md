@@ -7,8 +7,8 @@ when it is caught up by snapshot, read [how-it-works.md](how-it-works.md) first.
 
 ## Model
 
-- **An application** is identified by a 4-byte id, the same on both nodes; a peer replicating another application is
-  refused.
+- **A cluster** is identified by a 4-byte id, the same on both nodes: the first 4 bytes, big-endian, of the SHA-256 of
+  the UTF-8 of the cluster's name. A peer of another cluster is refused.
 - **A stream** is a sequence of records the leader appends, each at a **position**, increasing between two resets.
   Streams have a key, given from 0 in registration order and never reused, a name the follower finds its own copy by,
   a replication mode and a storage identity.
@@ -82,7 +82,7 @@ A frame of an unknown type closes the connection.
 | 48 | 2 | uint16 | lane |
 | 50 | 1 | uint8 | encryption mode |
 | 51 | 1 | | reserved |
-| 52 | 4 | int32 | application id |
+| 52 | 4 | int32 | cluster id |
 | 56 | 16 | bytes | nonce, zeros when the follower does not encrypt |
 | 72 | | UTF-8 | node id: the follower's name, as the leader reports and counts it |
 
@@ -99,7 +99,7 @@ A frame of an unknown type closes the connection.
 | 40 | 2 | uint16 | lane count |
 | 42 | 1 | uint8 | encryption mode |
 | 43 | 1 | | reserved |
-| 44 | 4 | int32 | application id |
+| 44 | 4 | int32 | cluster id |
 | 48 | 16 | bytes | nonce, zeros when the leader does not encrypt |
 | 64 | | UTF-8 | leader id: the leader's node id |
 
@@ -259,7 +259,7 @@ Header flag `0x01`: in sync, the follower holds every stream of the lane the lea
   |---|---|---|
   | 0 | `REPLICATING` | in sync |
   | 1 | `SHARED_STORAGE` | refused: the follower stores the stream where the leader does |
-  | 2 | `UNKNOWN_STORAGE` | refused: the leader gave no storage identity, so sharing cannot be ruled out |
+  | 2 | `UNKNOWN_STORAGE` | refused: the leader's storage identity or the follower's is unknown, so sharing cannot be ruled out |
   | 3 | `UNKNOWN_STREAM` | refused: the follower's configuration does not know the stream |
   | 4 | `SNAPSHOT_NEEDED` | replicated, but missing history: the leader sends a snapshot |
   | 5 | `NOT_REPLICATED` | the leader announced it with mode `NONE` |
@@ -280,7 +280,7 @@ Header flag `0x01`: in sync, the follower holds every stream of the lane the lea
   | 9 | `NO_SUCH_LANE` | leader: HELLO for a lane past its count |
   | 10 | `KEY_MISMATCH` | leader: KEY_CONFIRMATION does not verify |
   | 11 | `ENCRYPTION_REQUIRED` | either: one requires encryption, the other has it disabled |
-  | 12 | `APPLICATION_MISMATCH` | either: another application id |
+  | 12 | `CLUSTER_MISMATCH` | either: another cluster id |
   | 13 | `LEADER_MISMATCH` | follower: a lane's WELCOME names another leader than lane 0 follows, as when its leader addresses mix two nodes |
   | 14 | `DUPLICATE_NODE_ID` | leader: HELLO for a lane another connection of the same node id holds and still acks on, two nodes given one id |
 
@@ -293,7 +293,7 @@ Per lane:
 
 1. The follower sends **HELLO**: its epoch, the last epoch, leadership and log offset it applied on this lane (offset
    -1 when none), the lane, its encryption mode and a nonce (16 random bytes when it encrypts, zeros otherwise).
-2. The leader checks the version, the application, that the follower's epoch is not newer than its own (the leader
+2. The leader checks the version, the cluster, that the follower's epoch is not newer than its own (the leader
    would be deposed), the lane and that no other connection holds the follower's node id on it, then
    [negotiates encryption](#negotiation). A follower dropped as too slow and still held off gets `RETRY_LATER`.
 3. The leader sends **WELCOME**: its epoch, its leadership, the lane count, its mode, its nonce and the **resume

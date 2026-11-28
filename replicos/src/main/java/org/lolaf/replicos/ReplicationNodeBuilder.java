@@ -41,6 +41,11 @@ public final class ReplicationNodeBuilder {
      */
     private String nodeId;
     /**
+     * The replication cluster the node belongs to, the same on its leader and followers: a peer of another cluster,
+     * such as another application's or another environment's, is refused.
+     */
+    private String cluster;
+    /**
      * Needed for the node to lead.
      */
     private @Nullable LeaderSettings leader;
@@ -80,11 +85,14 @@ public final class ReplicationNodeBuilder {
     }
 
     /**
-     * @throws IllegalStateException without a node id, or without the settings of either role
+     * @throws IllegalStateException without a node id or a cluster, or without the settings of either role
      */
     public ReplicationNode build() {
         if (nodeId == null) {
             throw new IllegalStateException("nodeId is required");
+        }
+        if (cluster == null || cluster.isEmpty()) {
+            throw new IllegalStateException("cluster is required");
         }
         if (leader == null && follower == null) {
             throw new IllegalStateException("leader or follower settings are required");

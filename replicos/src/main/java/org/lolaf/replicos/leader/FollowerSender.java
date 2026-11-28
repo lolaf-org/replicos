@@ -89,9 +89,9 @@ final class FollowerSender {
      */
     private long filledRecordOffset;
 
-    FollowerSender(FollowerConnection connection, IOSession ioSession, LeaderSettings settings, StreamSyncs syncs,
-                   FollowerAcks acks, LongSupplier nodeEpoch, int maxRecordFrameBytes, CatchUp catchUp,
-                   ReplicationStats stats, Consumer<Runnable> launcher, ReplicationClock clock) {
+    FollowerSender(FollowerConnection connection, IOSession ioSession, LeaderSettings settings, StreamRegistry streams,
+                   StreamSyncs syncs, FollowerAcks acks, LongSupplier nodeEpoch, int maxRecordFrameBytes,
+                   CatchUp catchUp, ReplicationStats stats, Consumer<Runnable> launcher, ReplicationClock clock) {
         this.sealer = FrameCipher.CLEAR;
         this.sentOffset = -1;
         this.lastSentRecordOffset = -1;
@@ -106,9 +106,9 @@ final class FollowerSender {
         this.launcher = launcher;
         this.batches = new BatchBuffers(ioSession, settings.getSendBuffers(),
                 WireFormat.bufferBytes(maxRecordFrameBytes + WireFormat.TAG_BYTES), stats);
-        this.snapshots = new SnapshotSender(connection, settings.getStreams(), syncs, batches, stats, nodeEpoch, clock,
+        this.snapshots = new SnapshotSender(connection, streams, syncs, batches, stats, nodeEpoch, clock,
                 catchUp, maxRecordFrameBytes, settings.getSnapshotChunkBytes());
-        this.announcer = new StreamAnnouncer(connection, settings.getStreams(), syncs, snapshots);
+        this.announcer = new StreamAnnouncer(connection, streams, syncs, snapshots);
     }
 
     /**

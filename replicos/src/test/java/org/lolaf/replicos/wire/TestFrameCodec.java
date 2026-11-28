@@ -53,7 +53,7 @@ class TestFrameCodec {
 
     TestFrameCodec() {
         this.decoder = new FrameDecoder(MAX_FRAME_BYTES);
-        this.handler = new RecordingHandler(Journal.APPLICATION_ID);
+        this.handler = new RecordingHandler(Journal.CLUSTER_ID);
     }
 
     private static ByteBuffer buffer(boolean direct) {
@@ -413,7 +413,7 @@ class TestFrameCodec {
     }
 
     @Test
-    void helloAndWelcomeCarryTheApplication() {
+    void helloAndWelcomeCarryTheCluster() {
         ByteBuffer buffer = buffer(false);
         int hello = FrameEncoder.hello(buffer, 0, 7, 0x41505031, "node-b", 6, 5, 1234, 3, EncryptionMode.DISABLED,
                 TestingKeyExchanges.NO_NONCE);
@@ -424,8 +424,8 @@ class TestFrameCodec {
         decodeWhole(buffer, hello, welcome);
 
         assertThat(handler.frames).containsExactly(
-                "HELLO epoch=7 version=1 application=41505031 node=node-b lastEpoch=6 lastLeadership=5 lastOffset=1234 lane=3",
-                "WELCOME epoch=7 version=1 application=41505031 leader=node-a leadership=41 resume=99 lanes=2");
+                "HELLO epoch=7 version=1 cluster=41505031 node=node-b lastEpoch=6 lastLeadership=5 lastOffset=1234 lane=3",
+                "WELCOME epoch=7 version=1 cluster=41505031 leader=node-a leadership=41 resume=99 lanes=2");
     }
 
     @Test

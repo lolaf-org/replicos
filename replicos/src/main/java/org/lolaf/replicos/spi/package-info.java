@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 /**
- * What an application implements for its data to be replicated: its streams as the leader announces and snapshots
- * them, the sinks a follower applies them into, and the clock and recorders the replication reads and feeds.
+ * What an application implements for its data to be replicated: the sources the leader snapshots its streams from,
+ * the sinks a follower applies them into, and the clock and recorders the replication reads and feeds.
  */
 package org.lolaf.replicos.spi;

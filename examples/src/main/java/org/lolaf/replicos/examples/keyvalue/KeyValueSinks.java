@@ -33,11 +33,6 @@ final class KeyValueSinks implements ReplicaSinks {
     }
 
     @Override
-    public int getApplicationId() {
-        return KeyValueNode.APPLICATION_ID;
-    }
-
-    @Override
     public Binding open(String streamName, @Nullable String leaderStorageIdentity) {
         if (!KeyValueStream.NAME.equals(streamName)) {
             return Binding.refused(StreamAnswer.UNKNOWN_STREAM);

@@ -20,8 +20,6 @@ import org.jspecify.annotations.Nullable;
 import org.lolaf.ringos.idling.BackoffIdleStrategy;
 import org.lolaf.ringos.idling.IdleStrategy;
 import org.lolaf.replicos.CatchUp;
-import org.lolaf.replicos.spi.LeaderStream;
-import org.lolaf.replicos.spi.LeaderStreams;
 import org.lolaf.replicos.spi.RecordFlag;
 import org.lolaf.replicos.spi.ReplicationClock;
 import org.lolaf.replicos.spi.SnapshotSource;
@@ -58,7 +56,7 @@ final class SnapshotSender {
     private static final long SOURCE_RETRY_NANOS = Duration.ofMillis(10).toNanos();
 
     private final FollowerConnection connection;
-    private final LeaderStreams streams;
+    private final StreamRegistry streams;
     private final StreamSyncs syncs;
     private final BatchBuffers batches;
     private final ReplicationStats stats;
@@ -120,7 +118,7 @@ final class SnapshotSender {
     /**
      * @param chunkBytes the most bytes sent between two live batches, at most a batch
      */
-    SnapshotSender(FollowerConnection connection, LeaderStreams streams, StreamSyncs syncs, BatchBuffers batches,
+    SnapshotSender(FollowerConnection connection, StreamRegistry streams, StreamSyncs syncs, BatchBuffers batches,
                    ReplicationStats stats, LongSupplier nodeEpoch, ReplicationClock clock, CatchUp catchUp,
                    int maxRecordFrameBytes, int chunkBytes) {
         this.writer = new ChunkWriter();
@@ -215,7 +213,7 @@ final class SnapshotSender {
      * @param sealer seals the chunk's frames, as it does the live batches'
      */
     void sendChunk(FrameCipher sealer) {
-        LeaderStream stream = streams.get(streamKey);
+        StreamRegistration stream = streams.get(streamKey);
         writer.start(nodeEpoch.getAsLong(), sealer);
         try {
             if (!begun) {
@@ -286,7 +284,7 @@ final class SnapshotSender {
         resetAhead = false;
     }
 
-    private long startPosition(LeaderStream stream) {
+    private long startPosition(StreamRegistration stream) {
         syncs.copyClaim(streamKey, claim);
         if (claim.check != catchUp.getCheck()) {
             logCatchUpMismatch(stream);
@@ -314,7 +312,7 @@ final class SnapshotSender {
         return claim.lastPosition + 1;
     }
 
-    private void logCatchUpMismatch(LeaderStream stream) {
+    private void logCatchUpMismatch(StreamRegistration stream) {
         if (!catchUpMismatchLogged) {
             catchUpMismatchLogged = true;
             int followerRecords = claim.proofLength == RecordDigest.PROOF_BYTES
@@ -358,7 +356,7 @@ final class SnapshotSender {
         }
     }
 
-    private void end(LeaderStream stream) {
+    private void end(StreamRegistration stream) {
         writer.end();
         int records = recordCount;
         cancel();

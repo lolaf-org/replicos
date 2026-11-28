@@ -18,6 +18,11 @@ package org.lolaf.replicos.wire;
 import lombok.experimental.UtilityClass;
 import org.lolaf.replicos.spi.RecordFlag;
 
+import java.nio.ByteBuffer;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
+
 /**
  * The byte layout of the replication stream between a leader and its follower, over TCP.
  *
@@ -95,6 +100,19 @@ public class WireFormat {
     public static final long NO_RESUME = -1;
 
     public static final int MAX_STRING_BYTES = 0xFFFF;
+
+    /**
+     * What HELLO and WELCOME carry of the cluster's name: the first 4 bytes, big-endian, of the SHA-256 of its UTF-8,
+     * which another implementation computes alike.
+     */
+    public static int clusterId(String clusterName) {
+        try {
+            byte[] digest = MessageDigest.getInstance("SHA-256").digest(clusterName.getBytes(StandardCharsets.UTF_8));
+            return ByteBuffer.wrap(digest).getInt();
+        } catch (NoSuchAlgorithmException e) {
+            throw new IllegalStateException("Every Java platform has SHA-256", e);
+        }
+    }
 
     /**
      * The longest stream state a snapshot carries, its length being an unsigned short.

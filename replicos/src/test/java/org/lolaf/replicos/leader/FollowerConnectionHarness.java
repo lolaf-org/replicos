@@ -121,7 +121,7 @@ abstract class FollowerConnectionHarness {
 
     FollowerConnectionHarness() {
         this.ioSession = mock(IOSession.class);
-        this.sent = new RecordingHandler(Journal.APPLICATION_ID);
+        this.sent = new RecordingHandler(Journal.CLUSTER_ID);
         this.sentPlaintext = new CopyOnWriteArrayList<>();
         this.sentBytes = new CopyOnWriteArrayList<>();
         this.stats = new ReplicationStats(new SlowFollowers(Duration.ZERO, new TestingReplicationClock()), ReplicationMetrics.NONE);
@@ -175,7 +175,7 @@ abstract class FollowerConnectionHarness {
 
     FollowerConnection connection(CatchUp catchUp) {
         return new FollowerConnection(ioSession, journal.settings().heartbeatInterval(Duration.ofMillis(100)).build(),
-                journal.getLogs(), () -> EPOCH, LEADERSHIP, "leader-a", catchUp, stats, loop -> {
+                journal.getStreams(), journal.getLogs(), () -> EPOCH, LEADERSHIP, "leader-a", catchUp, stats, loop -> {
                 }, new TestingReplicationClock(), keyExchange, new Followers(new TestingReplicationClock()));
     }
 
@@ -284,7 +284,7 @@ abstract class FollowerConnectionHarness {
     FollowerConnection connectionStallingAfter(Duration stallTimeout, Thread[] sender) {
         IdleStrategy idles = countingIdles();
         return new FollowerConnection(ioSession, journal.settings().heartbeatInterval(Duration.ofHours(1))
-                .followerStallTimeout(stallTimeout).senderIdleStrategy(() -> idles).build(), journal.getLogs(),
+                .followerStallTimeout(stallTimeout).senderIdleStrategy(() -> idles).build(), journal.getStreams(), journal.getLogs(),
                 () -> EPOCH, LEADERSHIP, "leader-a", CatchUp.fullCopy(), stats, loop -> {
             sender[0] = new Thread(loop);
             sender[0].start();
@@ -316,7 +316,7 @@ abstract class FollowerConnectionHarness {
     FollowerConnection senderRunningConnection(int snapshotChunkBytes) {
         IdleStrategy idles = countingIdles();
         return new FollowerConnection(ioSession, journal.settings().heartbeatInterval(Duration.ofHours(1))
-                .snapshotChunkBytes(snapshotChunkBytes).senderIdleStrategy(() -> idles).build(), journal.getLogs(),
+                .snapshotChunkBytes(snapshotChunkBytes).senderIdleStrategy(() -> idles).build(), journal.getStreams(), journal.getLogs(),
                 () -> EPOCH, LEADERSHIP, "leader-a", CatchUp.fullCopy(), stats, loop -> new Thread(loop).start(), new TestingReplicationClock(),
                 keyExchange, new Followers(new TestingReplicationClock()));
     }

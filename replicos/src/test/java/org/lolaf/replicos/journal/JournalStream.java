@@ -19,8 +19,9 @@ import lombok.Getter;
 import lombok.Setter;
 import org.jspecify.annotations.Nullable;
 import org.lolaf.replicos.AckWait;
+import org.lolaf.replicos.RegisteredStream;
+import org.lolaf.replicos.StreamSettings;
 import org.lolaf.replicos.StreamWriter;
-import org.lolaf.replicos.spi.LeaderStream;
 import org.lolaf.replicos.spi.RecordFlag;
 import org.lolaf.replicos.spi.SnapshotSource;
 import org.lolaf.replicos.spi.StreamReplicationMode;
@@ -33,30 +34,20 @@ import java.util.Map;
 import java.util.NavigableMap;
 import java.util.concurrent.ConcurrentSkipListMap;
 import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.function.Function;
 import java.util.function.LongConsumer;
 
 /**
  * One journal on the leader: its entries kept in memory by position, from 1, each one put there before it is appended
  * to the log, as the snapshot contract asks. One appending thread at a time.
  */
-public final class JournalStream implements LeaderStream {
+public final class JournalStream {
 
     /**
      * The content type of an entry; any other is carried as it is.
      */
     public static final byte TEXT = 1;
 
-    @Getter
-    private final int key;
-    @Getter
-    private final String streamName;
-    @Getter
-    @Setter
-    private volatile StreamReplicationMode streamReplicationMode;
-    @Getter
-    @Setter
-    private volatile @Nullable String storageIdentity;
-    private final StreamWriter writer;
     private final NavigableMap<Long, Entry> entries;
     @Getter
     private volatile long nextPosition;
@@ -76,14 +67,12 @@ public final class JournalStream implements LeaderStream {
      */
     @Getter
     private final List<long[]> snapshotRanges;
+    @Getter
+    private final RegisteredStream registered;
+    private final StreamWriter writer;
 
-    JournalStream(int key, String streamName, StreamReplicationMode streamReplicationMode,
-                  @Nullable String storageIdentity, StreamWriter writer) {
-        this.key = key;
-        this.streamName = streamName;
-        this.streamReplicationMode = streamReplicationMode;
-        this.storageIdentity = storageIdentity;
-        this.writer = writer;
+    JournalStream(String streamName, StreamReplicationMode replicationMode, @Nullable String storageIdentity,
+                  Function<StreamSettings, RegisteredStream> registrar) {
         this.entries = new ConcurrentSkipListMap<>();
         this.nextPosition = 1;
         this.lastAppendedOffset = -1;
@@ -91,6 +80,10 @@ public final class JournalStream implements LeaderStream {
         this.snapshotReads = position -> {
         };
         this.snapshotRanges = new CopyOnWriteArrayList<>();
+        // last: the snapshots the senders take read only the fields above
+        this.registered = registrar.apply(StreamSettings.builder().name(streamName).replicationMode(replicationMode)
+                .storageIdentity(storageIdentity).snapshotSource(Snapshot::new).build());
+        this.writer = registered.writer();
     }
 
     public long append(String text) {
@@ -177,12 +170,7 @@ public final class JournalStream implements LeaderStream {
      * As a sync mode asks, after the last append, from {@code quorum} followers.
      */
     public StreamWriter.Ack awaitAck(int quorum, Duration timeout) {
-        return writer.awaitAck(lastAppendedOffset, AckWait.of(streamReplicationMode, quorum, timeout));
-    }
-
-    @Override
-    public SnapshotSource newSnapshotSource() {
-        return new Snapshot();
+        return writer.awaitAck(lastAppendedOffset, AckWait.of(registered.getReplicationMode(), quorum, timeout));
     }
 
     private static final class Entry {

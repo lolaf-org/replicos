@@ -68,7 +68,6 @@ The interfaces of `org.lolaf.replicos.spi`:
 
 | interface | role |
 |---|---|
-| `LeaderStreams`, `LeaderStream` | the streams the leader announces: key, name, mode, where it stores them |
 | `SnapshotSource` | reads a stream's state and records back from the application's storage, for a snapshot |
 | `ReplicaSinks` | on a follower, opens the sink each announced stream is applied into, or refuses it |
 | `ReplicaSink` | applies one stream's records and snapshots into the follower's storage; under `CatchUp.byLastRecords()` it also reads its last records back |
@@ -81,21 +80,27 @@ metrics.
 ```java
 ReplicationNode node = ReplicationNode.builder()
         .nodeId("node-a")
+        .cluster("orders-prod")
         .leader(LeaderSettings.builder()
                 .bindAddress(new InetSocketAddress(7000))
-                .streams(myLeaderStreams)
                 .build())
         .follower(FollowerSettings.builder()
                 .sinks(myReplicaSinks)
                 .build())
         .build();
+RegisteredStream orders = node.register(StreamSettings.builder()
+        .name("orders")
+        .replicationMode(StreamReplicationMode.SYNC_APPLIED)
+        .storageIdentity("/data/orders")              // a follower storing into the same place refuses the stream
+        .snapshotSource(myStore::newSnapshotSource)   // asked once per snapshot
+        .build());
 
 // as the election decides; a leader on several networks is given by all its addresses
 node.follow(List.of(leaderAddressA, leaderAddressB), () -> knownEpoch, Deadline.of(Duration.ofSeconds(5)));
 node.lead(epoch, Deadline.of(Duration.ofSeconds(5)));
 
 // on the leader, once a record is stored
-StreamWriter writer = node.writer(streamKey);
+StreamWriter writer = orders.writer();
 long offset = writer.append(contentType, RecordFlag.NONE, position, buffer, index, length);
 // built once, checked there: the wait itself checks nothing
 AckWait everyOne = AckWait.of(StreamReplicationMode.SYNC_APPLIED, Duration.ofSeconds(1));    // every follower in sync
@@ -103,12 +108,15 @@ AckWait firstOne = AckWait.of(StreamReplicationMode.SYNC_APPLIED, 1, Duration.of
 writer.awaitAck(offset, everyOne);
 ```
 
-Both nodes give the same `ReplicaSinks.getApplicationId()`; a peer replicating another application is refused.
+Every node of a cluster gives the same cluster name; a peer of another cluster, another application's or another
+environment's, is refused. A stream name is registered once per node; `node.stream(name)` finds its handle, which
+also says whether a follower holds it in sync and which ones refuse it. `orders.reconfigure(mode, storageIdentity)`,
+or either setter, changes the stream's settings and tells the followers.
 `handOver` before stopping a leader lets the next one take over each stream where it was left.
 
 A node holds what both roles read (log capacity, encryption, catch-up, network threads' waiting, clock, metrics) and
 each role's own settings: `LeaderSettings` (lanes, timeouts, send buffers, snapshot chunks) and `FollowerSettings`
-(reconnection, sink writer threads). Everything but the bind address, the streams and the sinks has a default. A node
+(reconnection, sink writer threads). Everything but the node id, the cluster, the bind address and the sinks has a default. A node
 given one role's settings only refuses to take the other.
 
 ## Monitoring

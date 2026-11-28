@@ -85,9 +85,9 @@ class TestReplicationNode {
                                  ReplicationEncryptionSettings encryption, CatchUp catchUp) {
         ReplicationNode node = ReplicationNode.builder()
                 .nodeId(nodeId)
+                .cluster(Journal.CLUSTER)
                 .leader(LeaderSettings.builder()
                         .bindAddress(bindAddress)
-                        .streams(journal)
                         .heartbeatInterval(Duration.ofMillis(100))
                         .build())
                 .follower(FollowerSettings.builder()
@@ -171,8 +171,9 @@ class TestReplicationNode {
         FollowersView followers = a.followers();
         assertThat(followers.countConnected()).isEqualTo(1);
         assertThat(followers.countInSync()).isEqualTo(1);
-        assertThat(followers.isStreamInSync(0)).isTrue();
-        assertThat(followers.getStreamRefusals(0)).isEmpty();
+        RegisteredStream main = a.stream(MAIN);
+        assertThat(main.isInSync()).isTrue();
+        assertThat(main.getRefusals()).isEmpty();
         assertThat(followers.getSnapshots()).isEqualTo(1);
         assertThat(followers.getSnapshotRecords()).isEqualTo(1);
         assertThat(followers.getDroppedFollowers()).isEmpty();
@@ -181,8 +182,8 @@ class TestReplicationNode {
         assertThat(followers.getSendWaits()).isNotNegative();
         assertThat(followers.getLogFullWaits()).isZero();
         assertThat(followers.getCloses()).isEmpty();
-        assertThat(followers.getAckTimeouts(0)).isZero();
-        assertThat(followers.getAcksWithNoFollowerInSync(0)).isZero();
+        assertThat(main.getAckTimeouts()).isZero();
+        assertThat(main.getAcksWithNoFollowerInSync()).isZero();
         assertThat(followers.getLaneStatuses()).singleElement().satisfies(lane -> {
             assertThat(lane.getNodeId()).isEqualTo("b");
             assertThat(lane.isConnected()).isTrue();
@@ -384,14 +385,14 @@ class TestReplicationNode {
         JournalStream main = journalA.add(MAIN, StreamReplicationMode.SYNC_APPLIED);
         a.lead(1, stop());
         b.follow(addressA, () -> 1, stop());
-        await().until(() -> !a.followers().getStreamRefusals(0).isEmpty());
+        await().until(() -> !main.getRegistered().getRefusals().isEmpty());
 
         main.append("first");
 
         assertThat(main.awaitAck(ACK_TIMEOUT)).isEqualTo(StreamWriter.Ack.NO_FOLLOWER_IN_SYNC);
-        assertThat(a.followers().getAcksWithNoFollowerInSync(0)).isEqualTo(1);
-        assertThat(a.followers().getStreamRefusals(0)).isEqualTo(Map.of("b", StreamAnswer.SHARED_STORAGE));
-        assertThat(a.followers().isStreamInSync(0)).isFalse();
+        assertThat(main.getRegistered().getAcksWithNoFollowerInSync()).isEqualTo(1);
+        assertThat(main.getRegistered().getRefusals()).isEqualTo(Map.of("b", StreamAnswer.SHARED_STORAGE));
+        assertThat(main.getRegistered().isInSync()).isFalse();
         assertThat(b.leader().getStream(MAIN)).isNotNull().satisfies(stream -> {
             assertThat(stream.isReplicated()).isFalse();
             assertThat(stream.getNotReplicatedAnswer()).isEqualTo(StreamAnswer.SHARED_STORAGE);
@@ -404,15 +405,84 @@ class TestReplicationNode {
         late.append("first");
         a.lead(1, stop());
         b.follow(addressA, () -> 1, stop());
-        await().until(() -> a.followers().getStreamRefusals(0).equals(Map.of("b", StreamAnswer.UNKNOWN_STREAM)));
+        await().until(() -> late.getRegistered().getRefusals().equals(Map.of("b", StreamAnswer.UNKNOWN_STREAM)));
 
         JournalCopy lateCopy = replicaB.configure("late");
 
-        await().until(() -> a.followers().isStreamInSync(0));
+        await().until(() -> late.getRegistered().isInSync());
         late.append("second");
         assertThat(late.awaitAck(ACK_TIMEOUT)).isEqualTo(StreamWriter.Ack.ACKED);
         assertThat(lateCopy.getWrites())
                 .containsExactly("begin from=0 state=2", "snapshot 1 first", "end state=2", "2 second");
+    }
+
+    @Test
+    void aStreamRegisteredWhileLeadingIsReplicatedToTheFollowersConnected() {
+        aLeadsBInSync();
+        JournalCopy lateCopy = replicaB.configure("late");
+
+        JournalStream late = journalA.add("late", StreamReplicationMode.SYNC_APPLIED);
+
+        await().until(() -> late.getRegistered().isInSync());
+        late.append("first");
+        assertThat(late.awaitAck(ACK_TIMEOUT)).isEqualTo(StreamWriter.Ack.ACKED);
+        assertThat(lateCopy.getStored()).containsExactly("1 first");
+    }
+
+    @Test
+    void aStreamIsFoundByItsName() {
+        JournalStream main = journalA.add(MAIN, StreamReplicationMode.ASYNC);
+        JournalStream other = journalA.add("other", StreamReplicationMode.ASYNC);
+
+        assertThat(a.stream(MAIN)).isSameAs(main.getRegistered());
+        assertThat(a.stream("unknown")).isNull();
+        assertThat(a.streams()).containsExactly(main.getRegistered(), other.getRegistered());
+        assertThat(main.getRegistered().getStreamName()).isEqualTo(MAIN);
+    }
+
+    @Test
+    void aStreamNameIsRegisteredOnce() {
+        journalA.add(MAIN, StreamReplicationMode.ASYNC);
+
+        assertThatThrownBy(() -> journalA.add(MAIN, StreamReplicationMode.SYNC_APPLIED))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("Stream main is registered already");
+        assertThat(a.streams()).hasSize(1);
+    }
+
+    @Test
+    void aStreamNameFitsTheStreamFrame() {
+        assertThatThrownBy(() -> journalA.add("", StreamReplicationMode.ASYNC))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("A stream name cannot be empty");
+        assertThatThrownBy(() -> journalA.add("é".repeat(32768), StreamReplicationMode.ASYNC))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("A stream name is at most 65535 UTF-8 bytes, got 65536");
+        assertThat(a.streams()).isEmpty();
+    }
+
+    @Test
+    void aFollowerOfAnotherClusterIsRefused() {
+        ReplicationNode other = ReplicationNode.builder()
+                .nodeId("c")
+                .cluster("another")
+                .follower(FollowerSettings.builder()
+                        .sinks(replicaB)
+                        .reconnectInterval(Duration.ofMillis(50))
+                        .build())
+                .build();
+        try {
+            journalA.add(MAIN, StreamReplicationMode.ASYNC).append("first");
+            a.lead(1, stop());
+
+            other.follow(addressA, () -> 1, stop());
+
+            await().until(() -> a.followers().getCloses().containsKey("CLUSTER_MISMATCH"));
+            assertThat(other.leader().isConnected()).isFalse();
+            assertThat(copyB.getStored()).isEmpty();
+        } finally {
+            other.close(stop());
+        }
     }
 
     @Test
@@ -421,19 +491,18 @@ class TestReplicationNode {
         main.append("first");
         a.lead(1, stop());
         b.follow(addressA, () -> 1, stop());
-        await().until(() -> a.followers().isStreamInSync(0));
+        await().until(() -> main.getRegistered().isInSync());
 
         for (StreamReplicationMode mode : List.of(StreamReplicationMode.ASYNC, StreamReplicationMode.SYNC_APPLIED)) {
-            main.setStreamReplicationMode(mode);
-            a.reannounce(0);
-            await().until(() -> b.leader().getStream(MAIN).getLeaderMode() == mode && a.followers().isStreamInSync(0));
+            main.getRegistered().setReplicationMode(mode);
+            await().until(() -> b.leader().getStream(MAIN).getLeaderMode() == mode && main.getRegistered().isInSync());
         }
         main.append("second");
 
         assertThat(main.awaitAck(ACK_TIMEOUT)).isEqualTo(StreamWriter.Ack.ACKED);
         assertThat(copyB.getWrites()).as("no snapshot but the first")
                 .containsExactly("begin from=0 state=2", "snapshot 1 first", "end state=2", "2 second");
-        assertThat(a.followers().getStreamRefusals(0)).isEmpty();
+        assertThat(main.getRegistered().getRefusals()).isEmpty();
     }
 
     @Test
@@ -475,7 +544,7 @@ class TestReplicationNode {
         aLeadsBInSync();
         copyB.getWrites().clear();
 
-        a.resync(0);
+        a.stream(MAIN).resync();
 
         await().untilAsserted(() -> assertThat(copyB.getWrites()).startsWith("begin from=0 state=2"));
         assertThat(a.followers().getSnapshots()).isEqualTo(2);
@@ -517,7 +586,7 @@ class TestReplicationNode {
 
     @Test
     void aWriterRefusesAPayloadLongerThanHalfTheLog() {
-        try (StreamWriter writer = a.writer(0)) {
+        try (StreamWriter writer = journalA.add(MAIN, StreamReplicationMode.ASYNC).getRegistered().writer()) {
             ByteBuffer tooLong = ByteBuffer.allocate(writer.getMaxPayloadLength() + 1);
 
             assertThat(writer.getMaxPayloadLength()).isEqualTo(1 << 15);
@@ -541,8 +610,14 @@ class TestReplicationNode {
                 .hasMessage("nodeId is required");
         assertThatThrownBy(() -> ReplicationNode.builder().nodeId("c").build())
                 .isInstanceOf(IllegalStateException.class)
+                .hasMessage("cluster is required");
+        assertThatThrownBy(() -> ReplicationNode.builder().nodeId("c").cluster("").build())
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessage("cluster is required");
+        assertThatThrownBy(() -> ReplicationNode.builder().nodeId("c").cluster(Journal.CLUSTER).build())
+                .isInstanceOf(IllegalStateException.class)
                 .hasMessage("leader or follower settings are required");
-        assertThatThrownBy(() -> LeaderSettings.builder().streams(new Journal()).build())
+        assertThatThrownBy(() -> LeaderSettings.builder().build())
                 .isInstanceOf(NullPointerException.class)
                 .hasMessageContaining("bindAddress");
     }
@@ -558,10 +633,12 @@ class TestReplicationNode {
     void aNodeTakesOnlyTheRolesItHasSettingsFor() {
         ReplicationNode leaderOnly = ReplicationNode.builder()
                 .nodeId("c")
-                .leader(LeaderSettings.builder().bindAddress(addressA).streams(new Journal()).build())
+                .cluster(Journal.CLUSTER)
+                .leader(LeaderSettings.builder().bindAddress(addressA).build())
                 .build();
         ReplicationNode followerOnly = ReplicationNode.builder()
                 .nodeId("d")
+                .cluster(Journal.CLUSTER)
                 .follower(FollowerSettings.builder().sinks(new JournalReplica()).build())
                 .build();
         try {
@@ -571,8 +648,11 @@ class TestReplicationNode {
             assertThatThrownBy(() -> followerOnly.lead(1, stop()))
                     .isInstanceOf(IllegalStateException.class)
                     .hasMessage("Node d has no leader settings: it cannot lead");
-            assertThatThrownBy(() -> followerOnly.writer(0))
-                    .isInstanceOf(IllegalStateException.class);
+            Journal unled = new Journal();
+            unled.writeThrough(followerOnly);
+            assertThatThrownBy(() -> unled.add(MAIN, StreamReplicationMode.ASYNC))
+                    .isInstanceOf(IllegalStateException.class)
+                    .hasMessage("Node d has no leader settings: it cannot replicate stream " + MAIN);
             assertThat(followerOnly.followers().countConnected()).isZero();
         } finally {
             leaderOnly.close(stop());

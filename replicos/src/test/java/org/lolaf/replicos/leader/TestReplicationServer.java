@@ -68,10 +68,10 @@ class TestReplicationServer {
         this.journal = Journal.ofCapacity(1 << 16);
         this.address = new InetSocketAddress("localhost", TestingPorts.findFree());
         this.server = new ReplicationServer(journal.settings().bindAddress(address).heartbeatInterval(Duration.ofMillis(100))
-                .build(), journal.getLogs(), journal.getFollowers(), () -> EPOCH, LEADERSHIP, "leader-a", CatchUp.fullCopy(), new WakeupSelectStrategy(10),
+                .build(), journal.getStreams(), journal.getLogs(), journal.getFollowers(), () -> EPOCH, LEADERSHIP, "leader-a", CatchUp.fullCopy(), new WakeupSelectStrategy(10),
                 new ReplicationStats(new SlowFollowers(Duration.ZERO, new TestingReplicationClock()), ReplicationMetrics.NONE), new TestingReplicationClock(),
                 TestingKeyExchanges.CLEAR);
-        this.received = new RecordingHandler(Journal.APPLICATION_ID);
+        this.received = new RecordingHandler(Journal.CLUSTER_ID);
     }
 
     private JournalStream replicated() {

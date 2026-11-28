@@ -25,15 +25,15 @@ import org.lolaf.replicos.leader.Followers;
 import org.lolaf.replicos.leader.ReplicationServer;
 import org.lolaf.replicos.leader.ReplicationStats;
 import org.lolaf.replicos.leader.SlowFollowers;
-import org.lolaf.replicos.leader.StreamLogWriter;
+import org.lolaf.replicos.leader.StreamRegistry;
+import org.lolaf.replicos.leader.StreamWriters;
 import org.lolaf.replicos.log.ReplicationLogs;
-import org.lolaf.replicos.spi.LeaderStream;
-import org.lolaf.replicos.spi.LeaderStreams;
 import org.lolaf.replicos.spi.ReplicaSinks;
 import org.lolaf.replicos.spi.ReplicationClock;
 import org.lolaf.replicos.spi.LatencyRecorder;
 import org.lolaf.replicos.spi.ReplicationMetrics;
 import org.lolaf.replicos.spi.StreamAnswer;
+import org.lolaf.replicos.wire.WireFormat;
 
 import java.net.InetSocketAddress;
 import java.security.SecureRandom;
@@ -49,28 +49,7 @@ import java.util.function.Supplier;
 final class ReplicationNodeImpl implements ReplicationNode {
 
     private static final SecureRandom LEADERSHIPS = new SecureRandom();
-    private static final LeaderStreams NO_STREAMS = new LeaderStreams() {
-        @Override
-        public int getApplicationId() {
-            return 0;
-        }
-
-        @Override
-        public int count() {
-            return 0;
-        }
-
-        @Override
-        public LeaderStream get(int key) {
-            throw new IndexOutOfBoundsException("No stream " + key + ": this node has no leader settings");
-        }
-    };
     private static final ReplicaSinks NO_SINKS = new ReplicaSinks() {
-        @Override
-        public int getApplicationId() {
-            return 0;
-        }
-
         @Override
         public Binding open(String streamName, @Nullable String leaderStorageIdentity) {
             return Binding.refused(StreamAnswer.UNKNOWN_STREAM);
@@ -92,7 +71,8 @@ final class ReplicationNodeImpl implements ReplicationNode {
     private final ReplicationLogs logs;
     private final Followers followers;
     private final ReplicationStats stats;
-    private final LatencyRecorder[] logFullWaits;
+    private final StreamRegistry streams;
+    private final @Nullable StreamWriters writers;
     private final FollowerStreams followerStreams;
     private final FollowersView followersView;
     private final LeaderView leaderView;
@@ -114,13 +94,13 @@ final class ReplicationNodeImpl implements ReplicationNode {
         ReplicationMetrics metrics = builder.metrics();
         Duration slowFollowerHoldOff = leader == null ? Duration.ZERO : leader.getSlowFollowerHoldOff();
         this.stats = new ReplicationStats(new SlowFollowers(slowFollowerHoldOff, clock), metrics);
-        this.logFullWaits = new LatencyRecorder[logs.count()];
-        for (int lane = 0; lane < logFullWaits.length; lane++) {
-            logFullWaits[lane] = metrics.logFullWait(lane);
-        }
-        this.followerStreams = new FollowerStreams(follower == null ? NO_SINKS : follower.getSinks(),
+        int clusterId = WireFormat.clusterId(builder.cluster());
+        this.streams = new StreamRegistry(clusterId, logs.count(), followers, stats);
+        this.writers = leader == null ? null
+                : new StreamWriters(leader, logs, followers, logFullWaits(logs.count(), metrics), stats, clock);
+        this.followerStreams = new FollowerStreams(follower == null ? NO_SINKS : follower.getSinks(), clusterId,
                 catchUp, metrics.receivedWriteLatency());
-        this.followersView = new FollowersViewImpl(followers, stats, logs, leader == null ? NO_STREAMS : leader.getStreams());
+        this.followersView = new FollowersViewImpl(followers, stats, logs, streams);
         this.leaderView = new LeaderViewImpl(() -> client, followerStreams);
     }
 
@@ -129,8 +109,8 @@ final class ReplicationNodeImpl implements ReplicationNode {
         LeaderSettings leader = requireLeaderSettings();
         standDown(deadline);
         followerStreams.close(deadline);
-        ReplicationServer started = new ReplicationServer(leader, logs, followers, () -> epoch, LEADERSHIPS.nextLong(),
-                nodeId, catchUp, selectStrategy.get(), stats, clock, keyExchange);
+        ReplicationServer started = new ReplicationServer(leader, streams, logs, followers, () -> epoch,
+                LEADERSHIPS.nextLong(), nodeId, catchUp, selectStrategy.get(), stats, clock, keyExchange);
         started.start();
         server = started;
     }
@@ -184,11 +164,32 @@ final class ReplicationNodeImpl implements ReplicationNode {
         return client != null;
     }
 
+    private static LatencyRecorder[] logFullWaits(int lanes, ReplicationMetrics metrics) {
+        LatencyRecorder[] logFullWaits = new LatencyRecorder[lanes];
+        for (int lane = 0; lane < lanes; lane++) {
+            logFullWaits[lane] = metrics.logFullWait(lane);
+        }
+        return logFullWaits;
+    }
+
     @Override
-    public StreamWriter writer(int streamKey) {
-        LeaderSettings leader = requireLeaderSettings();
-        return new StreamLogWriter(streamKey, logs.forStream(streamKey), followers, leader.getLogFullTimeout(),
-                logFullWaits[logs.laneOf(streamKey)], leader.getAckIdleStrategy().get(), stats, clock);
+    public RegisteredStream register(StreamSettings settings) {
+        StreamWriters leaderWriters = writers;
+        if (leaderWriters == null) {
+            throw new IllegalStateException("Node " + nodeId + " has no leader settings: it cannot replicate stream "
+                    + settings.getName());
+        }
+        return streams.register(settings, leaderWriters);
+    }
+
+    @Override
+    public @Nullable RegisteredStream stream(String streamName) {
+        return streams.find(streamName);
+    }
+
+    @Override
+    public List<RegisteredStream> streams() {
+        return streams.list();
     }
 
     private LeaderSettings requireLeaderSettings() {
@@ -205,16 +206,6 @@ final class ReplicationNodeImpl implements ReplicationNode {
             throw new IllegalStateException("Node " + nodeId + " has no follower settings: it cannot follow");
         }
         return follower;
-    }
-
-    @Override
-    public void reannounce(int streamKey) {
-        followers.reannounce(streamKey);
-    }
-
-    @Override
-    public void resync(int streamKey) {
-        followers.resync(streamKey);
     }
 
     @Override
