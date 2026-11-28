@@ -44,7 +44,7 @@ The first release, extracted from the high availability of [staffix](https://git
   `lead()` is a new leadership, even at an epoch used before, so a follower is never resumed from a log it did not
   follow.
   `handOver` before a clean stop tells the followers they hold everything, so the next leader takes over where this one
-  left off.
+  left off; it returns the followers that received everything, so you promote one of them.
 - **A leader reachable over several networks.** A follower can be given all of its leader's addresses, and connects
   through the first that answers.
 - **Safety checks on connecting.** Nodes of two different clusters refuse each other, two environments of one

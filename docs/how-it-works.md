@@ -221,8 +221,9 @@ sequenceDiagram
     A->>B: follow(B): HELLO, caught up by snapshot, as much as the CatchUp setting needs
 ```
 
-`handOver()` on a clean stop lets the promoted node know it lost no write. Without it, after a crash, the promoted
-node holds what it had received, and anything the old leader wrote after that is lost to the new leadership.
+`handOver()` on a clean stop lets the promoted node know it lost no write, and returns the followers sent the whole
+log and the hand over on every lane: promote one of them. Without it, after a crash, the promoted node holds what it
+had received, and anything the old leader wrote after that is lost to the new leadership.
 
 Promote a sync follower in sync: it holds every write a `SYNC` append was acknowledged for. Any other node, a
 disaster-recovery copy say, may lack some, so promoting one is a decision to accept losing them. To weigh it,

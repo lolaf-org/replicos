@@ -239,7 +239,7 @@ class TestReplicationNode {
     void bothSidesCountTheClosesAndTheFollowerItsReconnects() {
         aLeadsBInSync();
 
-        assertThat(a.handOver(stop())).isTrue();
+        assertThat(a.handOver(stop())).containsExactly("b");
         a.standDown(stop());
         a.lead(1, stop());
         await().until(() -> b.leader().isInSync());
@@ -550,7 +550,7 @@ class TestReplicationNode {
     void aFollowerHandedOverTakesOverWhatItHoldsOnceItsSinksStop() {
         aLeadsBInSync();
 
-        assertThat(a.handOver(stop())).isTrue();
+        assertThat(a.handOver(stop())).containsExactly("b");
         await().until(() -> b.leader().getStream(MAIN).isHandedOver());
         a.standDown(stop());
         b.lead(2, stop());
@@ -570,7 +570,7 @@ class TestReplicationNode {
         b.standDown(stop());
 
         assertThat(a.isLeading()).isFalse();
-        assertThat(a.handOver(stop())).isFalse();
+        assertThat(a.handOver(stop())).isEmpty();
         assertThat(a.followers().getLaneStatuses()).isEmpty();
         assertThat(b.isFollowing()).isFalse();
         assertThat(b.leader().getStatus()).isNull();

@@ -20,6 +20,7 @@ import org.lolaf.ringos.Deadline;
 
 import java.net.InetSocketAddress;
 import java.util.List;
+import java.util.Set;
 import java.util.function.LongSupplier;
 
 /**
@@ -77,9 +78,10 @@ public interface ReplicationNode {
      * comes next.
      *
      * @param deadline for every follower to be sent the rest of the log
-     * @return whether at least one follower was told; false when not leading
+     * @return the ids of the followers sent the whole log and the hand over on each of their lanes, the only ones that
+     *         can take over without losing a write; empty when not leading
      */
-    boolean handOver(Deadline deadline);
+    Set<String> handOver(Deadline deadline);
 
     /**
      * Stops leading or following. A leader disconnects its followers without telling them, unlike

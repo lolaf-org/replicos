@@ -432,7 +432,7 @@ class TestSeveralFollowers {
         main.append("second");
         assertThat(main.awaitAck(ACK_TIMEOUT)).isEqualTo(StreamWriter.Ack.ACKED);
 
-        assertThat(a.handOver(stop())).isTrue();
+        assertThat(a.handOver(stop())).containsExactlyInAnyOrder("b", "c");
         await().until(() -> b.leader().getStream(MAIN).isHandedOver() && c.leader().getStream(MAIN).isHandedOver());
         a.standDown(stop());
         JournalStream promoted = journalB.add(MAIN, StreamReplicationMode.SYNC_APPLIED);
@@ -446,6 +446,15 @@ class TestSeveralFollowers {
         assertThat(copyC.getStored()).containsExactly("1 first", "2 second", "3 third");
         assertThat(c.leader().getStatus()).isNotNull()
                 .satisfies(status -> assertThat(status.getLeaderId()).isEqualTo("b"));
+    }
+
+    @Test
+    void aFollowerGoneBeforeTheHandOverIsNotAmongThoseHandedOver() {
+        aLeadsBothInSync();
+        c.close(stop());
+        await().until(() -> a.followers().countConnected() == 1);
+
+        assertThat(a.handOver(stop())).containsExactly("b");
     }
 
     @FunctionalInterface

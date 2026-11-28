@@ -41,7 +41,9 @@ import org.lolaf.ringos.Deadline;
 import java.net.StandardSocketOptions;
 import java.nio.ByteBuffer;
 import java.util.Map;
+import java.util.Set;
 import java.util.function.LongSupplier;
+import java.util.stream.Collectors;
 
 /**
  * The leader's replication server: accepts its follower, and streams the log to it through a {@link FollowerConnection}.
@@ -103,18 +105,21 @@ public final class ReplicationServer {
 
     /**
      * Hands over to every follower, for a leader stopping cleanly; see {@link FollowerConnection#handOver(Deadline)}.
-     * Once a follower was told, the server refuses the followers connecting.
+     * Once a lane of a follower was told, the server refuses the followers connecting.
      *
-     * @return whether a follower was told
+     * @return the ids of the followers sent the whole log and the hand over on each of their lanes
      */
-    public boolean handOver(Deadline deadline) {
+    public Set<String> handOver(Deadline deadline) {
         handedOver = true;
-        boolean told = false;
-        for (FollowerConnection connection : followers.connections()) {
-            told |= connection.handOver(deadline);
-        }
-        handedOver = told;
-        return told;
+        Map<String, Set<Integer>> toldLanes = followers.connections().stream()
+                .filter(connection -> connection.handOver(deadline) && connection.getFollowerId() != null)
+                .collect(Collectors.groupingBy(FollowerConnection::getFollowerId,
+                        Collectors.mapping(FollowerConnection::getLane, Collectors.toSet())));
+        handedOver = !toldLanes.isEmpty();
+        return toldLanes.entrySet().stream()
+                .filter(follower -> follower.getValue().size() == logs.count())
+                .map(Map.Entry::getKey)
+                .collect(Collectors.toUnmodifiableSet());
     }
 
     public void stop(Deadline deadline) {

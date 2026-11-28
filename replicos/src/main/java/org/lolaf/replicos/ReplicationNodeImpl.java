@@ -30,6 +30,7 @@ import java.net.InetSocketAddress;
 import java.security.SecureRandom;
 import java.time.Duration;
 import java.util.List;
+import java.util.Set;
 import java.util.function.LongSupplier;
 import java.util.function.Supplier;
 
@@ -128,9 +129,9 @@ final class ReplicationNodeImpl implements ReplicationNode {
     }
 
     @Override
-    public boolean handOver(Deadline deadline) {
+    public Set<String> handOver(Deadline deadline) {
         ReplicationServer leading = server;
-        return leading != null && leading.handOver(deadline);
+        return leading == null ? Set.of() : leading.handOver(deadline);
     }
 
     @Override
